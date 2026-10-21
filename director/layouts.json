@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "current": {
+    "vw": 1920,
+    "vh": 971,
+    "panels": [
+      {
+        "id": "live",
+        "type": "live",
+        "x": 450,
+        "y": 80,
+        "w": 1464,
+        "h": 885,
+        "z": 70,
+        "minimized": false
+      },
+      {
+        "id": "p1",
+        "type": "board",
+        "x": 6,
+        "y": 8,
+        "w": 438,
+        "h": 406,
+        "z": 86,
+        "minimized": false,
+        "board": "timing"
+      },
+      {
+        "id": "p2",
+        "type": "board",
+        "x": 6,
+        "y": 420,
+        "w": 438,
+        "h": 309,
+        "z": 88,
+        "minimized": false,
+        "board": "trackmap"
+      },
+      {
+        "id": "p5",
+        "type": "board",
+        "x": 6,
+        "y": 735,
+        "w": 438,
+        "h": 230,
+        "z": 85,
+        "minimized": false,
+        "board": "messages"
+      },
+      {
+        "id": "p3",
+        "type": "board",
+        "x": 450,
+        "y": 6,
+        "w": 1464,
+        "h": 68,
+        "z": 73,
+        "minimized": false,
+        "board": "flags"
+      }
+    ]
+  },
+  "presets": {
+    "user": {
+      "savedAt": 1792590922923,
+      "theme": "day",
+      "vw": 1920,
+      "vh": 971,
+      "panels": [
+        {
+          "id": "live",
+          "type": "live",
+          "x": 450,
+          "y": 80,
+          "w": 1464,
+          "h": 885,
+          "z": 70,
+          "minimized": false
+        },
+        {
+          "id": "p1",
+          "type": "board",
+          "x": 6,
+          "y": 8,
+          "w": 438,
+          "h": 406,
+          "z": 86,
+          "minimized": false,
+          "board": "timing"
+        },
+        {
+          "id": "p2",
+          "type": "board",
+          "x": 6,
+          "y": 420,
+          "w": 438,
+          "h": 309,
+          "z": 88,
+          "minimized": false,
+          "board": "trackmap"
+        },
+        {
+          "id": "p5",
+          "type": "board",
+          "x": 6,
+          "y": 735,
+          "w": 438,
+          "h": 230,
+          "z": 85,
+          "minimized": false,
+          "board": "messages"
+        },
+        {
+          "id": "p3",
+          "type": "board",
+          "x": 450,
+          "y": 6,
+          "w": 1464,
+          "h": 68,
+          "z": 73,
+          "minimized": false,
+          "board": "flags"
+        }
+      ]
+    }
+  },
+  "theme": "day",
+  "streamUrl": "",
+  "liveToolbarHidden": true,
+  "layoutLocked": true,
+  "timingColumns": [
+    "pos",
+    "who",
+    "gap",
+    "int",
+    "tyre",
+    "laps",
+    "pit"
+  ]
+}

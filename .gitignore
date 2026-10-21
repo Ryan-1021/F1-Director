@@ -1,0 +1,29 @@
+# Portable JRE (large; keep next to jar locally, do not commit)
+share/jre/
+
+# Published web UI — regenerated from director/ on every Start.cmd
+share/web/
+
+# Optional upstream translation override (not required)
+share/translations.rctrans
+
+# Race Control / Director logs
+*.rclog
+*.log
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+*~
+*.tmp
+*.swp
+.idea/
+.vscode/
+*.code-workspace
+
+# Local scratch
+__pycache__/
+*.pyc
+.cache/

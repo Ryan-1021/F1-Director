@@ -1,0 +1,4514 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light" id="colorSchemeMeta">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>F1 导播台 · Director</title>
+<style>
+  :root {
+    /* night = current dark broadcast look */
+    --bg: #06080c;
+    --bg-stage: #080b10;
+    --bg-elev: #0a0e14;
+    --panel: #0d1218;
+    --panel-elev: #111820;
+    --panel-head: #10161e;
+    --border: rgba(255, 255, 255, 0.07);
+    --border-hi: rgba(255, 255, 255, 0.12);
+    --accent: #e10600;
+    --accent-dim: rgba(225, 6, 0, 0.18);
+    --teal: #00d2be;
+    --teal-dim: rgba(0, 210, 190, 0.14);
+    --text: #eef3f8;
+    --muted: #7d8b9c;
+    --muted2: #5a6778;
+    --live: #ff3b5c;
+    --ok: #3dd6c3;
+    --bad: #ff6b7a;
+    --warn: #f0b429;
+    --bar-h: 46px;
+    --head-h: 32px;
+    --handle: 8px;
+    --r: 10px;
+    --r-sm: 6px;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
+    --font: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --topbar-bg: linear-gradient(180deg, #0f141c 0%, #0a0e14 100%);
+    --input-bg: rgba(0, 0, 0, 0.35);
+    --btn-bg: rgba(255, 255, 255, 0.04);
+    --btn-hover: rgba(255, 255, 255, 0.08);
+    --btn-text-hover: #ffffff;
+    --status-bg: rgba(255, 255, 255, 0.03);
+    --stage-glow: #121820;
+    --stage-edge: #05070a;
+    --panel-body: #05070a;
+    --live-panel-bg: #050607;
+    --dd-bg: #1a1f2a;
+    --dd-hover: #222836;
+    --dd-border: rgba(255, 255, 255, 0.14);
+    --dd-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.35);
+    --inset-line: rgba(255, 255, 255, 0.03);
+    --live-ph-bg: radial-gradient(ellipse at center, #1a0c10 0%, #050607 68%);
+    --theme-active-bg: rgba(0, 210, 190, 0.18);
+    --theme-active-fg: #00d2be;
+    --status-ok-border: rgba(61, 214, 195, 0.28);
+    --status-ok-bg: rgba(61, 214, 195, 0.08);
+  }
+  html[data-theme="day"] {
+    color-scheme: light;
+    --teal: #0a8f82;
+    --bg: #eef2f7;
+    --bg-stage: #e4eaf2;
+    --bg-elev: #f5f7fb;
+    --panel: #ffffff;
+    --panel-elev: #f7f9fc;
+    --panel-head: #eef2f7;
+    --border: rgba(15, 23, 42, 0.10);
+    --border-hi: rgba(15, 23, 42, 0.16);
+    --accent-dim: rgba(225, 6, 0, 0.10);
+    --teal-dim: rgba(0, 160, 145, 0.12);
+    --text: #0f172a;
+    --muted: #5b6b7c;
+    --muted2: #8494a7;
+    --shadow: 0 12px 36px rgba(15, 23, 42, 0.12);
+    --shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.08);
+    --topbar-bg: linear-gradient(180deg, #ffffff 0%, #f3f6fa 100%);
+    --input-bg: rgba(15, 23, 42, 0.04);
+    --btn-bg: rgba(15, 23, 42, 0.04);
+    --btn-hover: rgba(15, 23, 42, 0.08);
+    --btn-text-hover: #0f172a;
+    --status-bg: rgba(15, 23, 42, 0.03);
+    --stage-glow: #dce4ee;
+    --stage-edge: #c8d2e0;
+    --panel-body: #f4f7fb;
+    --live-panel-bg: #0b0c0e;
+    --dd-bg: #ffffff;
+    --dd-hover: #f0f4f8;
+    --dd-border: rgba(15, 23, 42, 0.14);
+    --dd-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.06);
+    --inset-line: rgba(15, 23, 42, 0.04);
+    --live-ph-bg: radial-gradient(ellipse at center, #ffe8ec 0%, #f4eef0 68%);
+    --theme-active-bg: rgba(0, 120, 110, 0.16);
+    --theme-active-fg: #06665c;
+    --ok: #06665c;
+    --status-ok-border: rgba(6, 102, 92, 0.38);
+    --status-ok-bg: rgba(6, 102, 92, 0.12);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.45 var(--font);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .desk {
+    display: grid;
+    grid-template-rows: var(--bar-h) 1fr;
+    height: 100%;
+  }
+
+  /* ---- top bar: broadcast desk chrome ---- */
+  .topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 14px;
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 var(--inset-line) inset;
+    z-index: 100000;
+    position: relative;
+  }
+  .topbar::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--accent), #8b0000);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 9px;
+    font-weight: 650; letter-spacing: 0.06em;
+    font-size: 12.5px;
+    text-transform: none;
+    white-space: nowrap;
+    padding-left: 4px;
+  }
+  .logo .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 0 3px rgba(255, 59, 92, 0.18), 0 0 10px rgba(255, 59, 92, 0.55);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.92); }
+  }
+  .topbar .grow { flex: 1; min-width: 8px; }
+
+  /* fixed top-left session strip (race / session / laps / clock) */
+  .session-strip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    max-width: min(440px, 38vw);
+    flex: 0 1 auto;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .session-strip .ss-meeting {
+    font-weight: 650;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  }
+  .session-strip .ss-flag {
+    flex-shrink: 0;
+    height: 16px;
+    width: auto;
+    max-width: 24px;
+    margin-left: 2px;
+    border-radius: 2px;
+    object-fit: cover;
+    vertical-align: middle;
+    box-shadow: 0 0 0 0.5px rgba(0,0,0,0.22);
+  }
+  .session-strip .ss-flag[hidden] { display: none !important; }
+  .session-strip .ss-session {
+    color: var(--teal);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .session-strip .ss-sep {
+    color: var(--muted2);
+    opacity: 0.55;
+    flex-shrink: 0;
+  }
+  .session-strip .ss-chip {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    color: var(--text);
+    font-weight: 550;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    letter-spacing: 0.01em;
+  }
+  .session-strip .ss-chip.clock {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .session-strip.empty .ss-meeting,
+  .session-strip.empty .ss-session {
+    color: var(--muted2);
+    font-weight: 500;
+  }
+  @media (max-width: 1100px) {
+    .session-strip { max-width: min(280px, 28vw); }
+    .session-strip .ss-meeting { max-width: 96px; }
+  }
+
+  /* compact weather chips beside session capsule */
+  .weather-strip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(420px, 36vw);
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .weather-strip .ws-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--btn-bg);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .weather-strip .ws-k {
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    opacity: 1;
+  }
+  .weather-strip .ws-v {
+    color: var(--text);
+    font-weight: 650;
+  }
+  .weather-strip .ws-chip.rain-warn {
+    border-color: rgba(255, 107, 122, 0.45);
+    background: rgba(255, 107, 122, 0.10);
+  }
+  .weather-strip .ws-chip.rain-warn .ws-v { color: var(--bad); }
+  .weather-strip.empty .ws-v { color: var(--muted2); font-weight: 500; }
+  @media (max-width: 1280px) {
+    .weather-strip { max-width: min(340px, 30vw); }
+    .weather-strip .ws-chip[data-ws="humidity"],
+    .weather-strip .ws-chip[data-ws="wind"] { display: none; }
+  }
+  @media (max-width: 980px) {
+    .weather-strip { max-width: min(220px, 26vw); }
+    .weather-strip .ws-chip[data-ws="track"] { display: none; }
+  }
+
+  /* compact track/flag status chip beside weather */
+  .track-strip {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: 3px 4px;
+    border-radius: 999px;
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .track-strip .ts-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 160px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    background: var(--btn-bg);
+    border-color: var(--border);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .track-strip .ts-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #43a047;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.18);
+  }
+  .track-strip .ts-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .track-strip.empty .ts-chip {
+    color: var(--muted2);
+    font-weight: 500;
+  }
+  .track-strip.empty .ts-dot {
+    background: var(--muted2);
+    opacity: 0.55;
+  }
+  .track-strip.filled .ts-chip {
+    /* fill color set inline from state.track */
+    border-color: rgba(0,0,0,0.18);
+  }
+  .track-strip.filled .ts-dot {
+    background: rgba(255,255,255,0.92);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
+  }
+  @media (max-width: 980px) {
+    .track-strip .ts-chip { max-width: 110px; }
+  }
+
+  /* LIVE panel: URL + load/clear + board-data delay on ONE compact row */
+  .live-toolbar {
+    display: flex; align-items: center; gap: 6px;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    padding: 5px 8px;
+    background: var(--panel-head);
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+    z-index: 4;
+  }
+  .live-toolbar .stream-url {
+    flex: 1 1 auto;
+    min-width: 100px;
+    background: var(--input-bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 5px 10px; outline: none;
+    font: inherit; font-size: 12px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .live-toolbar .stream-url::placeholder { color: var(--muted2); }
+  .live-toolbar .stream-url:focus {
+    border-color: rgba(0, 210, 190, 0.45);
+    box-shadow: 0 0 0 3px var(--teal-dim);
+  }
+  .live-toolbar > button {
+    padding: 4px 10px;
+    font-size: 11.5px;
+    flex-shrink: 0;
+  }
+  .live-toolbar .tb-sep {
+    flex-shrink: 0;
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    margin: 0 2px;
+  }
+  .live-toolbar .delay-label {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .live-toolbar input[type="range"] {
+    flex: 0 1 88px;
+    min-width: 56px;
+    max-width: 120px;
+    height: 4px;
+    accent-color: var(--teal);
+    cursor: pointer;
+  }
+  .live-toolbar input[type="number"] {
+    width: 44px;
+    flex-shrink: 0;
+    background: var(--input-bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 3px 6px; outline: none;
+    font: inherit; font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .live-toolbar input[type="number"]:focus {
+    border-color: rgba(0, 210, 190, 0.45);
+    box-shadow: 0 0 0 3px var(--teal-dim);
+  }
+  .live-toolbar .delay-unit {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--muted2);
+  }
+  .live-toolbar .delay-status {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--teal);
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--teal-dim);
+    border: 1px solid rgba(0, 210, 190, 0.28);
+    white-space: nowrap;
+  }
+  .live-toolbar .delay-status.warming {
+    color: var(--warn);
+    background: rgba(240, 180, 41, 0.12);
+    border-color: rgba(240, 180, 41, 0.35);
+  }
+  .live-toolbar .delay-status.off {
+    color: var(--muted);
+    background: var(--btn-bg);
+    border-color: var(--border);
+  }
+  .fpanel.live-panel.minimized .live-toolbar { display: none; }
+  .fpanel.live-panel.live-toolbar-hidden .live-toolbar { display: none !important; }
+  .p-head .win-btns button.live-url-tog {
+    width: auto;
+    min-width: 0;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .p-head .win-btns button.live-url-tog.on {
+    color: var(--teal);
+    background: var(--teal-dim);
+    border-color: rgba(0, 210, 190, 0.28);
+  }
+  @media (max-width: 900px) {
+    .live-toolbar { flex-wrap: wrap; }
+    .live-toolbar .stream-url { flex: 1 1 100%; min-width: 0; }
+  }
+  button {
+    background: var(--btn-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0.01em;
+    transition: background .15s, border-color .15s, color .15s, filter .15s;
+  }
+  button:hover {
+    background: var(--btn-hover);
+    border-color: var(--border-hi);
+    color: var(--btn-text-hover);
+  }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: transparent;
+    font-weight: 650;
+    box-shadow: 0 2px 12px rgba(225, 6, 0, 0.35);
+  }
+  button.primary:hover {
+    color: #fff;
+    filter: brightness(1.08);
+    border-color: transparent;
+  }
+  .status {
+    color: var(--muted); font-size: 11.5px; white-space: nowrap;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--status-bg);
+    border: 1px solid var(--border);
+  }
+  .status.ok {
+    color: var(--ok);
+    border-color: var(--status-ok-border);
+    background: var(--status-ok-bg);
+  }
+  .status.bad {
+    color: var(--bad);
+    border-color: rgba(255, 107, 122, 0.28);
+    background: rgba(255, 107, 122, 0.08);
+  }
+
+  .stage {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 55% at 50% 42%, var(--stage-glow) 0%, var(--bg-stage) 58%, var(--stage-edge) 100%);
+  }
+
+  /* ---- floating panels ---- */
+  .fpanel {
+    position: absolute;
+    display: flex; flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    min-width: 180px;
+    min-height: 120px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    user-select: none;
+    transition: box-shadow .15s, border-color .15s;
+  }
+  .fpanel.board-flags {
+    min-height: 68px;
+  }
+  .fpanel.board-flags:not(.minimized) .p-body {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .fpanel::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(0,210,190,0.55), rgba(0,210,190,0.08));
+    z-index: 6;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+  .fpanel.active {
+    border-color: rgba(0, 210, 190, 0.35);
+    box-shadow: var(--shadow), 0 0 0 1px rgba(0, 210, 190, 0.12);
+  }
+  .fpanel.active::before { opacity: 1; background: var(--teal); }
+  .fpanel.dragging {
+    opacity: 0.92;
+    border-color: rgba(0, 210, 190, 0.45);
+    box-shadow: var(--shadow);
+  }
+  .fpanel.drop-target {
+    border-color: rgba(0, 210, 190, 0.65) !important;
+    box-shadow: 0 0 0 2px rgba(0, 210, 190, 0.35), var(--shadow);
+  }
+  .fpanel.drop-target::after {
+    content: "交换位置";
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    pointer-events: none;
+    background: rgba(0, 210, 190, 0.95);
+    color: #041016;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    padding: 8px 16px;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  }
+  .fpanel.live-panel.drop-target::after { content: "与直播交换"; }
+  .fpanel.live-panel {
+    background: var(--live-panel-bg);
+    border-color: rgba(255, 59, 92, 0.22);
+    min-width: 280px;
+    min-height: 210px;
+  }
+  .fpanel.live-panel::before {
+    background: linear-gradient(180deg, var(--live), rgba(225, 6, 0, 0.25));
+    opacity: 1;
+  }
+  .fpanel.live-panel.active {
+    border-color: rgba(255, 59, 92, 0.45);
+    box-shadow: var(--shadow), 0 0 0 1px rgba(255, 59, 92, 0.15);
+  }
+  .fpanel.minimized {
+    min-height: 0;
+    height: auto !important;
+  }
+  .fpanel.minimized .p-body,
+  .fpanel.minimized .resize-handle { display: none !important; }
+
+  .p-head {
+    display: flex; align-items: center; gap: 7px;
+    height: var(--head-h);
+    padding: 0 8px 0 12px;
+    background: linear-gradient(180deg, var(--panel-elev), var(--panel-head));
+    border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: grab;
+    flex-shrink: 0;
+  }
+  .p-head:active { cursor: grabbing; }
+  .p-head .live-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--live);
+    background: rgba(255, 59, 92, 0.12);
+    border: 1px solid rgba(255, 59, 92, 0.28);
+    border-radius: 999px;
+    padding: 1px 8px 1px 6px;
+  }
+  .p-head .live-badge::before {
+    content: "";
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--live);
+    box-shadow: 0 0 6px var(--live);
+  }
+  .p-head .title {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 120px;
+    color: var(--text);
+    font-weight: 650;
+  }
+  .p-head .tag {
+    color: var(--muted2); font-weight: 500;
+    font-size: 10px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    max-width: 72px;
+    opacity: 0.75;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  /* Custom board-type dropdown (native <option> contrast is unreliable on Windows) */
+  .board-dd {
+    position: relative;
+    flex-shrink: 0;
+    max-width: 148px;
+  }
+  .board-dd-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    max-width: 148px; width: 100%;
+    background: var(--dd-bg); color: var(--text);
+    border: 1px solid var(--dd-border);
+    border-radius: 999px;
+    padding: 3px 8px 3px 8px;
+    font-size: 11px; font-family: inherit; font-weight: 500;
+    line-height: 1.3;
+    cursor: pointer; outline: none;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .board-dd-status {
+    flex-shrink: 0;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #ff6b7a;
+    box-shadow: 0 0 6px rgba(255, 107, 122, 0.55);
+  }
+  .board-dd-status.ok {
+    background: #00d2be;
+    box-shadow: 0 0 6px rgba(0, 210, 190, 0.7);
+  }
+  .board-dd-btn:hover,
+  .board-dd.open .board-dd-btn,
+  .board-dd-btn:focus-visible {
+    border-color: rgba(0, 210, 190, 0.5);
+    background: var(--dd-hover);
+    box-shadow: 0 0 0 2px rgba(0, 210, 190, 0.12);
+  }
+  .board-dd-label {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0; flex: 1; text-align: left;
+  }
+  .board-dd-caret {
+    flex-shrink: 0; font-size: 9px; color: var(--muted);
+    line-height: 1;
+  }
+  .board-dd.open .board-dd-caret { color: #00d2be; }
+  /* Portal menu — fixed so panel overflow:hidden cannot clip it */
+  #board-dd-menu {
+    position: fixed;
+    z-index: 200000;
+    min-width: 148px;
+    max-height: min(340px, 55vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--dd-bg);
+    color: var(--text);
+    border: 1px solid var(--dd-border);
+    border-radius: 10px;
+    box-shadow: var(--dd-shadow);
+    padding: 5px;
+    display: none;
+  }
+  #board-dd-menu.open { display: block; }
+  #board-dd-menu .board-dd-opt {
+    display: block; width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none; border-radius: 7px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 12px; font-family: inherit; font-weight: 500;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  #board-dd-menu .board-dd-opt:hover,
+  #board-dd-menu .board-dd-opt:focus-visible {
+    background: var(--theme-active-bg);
+    color: var(--theme-active-fg);
+    outline: none;
+  }
+  #board-dd-menu .board-dd-opt.active {
+    background: var(--theme-active-bg);
+    color: var(--theme-active-fg);
+    font-weight: 700;
+  }
+  .p-head .spacer { flex: 1; min-width: 4px; }
+  .p-head .win-btns {
+    display: flex; gap: 3px; flex-shrink: 0;
+  }
+  .p-head .win-btns button {
+    width: 22px; height: 22px; padding: 0;
+    border-radius: 50%; font-size: 13px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border-color: transparent;
+    color: var(--muted);
+  }
+  .p-head .win-btns button:hover {
+    background: var(--btn-hover); color: var(--btn-text-hover); border-color: transparent;
+  }
+  .p-head .win-btns button.close:hover {
+    background: var(--accent); color: #fff; border-color: transparent;
+  }
+
+  /* Timing column picker — same row as board dropdown / window buttons */
+  .p-head .timing-cols-tog {
+    width: 22px; height: 22px; padding: 0;
+    border-radius: 50%; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.02em; line-height: 1;
+    display: none; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid transparent;
+    color: var(--muted);
+    flex-shrink: 0;
+    opacity: 0.72;
+    cursor: pointer;
+    transition: color .12s, background .12s, border-color .12s, opacity .12s;
+  }
+  .p-head .timing-cols-tog.show { display: inline-flex; }
+  .p-head .timing-cols-tog:hover,
+  .p-head .timing-cols-tog[aria-expanded="true"] {
+    opacity: 1;
+    color: var(--text);
+    background: var(--btn-hover);
+    border-color: transparent;
+  }
+
+  /* Trackmap status / hint / rotation — same quiet title-row idea as 「列」 */
+  .p-head .tm-head {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    flex: 0 1 auto;
+    margin-right: 2px;
+  }
+  .p-head .tm-head.show { display: inline-flex; }
+  .p-head .tm-head-status {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 10px;
+    font-weight: 550;
+    color: var(--muted);
+    line-height: 1.2;
+    opacity: 0.85;
+    cursor: default;
+  }
+  .p-head .tm-hint {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: help;
+    opacity: 0.72;
+    user-select: none;
+    transition: color .12s, background .12s, opacity .12s;
+  }
+  .p-head .tm-hint:hover {
+    opacity: 1;
+    color: var(--text);
+    background: var(--btn-hover);
+  }
+  .p-head .tm-head-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    flex: 0 0 auto;
+  }
+  .p-head .tm-head-tools .tm-tool {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.78;
+    transition: color .12s, background .12s, opacity .12s;
+  }
+  .p-head .tm-head-tools .tm-tool:hover {
+    opacity: 1;
+    color: var(--text);
+    background: var(--btn-hover);
+  }
+  .p-head .tm-head-tools .tm-rot-label {
+    min-width: 2.1em;
+    text-align: center;
+    font-size: 9px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    padding: 0 1px;
+    opacity: 0.85;
+    cursor: default;
+    user-select: none;
+  }
+  #timing-cols-menu {
+    position: fixed;
+    z-index: 200000;
+    min-width: 120px;
+    background: var(--dd-bg);
+    color: var(--text);
+    border: 1px solid var(--dd-border);
+    border-radius: 10px;
+    box-shadow: var(--dd-shadow);
+    padding: 6px 8px;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+  }
+  #timing-cols-menu.open { display: flex; }
+  #timing-cols-menu .timing-cols-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500;
+    color: var(--text);
+    cursor: pointer; user-select: none;
+    white-space: nowrap;
+    padding: 4px 6px;
+    border-radius: 6px;
+  }
+  #timing-cols-menu .timing-cols-item:hover {
+    background: var(--theme-active-bg);
+  }
+  #timing-cols-menu .timing-cols-item input {
+    margin: 0;
+    accent-color: var(--teal);
+  }
+  #timing-cols-menu .timing-cols-item input:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+
+  .p-body {
+    flex: 1; min-height: 0; position: relative;
+    background: var(--panel-body);
+    pointer-events: auto;
+  }
+  .p-body iframe, .p-body video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border: 0; background: var(--panel-body);
+  }
+  .stage.interacting .p-body iframe,
+  .stage.interacting .p-body video {
+    pointer-events: none;
+  }
+
+  .live-placeholder {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px;
+    background:
+      var(--live-ph-bg);
+    color: var(--muted);
+    text-align: center; padding: 28px;
+  }
+  .live-placeholder h1 {
+    margin: 0; font-size: 22px; color: var(--text);
+    letter-spacing: 0.18em; font-weight: 700;
+  }
+  .live-placeholder p { margin: 0; max-width: 400px; line-height: 1.65; font-size: 13px; }
+  .live-placeholder .hint {
+    font-size: 11.5px; color: var(--muted2);
+    border: 1px solid var(--border); border-radius: var(--r);
+    background: var(--input-bg);
+    padding: 12px 16px; margin-top: 4px;
+    max-width: 440px; line-height: 1.55;
+  }
+  .live-placeholder.hidden { display: none; }
+  .live-frame.hidden { display: none !important; }
+
+  /* In-panel media fill: crop-zoom iframe player region into LIVE frame */
+  .p-head .win-btns button.live-fs {
+    width: auto;
+    min-width: 0;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .p-head .win-btns button.live-fs.on {
+    color: var(--live);
+  }
+  .fpanel.live-panel.live-media-fill .live-toolbar {
+    display: none !important;
+  }
+  .fpanel.live-panel.live-media-fill .p-head {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: auto;
+    z-index: 8;
+    width: auto;
+    height: auto;
+    padding: 6px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  .fpanel.live-panel.live-media-fill .p-head .live-badge,
+  .fpanel.live-panel.live-media-fill .p-head .title,
+  .fpanel.live-panel.live-media-fill .p-head .tag,
+  .fpanel.live-panel.live-media-fill .p-head .spacer,
+  .fpanel.live-panel.live-media-fill .p-head .win-btns button:not(.live-fs) {
+    display: none !important;
+  }
+  .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-fs {
+    background: rgba(0,0,0,.55);
+    border-color: rgba(255,255,255,.18);
+    color: #fff;
+  }
+  #liveFsRoot {
+    --live-crop-scale: 1.45;
+    --live-crop-x: 6%;
+    --live-crop-y: 4%;
+  }
+  .fpanel.live-panel.live-media-fill #liveFsRoot {
+    background: #000;
+    overflow: hidden;
+  }
+  .fpanel.live-panel.live-media-fill #liveFsRoot .live-frame,
+  .fpanel.live-panel.live-media-fill #liveFsRoot .live-placeholder {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .fpanel.live-panel.live-media-fill #liveVideo {
+    object-fit: contain;
+    background: #000;
+    transform: none !important;
+  }
+  /* Cross-origin: scale+pan so typical center-left player fills the box (crops nav/chat). */
+  .fpanel.live-panel.live-media-fill #liveIframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    transform-origin: center center;
+    transform: translate(var(--live-crop-x), var(--live-crop-y)) scale(var(--live-crop-scale));
+    will-change: transform;
+  }
+  .live-crop-ui {
+    display: none;
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 9;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+    max-width: calc(100% - 16px);
+    padding: 5px 6px;
+    border-radius: 8px;
+    background: rgba(0,0,0,.62);
+    border: 1px solid rgba(255,255,255,.12);
+    pointer-events: auto;
+  }
+  .fpanel.live-panel.live-media-fill #liveFsRoot.has-iframe .live-crop-ui {
+    display: flex;
+  }
+  .live-crop-ui button {
+    min-width: 28px;
+    height: 26px;
+    padding: 0 7px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(255,255,255,.08);
+    color: rgba(255,255,255,.92);
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .live-crop-ui button:hover {
+    background: rgba(255,255,255,.18);
+  }
+  .live-crop-ui .crop-readout {
+    font-size: 11px;
+    color: rgba(255,255,255,.75);
+    min-width: 3.2em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .p-head .win-btns {
+    align-items: center;
+  }
+
+  .resize-handle { position: absolute; z-index: 5; }
+  .resize-handle.n  { top: 0; left: var(--handle); right: var(--handle); height: var(--handle); cursor: n-resize; }
+  .resize-handle.s  { bottom: 0; left: var(--handle); right: var(--handle); height: var(--handle); cursor: s-resize; }
+  .resize-handle.e  { right: 0; top: var(--handle); bottom: var(--handle); width: var(--handle); cursor: e-resize; }
+  .resize-handle.w  { left: 0; top: var(--handle); bottom: var(--handle); width: var(--handle); cursor: w-resize; }
+  .resize-handle.nw { top: 0; left: 0; width: 14px; height: 14px; cursor: nw-resize; }
+  .resize-handle.ne { top: 0; right: 0; width: 14px; height: 14px; cursor: ne-resize; }
+  .resize-handle.sw { bottom: 0; left: 0; width: 14px; height: 14px; cursor: sw-resize; }
+  .resize-handle.se { bottom: 0; right: 0; width: 16px; height: 16px; cursor: se-resize; }
+  .resize-handle.se::after {
+    content: "";
+    position: absolute; right: 4px; bottom: 4px;
+    width: 7px; height: 7px;
+    border-right: 2px solid rgba(125,139,156,0.55);
+    border-bottom: 2px solid rgba(125,139,156,0.55);
+    border-radius: 1px;
+  }
+
+
+  .theme-toggle {
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+    width: 64px;
+    height: 28px;
+    padding: 2px;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--status-bg);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .theme-toggle-pill {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    width: calc(50% - 2px);
+    border-radius: 999px;
+    background: var(--theme-active-bg);
+    box-shadow: inset 0 0 0 1px rgba(0, 210, 190, 0.18);
+    transform: translateX(0);
+    transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .theme-toggle[data-active="night"] .theme-toggle-pill {
+    transform: translateX(100%);
+  }
+  .theme-toggle button {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    box-shadow: none;
+    cursor: pointer;
+  }
+  .theme-toggle button:hover {
+    background: transparent;
+    border-color: transparent;
+    color: var(--btn-text-hover);
+    filter: none;
+  }
+  .theme-toggle button.active {
+    background: transparent;
+    color: var(--theme-active-fg);
+  }
+  .theme-toggle .theme-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+    opacity: 0.72;
+  }
+  .theme-toggle button.active .theme-icon {
+    opacity: 1;
+    transform: scale(1.08) rotate(0deg);
+  }
+  .theme-toggle button:not(.active) .theme-icon-sun {
+    transform: scale(0.92) rotate(-18deg);
+  }
+  .theme-toggle button:not(.active) .theme-icon-moon {
+    transform: scale(0.92) rotate(14deg);
+  }
+  html[data-theme="day"] .theme-toggle-pill {
+    box-shadow: inset 0 0 0 1px rgba(6, 102, 92, 0.16);
+  }
+
+  /* Layout menu (save / restore / reset) */
+  #layout-preset-menu {
+    position: fixed;
+    z-index: 10050;
+    display: none;
+    max-height: min(360px, 70vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--dd-bg);
+    border: 1px solid var(--dd-border);
+    border-radius: 10px;
+    box-shadow: var(--dd-shadow);
+    padding: 6px;
+    min-width: 200px;
+  }
+  #layout-preset-menu.open { display: block; }
+  #layout-preset-menu .layout-action {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  #layout-preset-menu .layout-action:hover,
+  #layout-preset-menu .layout-action:focus-visible {
+    background: var(--dd-hover);
+    outline: none;
+  }
+  #layout-preset-menu .layout-action.danger {
+    color: var(--bad);
+  }
+  #layout-preset-menu .layout-action.danger:hover,
+  #layout-preset-menu .layout-action.danger:focus-visible {
+    background: rgba(255, 107, 122, 0.12);
+  }
+  #layout-preset-menu .layout-sep {
+    height: 1px;
+    margin: 6px 4px;
+    background: var(--dd-border);
+    border: 0;
+  }
+  #layout-preset-menu .layout-opt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  #layout-preset-menu .layout-opt:hover,
+  #layout-preset-menu .layout-opt:focus-visible {
+    background: var(--dd-hover);
+    outline: none;
+  }
+  #layout-preset-menu .layout-opt-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #layout-preset-menu .layout-opt-del {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: var(--muted2);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  #layout-preset-menu .layout-opt-del:hover {
+    color: var(--bad);
+    background: rgba(255, 107, 122, 0.12);
+  }
+  #layout-preset-menu .layout-empty {
+    padding: 8px 10px;
+    color: var(--muted2);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  /* Layout lock — quiet icon toggle next to 布局 */
+  #btnLayoutLock {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 999px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  #btnLayoutLock .lock-icon {
+    width: 15px;
+    height: 15px;
+    display: block;
+  }
+  #btnLayoutLock .lock-icon-locked { display: none; }
+  #btnLayoutLock[aria-pressed="true"] {
+    color: var(--teal);
+    background: var(--teal-dim);
+    border-color: rgba(0, 210, 190, 0.35);
+  }
+  #btnLayoutLock[aria-pressed="true"] .lock-icon-open { display: none; }
+  #btnLayoutLock[aria-pressed="true"] .lock-icon-locked { display: block; }
+  #btnLayoutLock:hover {
+    color: var(--btn-text-hover);
+  }
+  #btnLayoutLock[aria-pressed="true"]:hover {
+    color: var(--teal);
+  }
+  body.layout-locked .fpanel .resize-handle { display: none !important; }
+  body.layout-locked .fpanel .p-head { cursor: default; }
+  body.layout-locked .fpanel .p-head:active { cursor: default; }
+  body.layout-locked .fpanel .win-btns button[data-action="min"],
+  body.layout-locked .fpanel .win-btns button[data-action="close"] {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  body.layout-locked #btnAddPanel {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  body.layout-locked .hint-bar { opacity: 0.55; }
+
+  .hint-bar {
+    position: absolute; left: 14px; bottom: 12px;
+    font-size: 11px; color: var(--muted2);
+    pointer-events: none; z-index: 1;
+    letter-spacing: 0.02em;
+    opacity: 0.85;
+  }
+</style>
+</head>
+<body>
+<div class="desk">
+  <header class="topbar">
+    <div class="logo"><span class="dot"></span> F1 导播台</div>
+    <div class="session-strip empty" id="sessionStrip" title="场次状态（来自 Director）" aria-live="polite">
+      <span class="ss-meeting" id="ssMeeting">等待赛会</span>
+      <img class="ss-flag" id="ssFlag" hidden alt="" width="24" height="16" decoding="async" aria-hidden="true">
+      <span class="ss-sep">·</span>
+      <span class="ss-session" id="ssSession">—</span>
+      <span class="ss-chip" id="ssLaps">L —/—</span>
+      <span class="ss-chip clock" id="ssClock">—</span>
+    </div>
+    <div class="weather-strip empty" id="weatherStrip" title="天气（来自 Director）" aria-live="polite">
+      <span class="ws-chip" data-ws="air" id="wsAir"><span class="ws-k">气</span><span class="ws-v">—</span></span>
+      <span class="ws-chip" data-ws="track" id="wsTrack"><span class="ws-k">道</span><span class="ws-v">—</span></span>
+      <span class="ws-chip" data-ws="humidity" id="wsHumidity"><span class="ws-k">湿</span><span class="ws-v">—</span></span>
+      <span class="ws-chip" data-ws="wind" id="wsWind"><span class="ws-k">风</span><span class="ws-v">—</span></span>
+      <span class="ws-chip" data-ws="rain" id="wsRain"><span class="ws-k">雨</span><span class="ws-v">—</span></span>
+    </div>
+    <div class="track-strip empty" id="trackStrip" title="赛道旗语（来自 Director）" aria-live="polite">
+      <span class="ts-chip" id="tsChip"><span class="ts-dot" id="tsDot" aria-hidden="true"></span><span class="ts-label" id="tsLabel">—</span></span>
+    </div>
+    <div class="grow"></div>
+    <div class="theme-toggle" id="themeToggle" role="group" aria-label="主题" data-active="night">
+      <span class="theme-toggle-pill" aria-hidden="true"></span>
+      <button type="button" data-theme="day" id="btnThemeDay" title="白天" aria-label="白天" aria-pressed="false"><svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v2.2M12 19.8V22M4.93 4.93l1.56 1.56M17.51 17.51l1.56 1.56M2 12h2.2M19.8 12H22M4.93 19.07l1.56-1.56M17.51 6.49l1.56-1.56"/></svg></button>
+      <button type="button" data-theme="night" id="btnThemeNight" title="夜晚" aria-label="夜晚" aria-pressed="true"><svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M20.2 14.1A7.8 7.8 0 0 1 9.9 3.8 7.6 7.6 0 1 0 20.2 14.1z"/></svg></button>
+    </div>
+    <button id="btnAddPanel" type="button" title="新增一块浮动看板">添加面板</button>
+    <button id="btnLayoutMenu" type="button" title="保存、恢复或重置布局" aria-haspopup="menu" aria-expanded="false">布局 ▾</button>
+    <button id="btnLayoutLock" type="button" title="锁定布局（防止拖动/缩放/增删）" aria-label="锁定布局" aria-pressed="false">
+      <svg class="lock-icon lock-icon-open" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 0 1 7.5-1.9M8 11H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/><rect x="9" y="14" width="6" height="4" rx="1" fill="currentColor" opacity="0.35"/></svg>
+      <svg class="lock-icon lock-icon-locked" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 0 1 8 0v4M8 11H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/><rect x="9" y="14" width="6" height="4" rx="1" fill="currentColor"/></svg>
+    </button>
+    <span class="status" id="rcStatus">Director：检测中…</span>
+    <button id="btnOpenMain" type="button" title="在新窗口打开完整主界面">主界面</button>
+    <button id="btnReloadAll" type="button">刷新看板</button>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="hint-bar">拖到另一块上松开 = 交换 · 拖到空白处自动避让（不重叠） · 拖边缘放大时邻块沿共享边自动缩小 · 窗口缩放按比例适配</div>
+  </main>
+</div>
+
+<script>
+(function () {
+  // Use page host so LAN IP / hostname still hits this machine's RC + heartbeat.
+  var _rcHost = (location.protocol !== 'file:' && location.hostname) ? location.hostname : '127.0.0.1';
+  var RC = 'http://' + _rcHost + ':8720';
+  var HB = 'http://' + _rcHost + ':8721/heartbeat';
+  var HB_GOODBYE = 'http://' + _rcHost + ':8721/goodbye';
+  var STORAGE_URL = 'f1-director-stream-url';
+  var STORAGE_LAYOUT = 'f1-director-layout-v3';
+  var STORAGE_PRESETS = 'f1-director-layouts';
+  var STORAGE_THEME = 'f1-director-theme';
+  var STORAGE_DELAY = 'f1-director-stream-delay';
+  var STORAGE_CROP = 'f1-director-live-crop';
+  var STORAGE_LIVE_TB = 'f1-director-live-toolbar-hidden';
+  var STORAGE_LAYOUT_LOCK = 'f1-director-layout-locked';
+  var LAYOUTS_API = RC + '/api/layouts';
+  var LAYOUTS_FILE = 'layouts.json';
+  var presetsCache = {};
+  var layoutsPersistTimer = null;
+  var layoutsHydrated = false;
+  var layoutsFileOk = false;
+  var layoutLocked = false;
+  /** Disk/canonical current layout (vw/vh + panels). When locked, persist writes this
+   *  instead of the in-memory stage-scaled coords so resize never corrupts the file. */
+  var layoutBaseline = null;
+  /** Deferred mount when stage size is not ready yet (<80px). */
+  var pendingMount = null;
+
+  var MAX_DELAY_SEC = 120;
+  var MAX_BUFFER_MS = 180000; // keep up to 3 min of SSE snapshots
+  var streamDelaySec = 0;     // applied delay (seconds)
+  var stateBuffer = [];       // [{ t, state }, ...] newest last
+  var displayState = null;    // last state pushed to boards / session strip
+  var delayTickTimer = null;
+  var GAP = 6;
+  var MIN_W = 180;
+  var MIN_H = 120;
+  var FLAGS_MIN_H = 68;
+  var LIVE_MIN_W = 280;
+  var LIVE_MIN_H = 250;
+  var HEAD_H = 32;
+
+  var BOARD_OPTS = [
+    { id: 'timing', label: '成绩榜' },
+    { id: 'ring', label: '赛道图' },
+    { id: 'trackmap', label: '轨迹图' },
+    { id: 'track', label: '赛道状态' },
+    { id: 'tyres', label: '轮胎进站' },
+    { id: 'weather', label: '天气' },
+    { id: 'fastest', label: '最快圈' },
+    { id: 'session', label: '环节' },
+    { id: 'messages', label: '赛事通报' },
+    { id: 'flags', label: '旗语栏' },
+    { id: 'main', label: '完整主界面' }
+  ];
+
+  var stage = document.getElementById('stage');
+  var zCounter = 10;
+  var panels = {}; // id -> state + el
+  var interacting = false;
+  var lastViewport = { w: 0, h: 0 };
+  var resizeTimer = null;
+
+
+  // ?once=1 = snapshot only, no per-iframe EventSource.
+  // Director keeps ONE shared SSE and pushes state into each board
+  // (see connectFeed / pushStateToFrame). Avoids Chrome's ~6 conn/host limit
+  // blanking later panels when many boards are open at once.
+  function boardUrl(id, bust) {
+    var url = (id === 'main')
+      ? (RC + '/?once=1')
+      : (RC + '/board/' + id + '?once=1');
+    if (bust) {
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + '_ts=' + Date.now();
+    }
+    return url;
+  }
+
+  var latestState = null; // displayed (possibly delayed) state
+  var feedEs = null;
+
+  function clampDelaySec(n) {
+    n = Math.round(Number(n) || 0);
+    if (n < 0) n = 0;
+    if (n > MAX_DELAY_SEC) n = MAX_DELAY_SEC;
+    return n;
+  }
+
+  function pushStateToFrame(iframe) {
+    if (!iframe || !latestState) return;
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1 && typeof w.F1.pushState === 'function') {
+        w.F1.pushState(latestState);
+        return;
+      }
+    } catch (e) {}
+    try {
+      iframe.contentWindow.postMessage(
+        { type: 'f1-push-state', state: latestState },
+        '*'
+      );
+    } catch (e2) {}
+  }
+
+  function trimStateBuffer(now) {
+    var keepMs = Math.max(MAX_BUFFER_MS, streamDelaySec * 1000 + 8000);
+    var cutoff = now - keepMs;
+    while (stateBuffer.length > 1 && stateBuffer[0].t < cutoff) {
+      stateBuffer.shift();
+    }
+    if (stateBuffer.length > 2400) {
+      stateBuffer.splice(0, stateBuffer.length - 2400);
+    }
+  }
+
+  function pickDelayedState(now) {
+    if (!stateBuffer.length) return null;
+    if (streamDelaySec <= 0) {
+      return { state: stateBuffer[stateBuffer.length - 1].state, ready: true, waitSec: 0 };
+    }
+    var target = now - streamDelaySec * 1000;
+    var chosen = null;
+    for (var i = stateBuffer.length - 1; i >= 0; i--) {
+      if (stateBuffer[i].t <= target) {
+        chosen = stateBuffer[i].state;
+        break;
+      }
+    }
+    if (chosen) return { state: chosen, ready: true, waitSec: 0 };
+    // Still warming up: oldest sample is newer than the delay target.
+    var oldestAgeSec = Math.max(0, (now - stateBuffer[0].t) / 1000);
+    var waitSec = Math.max(0, Math.ceil(streamDelaySec - oldestAgeSec));
+    return { state: null, ready: false, waitSec: waitSec };
+  }
+
+  function updateDelayStatus(info) {
+    var el = document.getElementById('delayStatus');
+    if (!el) return;
+    if (streamDelaySec <= 0) {
+      el.textContent = '看板实时';
+      el.className = 'delay-status off';
+      el.title = '四周看板与左上角场次跟数据源同步；直播画面本身从不被延迟';
+      return;
+    }
+    if (info && !info.ready) {
+      el.textContent = '缓冲看板 ' + (info.waitSec || 0) + 's';
+      el.className = 'delay-status warming';
+      el.title = '正在缓存 ' + streamDelaySec + ' 秒看板历史数据（不改直播画面），以便对齐转播延迟';
+      return;
+    }
+    el.textContent = '看板延迟 ' + streamDelaySec + 's';
+    el.className = 'delay-status';
+    el.title = '四周看板/场次已故意延后 ' + streamDelaySec + ' 秒；直播 iframe/视频仍实时播放';
+  }
+
+  function flushDelayedState() {
+    var now = Date.now();
+    trimStateBuffer(now);
+    var picked = pickDelayedState(now);
+    updateDelayStatus(picked);
+    if (!picked || !picked.state) return;
+    if (picked.state === displayState) return;
+    displayState = picked.state;
+    latestState = picked.state;
+    setBoardFeedOk(true);
+    pushStateToAll();
+  }
+
+  function ingestLiveState(s) {
+    if (!s) return;
+    var now = Date.now();
+    stateBuffer.push({ t: now, state: s });
+    trimStateBuffer(now);
+    flushDelayedState();
+  }
+
+  function ensureDelayTicker() {
+    if (delayTickTimer) return;
+    delayTickTimer = setInterval(function () {
+      if (streamDelaySec > 0) flushDelayedState();
+    }, 200);
+  }
+
+  function syncDelayInputs(sec) {
+    var slider = document.getElementById('delaySlider');
+    var num = document.getElementById('delaySec');
+    if (slider) slider.value = String(sec);
+    if (num) num.value = String(sec);
+  }
+
+  function applyStreamDelay(sec, persist) {
+    streamDelaySec = clampDelaySec(sec);
+    syncDelayInputs(streamDelaySec);
+    if (persist !== false) {
+      try { localStorage.setItem(STORAGE_DELAY, String(streamDelaySec)); } catch (e) {}
+    }
+    ensureDelayTicker();
+    // Re-pick immediately (e.g. user lowered delay → jump closer to live).
+    flushDelayedState();
+  }
+
+  function loadStreamDelay() {
+    var saved = 0;
+    try {
+      var v = localStorage.getItem(STORAGE_DELAY);
+      if (v != null && v !== '') saved = clampDelaySec(v);
+    } catch (e) {}
+    applyStreamDelay(saved, false);
+  }
+
+
+  // ISO alpha-2 → flag image (flagcdn; Windows often renders regional-indicator emoji as letters).
+  function flagImgUrl(cc) {
+    if (!cc || cc.length !== 2) return '';
+    var code = cc.toLowerCase();
+    if (!/^[a-z]{2}$/.test(code)) return '';
+    return 'https://flagcdn.com/h20/' + code + '.png';
+  }
+
+  // Director/upstream state.race has meeting/circuit only — no country field.
+  // Match F1 calendar (and recent/historic) names → ISO code.
+  var GP_COUNTRY = [
+    [/miami/i, 'US'],
+    [/las\s*vegas/i, 'US'],
+    [/united\s*states|\busa\b|american/i, 'US'],
+    [/mexico\s*city|mexican|hermanos\s*rodr/i, 'MX'],
+    [/s[aã]o\s*paulo|brazilian|brasil|interlagos/i, 'BR'],
+    [/abu\s*dhabi|yas\s*marina/i, 'AE'],
+    [/saudi|jeddah/i, 'SA'],
+    [/emilia[\s-]*romagna|imola/i, 'IT'],
+    [/italian|\bitaly\b|monza|tuscan|mugello/i, 'IT'],
+    [/monaco|monte[\s-]*carlo/i, 'MC'],
+    [/british|great\s*britain|silverstone|\buk\b|70th\s*anniversary/i, 'GB'],
+    [/belgian|belgium|\bspa\b/i, 'BE'],
+    [/dutch|netherlands|zandvoort/i, 'NL'],
+    [/spanish|\bspain\b|barcelona|catalunya/i, 'ES'],
+    [/canadian|\bcanada\b|montreal|gilles\s*villeneuve/i, 'CA'],
+    [/austrian|\baustria\b|spielberg|red\s*bull\s*ring|styrian/i, 'AT'],
+    [/hungarian|\bhungary\b|hungaroring/i, 'HU'],
+    [/azerbaijan|\bbaku\b/i, 'AZ'],
+    [/singapore|marina\s*bay/i, 'SG'],
+    [/japanese|\bjapan\b|suzuka/i, 'JP'],
+    [/chinese|\bchina\b|shanghai/i, 'CN'],
+    [/australian|\baustralia\b|albert\s*park|melbourne/i, 'AU'],
+    [/bahrain|sakhir/i, 'BH'],
+    [/qatar|lusail/i, 'QA'],
+    [/french|\bfrance\b|paul\s*ricard/i, 'FR'],
+    [/german|\bgermany\b|hockenheim|n[uü]rburgring|\beifel\b/i, 'DE'],
+    [/portuguese|\bportugal\b|portim[aã]o/i, 'PT'],
+    [/turkish|\bturkey\b|istanbul/i, 'TR'],
+    [/russian|\brussia\b|sochi/i, 'RU'],
+    [/korean|\bkorea\b|yeongam/i, 'KR'],
+    [/malaysian|\bmalaysia\b|sepang/i, 'MY'],
+    [/indian|\bindia\b|buddh/i, 'IN']
+  ];
+
+  function inferCountryCode(meeting, circuit) {
+    var text = ((meeting || '') + ' ' + (circuit || '')).trim();
+    if (!text) return '';
+    for (var i = 0; i < GP_COUNTRY.length; i++) {
+      if (GP_COUNTRY[i][0].test(text)) return GP_COUNTRY[i][1];
+    }
+    return '';
+  }
+
+  function formatWeatherTemp(v) {
+    if (v == null || v === '') return '';
+    var s = String(v).trim();
+    if (!s || s === '—') return '';
+    if (/°\s*C|℃/i.test(s)) return s.replace(/℃/g, '°C');
+    if (/^-?[0-9]+(?:\.[0-9]+)?$/.test(s)) return s + '°C';
+    return s;
+  }
+
+  function parseWeatherExtras(text) {
+    var s = String(text || '');
+    var out = { humidity: '', wind: '', rain: '', raining: false };
+    var m;
+    m = /湿度\s*([0-9]+(?:\.[0-9]+)?)\s*%/.exec(s);
+    if (m) out.humidity = m[1] + '%';
+    m = /风(?:速)?\s*([0-9]+(?:\.[0-9]+)?)\s*(m\/s|km\/h)?/i.exec(s);
+    if (m) out.wind = m[1] + (m[2] ? (' ' + m[2]) : ' m/s');
+    if (/(?:有雨|正在下雨|下雨中)/.test(s) || /Rainfall\s*[:=]?\s*1\b/i.test(s)) {
+      out.raining = true;
+      out.rain = '有雨';
+    } else if (/(?:无雨|未降雨)/.test(s) || /Rainfall\s*[:=]?\s*0\b/i.test(s)) {
+      out.raining = false;
+    }
+    return out;
+  }
+
+  function weatherValuesFromState(st) {
+    var w = (st && st.weather) || {};
+    var extras = parseWeatherExtras(w.text);
+    var air = formatWeatherTemp(w.air);
+    var track = formatWeatherTemp(w.track);
+    if (!air) {
+      var ma = /气温\s*([0-9]+(?:\.[0-9]+)?)\s*°?\s*C?/i.exec(String(w.text || ''));
+      if (ma) air = ma[1] + '°C';
+    }
+    if (!track) {
+      var mt = /赛道(?:温(?:度)?)?\s*([0-9]+(?:\.[0-9]+)?)\s*°?\s*C?/i.exec(String(w.text || ''));
+      if (mt) track = mt[1] + '°C';
+    }
+    return {
+      air: air || '—',
+      track: track || '—',
+      humidity: extras.humidity || '—',
+      wind: extras.wind || '—',
+      rain: extras.raining ? (extras.rain || '有雨') : '无雨',
+      raining: !!extras.raining
+    };
+  }
+
+  function setWeatherChip(id, value) {
+    var chip = document.getElementById(id);
+    if (!chip) return;
+    var v = chip.querySelector('.ws-v');
+    if (v) v.textContent = value || '—';
+  }
+
+  function updateWeatherStrip() {
+    var strip = document.getElementById('weatherStrip');
+    if (!strip) return;
+    var vals = weatherValuesFromState(latestState);
+    var has = !!(latestState && latestState.weather && (
+      vals.air !== '—' || vals.track !== '—' || vals.humidity !== '—' ||
+      vals.wind !== '—' || (latestState.weather.text)
+    ));
+    strip.classList.toggle('empty', !has);
+    setWeatherChip('wsAir', vals.air);
+    setWeatherChip('wsTrack', vals.track);
+    setWeatherChip('wsHumidity', vals.humidity);
+    setWeatherChip('wsWind', vals.wind);
+    setWeatherChip('wsRain', vals.rain);
+    var rainChip = document.getElementById('wsRain');
+    if (rainChip) rainChip.classList.toggle('rain-warn', !!vals.raining);
+    var tip = [];
+    if (vals.air !== '—') tip.push('气温 ' + vals.air);
+    if (vals.track !== '—') tip.push('赛道 ' + vals.track);
+    if (vals.humidity !== '—') tip.push('湿度 ' + vals.humidity);
+    if (vals.wind !== '—') tip.push('风速 ' + vals.wind);
+    tip.push(vals.rain);
+    strip.title = tip.length ? tip.join(' · ') : '天气（来自 Director）';
+  }
+
+  /** Android ARGB int -> CSS (same as board app.js). */
+  function trackArgb(v) {
+    if (v === null || v === undefined || v === '') return '';
+    var n = Number(v);
+    if (!isFinite(n)) return '';
+    n = n >>> 0;
+    var a = ((n >>> 24) & 255) / 255;
+    var r = (n >>> 16) & 255, g = (n >>> 8) & 255, b = n & 255;
+    if (a === 0) a = 1;
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(3) + ')';
+  }
+
+  function updateTrackStrip() {
+    var strip = document.getElementById('trackStrip');
+    var chip = document.getElementById('tsChip');
+    var labelEl = document.getElementById('tsLabel');
+    var dot = document.getElementById('tsDot');
+    if (!strip || !chip || !labelEl) return;
+    var t = (latestState && latestState.track) || null;
+    var label = t && t.label ? String(t.label).trim() : '';
+    var detail = t && t.detail ? String(t.detail).trim() : '';
+    var kinds = (t && Array.isArray(t.kinds)) ? t.kinds.filter(Boolean) : [];
+    var has = !!(t && (label || detail || kinds.length || t.color != null || t.level != null));
+    strip.classList.toggle('empty', !has);
+    strip.classList.toggle('filled', has);
+    labelEl.textContent = has ? (label || '赛道状态') : '—';
+    var bg = has ? trackArgb(t.color) : '';
+    var fg = has ? trackArgb(t.textColor) : '';
+    if (has && bg) {
+      chip.style.background = bg;
+      chip.style.color = fg || '#fff';
+      chip.style.borderColor = 'rgba(0,0,0,0.18)';
+      if (dot) {
+        // keep a light marker on saturated fills; for near-white fills use dark
+        var n = Number(t.color) >>> 0;
+        var rr = (n >>> 16) & 255, gg = (n >>> 8) & 255, bb = n & 255;
+        var lum = (0.2126 * rr + 0.7152 * gg + 0.0722 * bb) / 255;
+        dot.style.background = lum > 0.72 ? 'rgba(20,24,30,0.85)' : 'rgba(255,255,255,0.92)';
+      }
+    } else {
+      chip.style.background = '';
+      chip.style.color = '';
+      chip.style.borderColor = '';
+      if (dot) dot.style.background = '';
+    }
+    var tip = [];
+    if (label) tip.push(label);
+    if (detail) tip.push(detail);
+    if (kinds.length) tip.push(kinds.join(' · '));
+    if (t && t.level != null && tip.indexOf('L' + t.level) < 0) {
+      // level is internal; only append if nothing else
+      if (!tip.length) tip.push('level ' + t.level);
+    }
+    strip.title = tip.length ? tip.join(' · ') : '赛道旗语（来自 Director）';
+  }
+
+  function updateSessionStrip() {
+    var strip = document.getElementById('sessionStrip');
+    if (!strip) return;
+    var r = (latestState && latestState.race) || {};
+    var meeting = r.meeting || '';
+    var session = r.session || '';
+    var status = r.status || '';
+    var remaining = r.remaining || '';
+    var lap = r.lap;
+    var total = r.totalLaps;
+    var has = !!(meeting || session || remaining || (lap != null && lap !== 0) || (total != null && total !== 0) || status);
+    strip.classList.toggle('empty', !has);
+    var meetEl = document.getElementById('ssMeeting');
+    var sessEl = document.getElementById('ssSession');
+    var lapsEl = document.getElementById('ssLaps');
+    var clockEl = document.getElementById('ssClock');
+    var flagEl = document.getElementById('ssFlag');
+    if (meetEl) meetEl.textContent = meeting || (has ? 'F1' : '等待赛会');
+    if (flagEl) {
+      var cc = meeting ? inferCountryCode(meeting, r.circuit) : '';
+      var url = flagImgUrl(cc);
+      if (url) {
+        if (flagEl.getAttribute('src') !== url) flagEl.src = url;
+        flagEl.alt = cc;
+        flagEl.title = cc;
+        flagEl.hidden = false;
+        flagEl.setAttribute('aria-hidden', 'false');
+      } else {
+        flagEl.removeAttribute('src');
+        flagEl.alt = '';
+        flagEl.title = '';
+        flagEl.hidden = true;
+        flagEl.setAttribute('aria-hidden', 'true');
+      }
+    }
+    if (sessEl) sessEl.textContent = session || (status || '—');
+    if (lapsEl) {
+      if (lap != null || total != null) {
+        lapsEl.textContent = 'L ' + (lap != null ? lap : 0) + '/' + (total != null ? total : 0);
+      } else {
+        lapsEl.textContent = 'L —/—';
+      }
+    }
+    if (clockEl) {
+      if (remaining) {
+        clockEl.textContent = remaining;
+        clockEl.title = status ? ('状态：' + status) : '剩余时间';
+      } else if (status) {
+        clockEl.textContent = status;
+        clockEl.title = '环节状态';
+      } else {
+        clockEl.textContent = '—';
+        clockEl.title = '';
+      }
+    }
+    var tip = [];
+    if (meeting) tip.push(meeting);
+    if (r.circuit) tip.push(r.circuit);
+    if (session) tip.push(session);
+    if (status) tip.push(status);
+    if (remaining) tip.push('剩 ' + remaining);
+    if (lap != null || total != null) tip.push('第 ' + (lap || 0) + '/' + (total || 0) + ' 圈');
+    strip.title = tip.length ? tip.join(' · ') : '场次状态（来自 Director）';
+  }
+
+  function pushStateToAll() {
+    updateSessionStrip();
+    updateWeatherStrip();
+    updateTrackStrip();
+    Object.keys(panels).forEach(function (id) {
+      var p = panels[id];
+      if (!p || p.type !== 'board' || !p.el) return;
+      pushStateToFrame(p.el.querySelector('iframe'));
+    });
+  }
+
+
+  function currentTheme() {
+    var t = document.documentElement.getAttribute('data-theme');
+    return (t === 'day') ? 'day' : 'night';
+  }
+
+  function pushThemeToFrame(iframe) {
+    if (!iframe) return;
+    var theme = currentTheme();
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1 && typeof w.F1.applyTheme === 'function') {
+        w.F1.applyTheme(theme);
+        try {
+          if (typeof w.F1.relayout === 'function') w.F1.relayout();
+        } catch (eRel) {}
+      }
+    } catch (e) {}
+    // Always postMessage too: covers cross-origin and boards that only listen.
+    try {
+      iframe.contentWindow.postMessage({ type: 'f1-theme', theme: theme }, '*');
+    } catch (e2) {}
+  }
+
+  function pushThemeToAll() {
+    Object.keys(panels).forEach(function (id) {
+      var p = panels[id];
+      if (!p || p.type !== 'board' || !p.el) return;
+      pushThemeToFrame(p.el.querySelector('iframe'));
+    });
+  }
+
+  function applyTheme(theme, persist) {
+    theme = (theme === 'day') ? 'day' : 'night';
+    document.documentElement.setAttribute('data-theme', theme);
+    var meta = document.getElementById('colorSchemeMeta');
+    if (meta) meta.setAttribute('content', theme === 'day' ? 'light' : 'dark');
+    var wrap = document.getElementById('themeToggle');
+    if (wrap) wrap.setAttribute('data-active', theme);
+    var dayBtn = document.getElementById('btnThemeDay');
+    var nightBtn = document.getElementById('btnThemeNight');
+    if (dayBtn) {
+      dayBtn.classList.toggle('active', theme === 'day');
+      dayBtn.setAttribute('aria-pressed', theme === 'day' ? 'true' : 'false');
+    }
+    if (nightBtn) {
+      nightBtn.classList.toggle('active', theme === 'night');
+      nightBtn.setAttribute('aria-pressed', theme === 'night' ? 'true' : 'false');
+    }
+    if (persist !== false) {
+      try { localStorage.setItem(STORAGE_THEME, theme); } catch (e) {}
+      if (typeof persistLayoutsToFile === 'function') persistLayoutsToFile(false);
+    }
+    pushThemeToAll();
+  }
+
+  function loadTheme() {
+    var saved = 'night';
+    try {
+      var v = localStorage.getItem(STORAGE_THEME);
+      if (v === 'day' || v === 'night') saved = v;
+    } catch (e) {}
+    applyTheme(saved, false);
+  }
+
+  function connectFeed() {
+    if (feedEs) {
+      try { feedEs.close(); } catch (e) {}
+      feedEs = null;
+    }
+    try {
+      feedEs = new EventSource(RC + '/api/events');
+    } catch (e) {
+      return;
+    }
+    // Open SSE = connected. Backend keeps the stream alive with ": ping"
+    // comments when race data is quiet (no new "state" events); those comments
+    // are invisible to JS, so we must NOT require state traffic for the green dot.
+    feedEs.addEventListener('open', function () {
+      setBoardFeedOk(true);
+    });
+    feedEs.addEventListener('state', function (ev) {
+      try {
+        ingestLiveState(JSON.parse(ev.data));
+      } catch (e) {}
+    });
+    feedEs.addEventListener('error', function () {
+      // EventSource auto-reconnects while readyState is CONNECTING (0).
+      // Only treat CLOSED (2) as a real drop; checkHealth will re-open.
+      if (feedEs && feedEs.readyState === 2) {
+        setBoardFeedOk(false);
+      }
+    });
+  }
+
+  /** Force the panel iframe to actually navigate to a board.
+   *  All /board/<id> URLs serve the same board.html; some browsers skip a
+   *  real reload when only the path segment changes, so title/label update
+   *  while the old board keeps painting. Recreate the iframe + cache-bust. */
+  function applyBoardToPanel(el, boardId) {
+    var body = el.querySelector('.p-body');
+    if (!body) return;
+    el.classList.toggle('board-flags', boardId === 'flags');
+    var oldFrame = body.querySelector('iframe');
+    var iframe = document.createElement('iframe');
+    iframe.title = boardId;
+    iframe.setAttribute('data-board', boardId);
+    iframe.onload = function () {
+      pushStateToFrame(iframe);
+      pushThemeToFrame(iframe);
+      if (boardId === 'trackmap') requestTrackmapUi(el);
+      if (boardId === 'timing') pushTimingColsToFrame(el, loadTimingColsVis());
+    };
+    iframe.src = boardUrl(boardId, true);
+    if (oldFrame) {
+      body.replaceChild(iframe, oldFrame);
+    } else {
+      body.appendChild(iframe);
+    }
+    var dd = el.querySelector('[data-board-select]');
+    if (dd) {
+      dd.setAttribute('data-value', boardId);
+      var lab = dd.querySelector('.board-dd-label');
+      if (lab) lab.textContent = boardLabel(boardId);
+    }
+    syncTimingColsTog(el, boardId);
+    syncTrackmapHead(el, boardId);
+  }
+
+  function boardLabel(id) {
+    for (var i = 0; i < BOARD_OPTS.length; i++) {
+      if (BOARD_OPTS[i].id === id) return BOARD_OPTS[i].label;
+    }
+    return id;
+  }
+
+  function stageSize() {
+    return { w: stage.clientWidth, h: stage.clientHeight };
+  }
+
+  function defaultLayout() {
+    var s = stageSize();
+    var W = Math.max(s.w, 900);
+    var H = Math.max(s.h, 600);
+    var g = 8;
+    var sideW = Math.floor(Math.min(340, W * 0.26));
+    var botH = Math.floor(Math.min(200, H * 0.28));
+    var liveX = sideW + g;
+    var liveY = g;
+    var liveW = W - sideW * 2 - g * 3;
+    var liveH = H - botH - g * 3;
+    if (liveW < 320) liveW = Math.max(320, W - g * 2);
+    if (liveH < 200) liveH = Math.max(200, H - botH - g * 2);
+
+    return [
+      { id: 'live', type: 'live', x: liveX, y: liveY, w: liveW, h: liveH, z: 20, minimized: false },
+      { id: 'p1', type: 'board', board: 'timing',   x: g, y: g, w: sideW, h: Math.floor((liveH - g) / 2), z: 11, minimized: false },
+      { id: 'p2', type: 'board', board: 'ring',     x: g, y: g + Math.floor((liveH - g) / 2) + g, w: sideW, h: Math.floor((liveH - g) / 2), z: 12, minimized: false },
+      { id: 'p3', type: 'board', board: 'weather',  x: W - sideW - g, y: g, w: sideW, h: Math.floor((liveH - g) / 2), z: 13, minimized: false },
+      { id: 'p4', type: 'board', board: 'tyres',    x: W - sideW - g, y: g + Math.floor((liveH - g) / 2) + g, w: sideW, h: Math.floor((liveH - g) / 2), z: 14, minimized: false },
+      { id: 'p5', type: 'board', board: 'messages', x: g, y: H - botH - g, w: Math.floor((W - g * 4) / 3), h: botH, z: 15, minimized: false },
+      { id: 'p6', type: 'board', board: 'fastest',  x: g * 2 + Math.floor((W - g * 4) / 3), y: H - botH - g, w: Math.floor((W - g * 4) / 3), h: botH, z: 16, minimized: false },
+      { id: 'p7', type: 'board', board: 'session',  x: g * 3 + Math.floor((W - g * 4) / 3) * 2, y: H - botH - g, w: Math.floor((W - g * 4) / 3), h: botH, z: 17, minimized: false }
+    ];
+  }
+
+  function panelH(p) {
+    return p.minimized ? HEAD_H : p.h;
+  }
+
+  function panelBox(p) {
+    return { x: p.x, y: p.y, w: p.w, h: panelH(p) };
+  }
+
+  function rectsOverlap(a, b, gap) {
+    if (gap == null) gap = GAP;
+    return !(a.x + a.w + gap <= b.x ||
+             b.x + b.w + gap <= a.x ||
+             a.y + a.h + gap <= b.y ||
+             b.y + b.h + gap <= a.y);
+  }
+
+  function eachOther(id, fn) {
+    Object.keys(panels).forEach(function (k) {
+      if (k !== id) fn(panels[k]);
+    });
+  }
+
+  function overlapsAny(st) {
+    var box = panelBox(st);
+    var hit = null;
+    eachOther(st.id, function (o) {
+      if (!hit && rectsOverlap(box, panelBox(o))) hit = o;
+    });
+    return hit;
+  }
+
+  function boardMinH(st) {
+    if (st.type === 'live') return LIVE_MIN_H;
+    if (st.board === 'flags') return FLAGS_MIN_H;
+    return MIN_H;
+  }
+
+  function minSize(st) {
+    return {
+      w: st.type === 'live' ? LIVE_MIN_W : MIN_W,
+      h: st.minimized ? HEAD_H : boardMinH(st)
+    };
+  }
+
+  function clampToStage(st) {
+    var s = stageSize();
+    var m = minSize(st);
+    var maxW = Math.max(m.w, s.w - GAP * 2);
+    var maxH = Math.max(m.h, s.h - GAP * 2);
+    st.w = Math.max(m.w, Math.min(st.w, maxW));
+    if (st.minimized) st.h = HEAD_H;
+    else st.h = Math.max(m.h, Math.min(st.h, maxH));
+    var ph = panelH(st);
+    st.x = Math.max(GAP, Math.min(st.x, Math.max(GAP, s.w - st.w - GAP)));
+    st.y = Math.max(GAP, Math.min(st.y, Math.max(GAP, s.h - ph - GAP)));
+    return st;
+  }
+
+  function clampPanel(st) {
+    return clampToStage(st);
+  }
+
+  function notifyPanelContentResize(el) {
+    if (!el) return;
+    var iframe = el.querySelector('iframe');
+    if (!iframe) return;
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1 && typeof w.F1.relayout === 'function') {
+        w.F1.relayout();
+        return;
+      }
+    } catch (e) {}
+    try {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'f1-resize' }, '*');
+      }
+    } catch (e2) {}
+  }
+
+  function notifyAllContentResize() {
+    Object.keys(panels).forEach(function (id) {
+      notifyPanelContentResize(panels[id].el);
+    });
+  }
+
+  var contentResizeTimer = null;
+  function scheduleContentResize(el) {
+    if (contentResizeTimer) clearTimeout(contentResizeTimer);
+    contentResizeTimer = setTimeout(function () {
+      contentResizeTimer = null;
+      if (el) notifyPanelContentResize(el);
+      else notifyAllContentResize();
+    }, 60);
+  }
+
+  function applyGeom(el, st, opts) {
+    // skipClamp: keep scaled/letterboxed coords (min-size + GAP clamp would
+    // reopen gaps and fight uniform scale after a shrink).
+    if (!opts || !opts.skipClamp) clampPanel(st);
+    el.style.left = st.x + 'px';
+    el.style.top = st.y + 'px';
+    el.style.width = st.w + 'px';
+    if (st.minimized) {
+      el.style.height = HEAD_H + 'px';
+      el.classList.add('minimized');
+    } else {
+      el.style.height = st.h + 'px';
+      el.classList.remove('minimized');
+    }
+    el.style.zIndex = st.z;
+    if (!opts || !opts.silentContent) scheduleContentResize(el);
+  }
+
+  /** Push st away from neighbors until no overlap, or restore origin. */
+  function trySeparate(st, origin) {
+    clampToStage(st);
+    if (!overlapsAny(st)) return true;
+    for (var iter = 0; iter < 48; iter++) {
+      var hit = overlapsAny(st);
+      if (!hit) return true;
+      var a = panelBox(st);
+      var b = panelBox(hit);
+      var dx = (a.x + a.w / 2) - (b.x + b.w / 2);
+      var dy = (a.y + a.h / 2) - (b.y + b.h / 2);
+      var ox = (a.w + b.w) / 2 + GAP - Math.abs(dx);
+      var oy = (a.h + b.h) / 2 + GAP - Math.abs(dy);
+      if (ox <= 0 || oy <= 0) {
+        st.x += (dx === 0 ? GAP : (dx > 0 ? 1 : -1));
+        st.y += (dy === 0 ? GAP : (dy > 0 ? 1 : -1));
+      } else if (ox < oy) {
+        st.x += (dx >= 0 ? 1 : -1) * Math.ceil(ox);
+      } else {
+        st.y += (dy >= 0 ? 1 : -1) * Math.ceil(oy);
+      }
+      clampToStage(st);
+    }
+    if (!overlapsAny(st)) return true;
+    if (origin) {
+      st.x = origin.x; st.y = origin.y; st.w = origin.w; st.h = origin.h;
+      st.minimized = origin.minimized; st._prevH = origin._prevH;
+      clampToStage(st);
+    }
+    return !overlapsAny(st);
+  }
+
+  /** Iteratively untangle all panels (after window scale / load). */
+  function resolveAllOverlaps() {
+    var ids = Object.keys(panels).sort(function (a, b) {
+      var pa = panels[a], pb = panels[b];
+      if (pa.type === 'live' && pb.type !== 'live') return -1;
+      if (pb.type === 'live' && pa.type !== 'live') return 1;
+      return (pb.w * panelH(pb)) - (pa.w * panelH(pa));
+    });
+    for (var pass = 0; pass < 40; pass++) {
+      var any = false;
+      for (var i = 0; i < ids.length; i++) {
+        var st = panels[ids[i]];
+        var hit = overlapsAny(st);
+        if (!hit) continue;
+        any = true;
+        var move = st;
+        if (st.type === 'live') move = hit;
+        else if (hit.type !== 'live' && (hit.w * panelH(hit) < st.w * panelH(st))) move = hit;
+        var other = (move === st) ? hit : st;
+        var a = panelBox(move);
+        var b = panelBox(other);
+        var dx = (a.x + a.w / 2) - (b.x + b.w / 2);
+        var dy = (a.y + a.h / 2) - (b.y + b.h / 2);
+        var ox = (a.w + b.w) / 2 + GAP - Math.abs(dx);
+        var oy = (a.h + b.h) / 2 + GAP - Math.abs(dy);
+        if (ox > 0 && oy > 0) {
+          if (ox < oy) move.x += (dx >= 0 ? 1 : -1) * Math.ceil(ox);
+          else move.y += (dy >= 0 ? 1 : -1) * Math.ceil(oy);
+        } else {
+          move.x += GAP; move.y += GAP;
+        }
+        clampToStage(move);
+        applyGeom(move.el, move, { silentContent: true });
+      }
+      if (!any) break;
+    }
+    notifyAllContentResize();
+  }
+
+  /** Clamp growing panel against a neighbor that cannot shrink further.
+   *  Only apply the axis that the neighbor actually blocks — corner dirs
+   *  (e.g. se) must not let a right-side panel collapse our height, or a
+   *  bottom panel collapse our width.
+   */
+  function clampSelfToNeighbor(st, hit, dir) {
+    var m = minSize(st);
+    var a = panelBox(st);
+    var o = panelBox(hit);
+    var acx = a.x + a.w / 2, acy = a.y + a.h / 2;
+    var ocx = o.x + o.w / 2, ocy = o.y + o.h / 2;
+    if (dir.indexOf('e') >= 0 && sharesPerpEdge(a, o, 'e') && ocx >= acx - 1) {
+      st.w = Math.min(st.w, Math.max(m.w, o.x - GAP - st.x));
+    }
+    if (dir.indexOf('w') >= 0 && sharesPerpEdge(a, o, 'w') && ocx <= acx + 1) {
+      var right = st.x + st.w;
+      var nx = Math.max(st.x, o.x + o.w + GAP);
+      st.x = nx;
+      st.w = Math.max(m.w, right - st.x);
+    }
+    if (dir.indexOf('s') >= 0 && sharesPerpEdge(a, o, 's') && ocy >= acy - 1) {
+      st.h = Math.min(st.h, Math.max(m.h, o.y - GAP - st.y));
+    }
+    if (dir.indexOf('n') >= 0 && sharesPerpEdge(a, o, 'n') && ocy <= acy + 1) {
+      var bottom = st.y + st.h;
+      var ny = Math.max(st.y, o.y + o.h + GAP);
+      st.y = ny;
+      st.h = Math.max(m.h, bottom - st.y);
+    }
+    st.w = Math.max(m.w, st.w);
+    st.h = Math.max(m.h, st.h);
+  }
+
+  /** True if A and B overlap on the axis perpendicular to the growth dir. */
+  function sharesPerpEdge(a, b, dir) {
+    if (dir.indexOf('e') >= 0 || dir.indexOf('w') >= 0) {
+      return !(a.y + a.h <= b.y || b.y + b.h <= a.y);
+    }
+    if (dir.indexOf('s') >= 0 || dir.indexOf('n') >= 0) {
+      return !(a.x + a.w <= b.x || b.x + b.w <= a.x);
+    }
+    return true;
+  }
+
+  /**
+   * Compress hit along the shared edge so st can keep growing.
+   * Returns true if hit geometry changed.
+   */
+  function compressNeighborAlongDir(st, hit, dir) {
+    var om = minSize(hit);
+    var changed = false;
+    var a = panelBox(st);
+    var b = panelBox(hit);
+    var acx = a.x + a.w / 2, acy = a.y + a.h / 2;
+    var bcx = b.x + b.w / 2, bcy = b.y + b.h / 2;
+
+    // East: grow right → shrink or push neighbor from its left
+    if (dir.indexOf('e') >= 0 && sharesPerpEdge(a, b, 'e') && bcx >= acx - 1) {
+      var need = a.x + a.w + GAP;
+      if (hit.x < need) {
+        var right = hit.x + hit.w;
+        var avail = right - need;
+        if (avail >= om.w) {
+          hit.x = need;
+          hit.w = avail;
+        } else {
+          // Already at min width: push the whole panel further along growth
+          hit.w = om.w;
+          hit.x = need;
+        }
+        changed = true;
+      }
+    }
+    // West: grow left → shrink or push neighbor from its right
+    if (dir.indexOf('w') >= 0 && sharesPerpEdge(a, b, 'w') && bcx <= acx + 1) {
+      var limit = a.x - GAP;
+      if (hit.x + hit.w > limit) {
+        var left = hit.x;
+        var availW = limit - left;
+        if (availW >= om.w) {
+          hit.w = availW;
+        } else {
+          hit.w = om.w;
+          hit.x = Math.max(GAP, limit - om.w);
+        }
+        changed = true;
+      }
+    }
+    // South: grow down → shrink or push neighbor from its top
+    if (dir.indexOf('s') >= 0 && !hit.minimized && sharesPerpEdge(a, b, 's') && bcy >= acy - 1) {
+      var needY = a.y + a.h + GAP;
+      if (hit.y < needY) {
+        var bottom = hit.y + hit.h;
+        var availH = bottom - needY;
+        if (availH >= om.h) {
+          hit.y = needY;
+          hit.h = availH;
+        } else {
+          hit.h = om.h;
+          hit.y = needY;
+        }
+        changed = true;
+      }
+    }
+    // North: grow up → shrink or push neighbor from its bottom
+    if (dir.indexOf('n') >= 0 && !hit.minimized && sharesPerpEdge(a, b, 'n') && bcy <= acy + 1) {
+      var limitY = a.y - GAP;
+      if (hit.y + hit.h > limitY) {
+        var top = hit.y;
+        var availN = limitY - top;
+        if (availN >= om.h) {
+          hit.h = availN;
+        } else {
+          hit.h = om.h;
+          hit.y = Math.max(GAP, limitY - om.h);
+        }
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      var hm = minSize(hit);
+      hit.w = Math.max(hm.w, hit.w);
+      hit.h = Math.max(hm.h, hit.h);
+      clampToStage(hit);
+    }
+    return changed;
+  }
+
+  function collectOverlaps(st) {
+    var list = [];
+    var box = panelBox(st);
+    eachOther(st.id, function (o) {
+      if (rectsOverlap(box, panelBox(o))) list.push(o);
+    });
+    return list;
+  }
+
+  /**
+   * While enlarging st, compress neighbors along the shared edge instead of
+   * blocking growth. If a neighbor hits its min size, clamp st.
+   * Returns map of touched panels.
+   */
+  function clampResizeAgainstOthers(st, dir) {
+    var m = minSize(st);
+    var touched = {};
+
+    for (var guard = 0; guard < 48; guard++) {
+      var hits = collectOverlaps(st);
+      if (!hits.length) break;
+
+      var progress = false;
+      for (var i = 0; i < hits.length; i++) {
+        var hit = hits[i];
+        var before = { x: hit.x, y: hit.y, w: hit.w, h: hit.h };
+        var moved = compressNeighborAlongDir(st, hit, dir);
+        touched[hit.id] = hit;
+
+        if (moved) {
+          progress = true;
+          // Chain: compressed panel may now overlap another further along growth
+          var chainHits = [];
+          eachOther(hit.id, function (o) {
+            if (o.id !== st.id && rectsOverlap(panelBox(hit), panelBox(o))) chainHits.push(o);
+          });
+          for (var c = 0; c < chainHits.length; c++) {
+            var ch = chainHits[c];
+            if (compressNeighborAlongDir(hit, ch, dir)) {
+              touched[ch.id] = ch;
+              progress = true;
+            }
+          }
+        }
+
+        // Still colliding with this hit — neighbor at min or not on growth side
+        if (rectsOverlap(panelBox(st), panelBox(hit))) {
+          var unchanged = before.x === hit.x && before.y === hit.y &&
+            before.w === hit.w && before.h === hit.h;
+          clampSelfToNeighbor(st, hit, dir);
+          if (unchanged) progress = true; // st changed at least
+        }
+      }
+
+      if (!collectOverlaps(st).length) break;
+      if (!progress) {
+        // Force-clamp against every remaining overlap then stop
+        collectOverlaps(st).forEach(function (h) {
+          clampSelfToNeighbor(st, h, dir);
+          touched[h.id] = h;
+        });
+        break;
+      }
+    }
+
+    st.w = Math.max(m.w, st.w);
+    st.h = Math.max(m.h, st.h);
+    clampToStage(st);
+
+    Object.keys(touched).forEach(function (id) {
+      var p = touched[id];
+      clampToStage(p);
+      applyGeom(p.el, p, { silentContent: true });
+    });
+    return touched;
+  }
+
+  function findFreeSpot(w, h) {
+    var s = stageSize();
+    var step = 24;
+    for (var y = GAP; y + h <= s.h - GAP; y += step) {
+      for (var x = GAP; x + w <= s.w - GAP; x += step) {
+        var trial = { id: '__tmp', x: x, y: y, w: w, h: h, minimized: false, type: 'board' };
+        var ok = true;
+        Object.keys(panels).forEach(function (id) {
+          if (ok && rectsOverlap(panelBox(trial), panelBox(panels[id]))) ok = false;
+        });
+        if (ok) return { x: x, y: y };
+      }
+    }
+    return { x: GAP, y: GAP };
+  }
+
+  function bringToFront(id) {
+    zCounter += 1;
+    panels[id].z = zCounter;
+    panels[id].el.style.zIndex = zCounter;
+    Object.keys(panels).forEach(function (k) {
+      panels[k].el.classList.toggle('active', k === id);
+    });
+    saveLayout();
+  }
+
+  function boardDdHtml(selected) {
+    var id = selected || 'timing';
+    var okClass = boardFeedOk ? ' ok' : '';
+    return '<div class="board-dd" data-board-select data-value="' + id + '">' +
+      '<button type="button" class="board-dd-btn" aria-haspopup="listbox" aria-expanded="false">' +
+        '<span class="board-dd-status' + okClass + '" aria-hidden="true"></span>' +
+        '<span class="board-dd-label">' + boardLabel(id) + '</span>' +
+        '<span class="board-dd-caret" aria-hidden="true">▾</span>' +
+      '</button>' +
+    '</div>';
+  }
+
+  var boardFeedOk = false;
+  function setBoardFeedOk(ok) {
+    boardFeedOk = !!ok;
+    document.querySelectorAll('.board-dd-status').forEach(function (dot) {
+      dot.classList.toggle('ok', boardFeedOk);
+    });
+  }
+
+  var boardDdMenu = null;
+  var boardDdActive = null;
+
+  function ensureBoardDdMenu() {
+    if (boardDdMenu) return boardDdMenu;
+    boardDdMenu = document.createElement('div');
+    boardDdMenu.id = 'board-dd-menu';
+    boardDdMenu.setAttribute('role', 'listbox');
+    boardDdMenu.innerHTML = BOARD_OPTS.map(function (o) {
+      return '<button type="button" class="board-dd-opt" role="option" data-value="' + o.id + '">' + o.label + '</button>';
+    }).join('');
+    document.body.appendChild(boardDdMenu);
+    boardDdMenu.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    boardDdMenu.addEventListener('click', function (e) {
+      var opt = e.target.closest('.board-dd-opt');
+      if (!opt || !boardDdActive) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var val = opt.getAttribute('data-value');
+      var st = boardDdActive.st;
+      var el = boardDdActive.el;
+      var dd = boardDdActive.dd;
+      closeBoardDd();
+      if (!st || !el || !dd) return;
+      if (st.board === val) return;
+      st.board = val;
+      applyBoardToPanel(el, val);
+      saveLayout();
+    });
+    return boardDdMenu;
+  }
+
+  function closeBoardDd() {
+    if (boardDdMenu) boardDdMenu.classList.remove('open');
+    if (boardDdActive && boardDdActive.dd) {
+      boardDdActive.dd.classList.remove('open');
+      var btn = boardDdActive.dd.querySelector('.board-dd-btn');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+    boardDdActive = null;
+  }
+
+  function openBoardDd(st, el, dd) {
+    var menu = ensureBoardDdMenu();
+    var btn = dd.querySelector('.board-dd-btn');
+    if (!btn) return;
+    if (boardDdActive && boardDdActive.dd === dd) {
+      closeBoardDd();
+      return;
+    }
+    if (typeof closeLayoutMenu === 'function') closeLayoutMenu();
+    closeBoardDd();
+    var cur = dd.getAttribute('data-value') || st.board || 'timing';
+    menu.querySelectorAll('.board-dd-opt').forEach(function (opt) {
+      opt.classList.toggle('active', opt.getAttribute('data-value') === cur);
+    });
+    var r = btn.getBoundingClientRect();
+    menu.classList.add('open');
+    // Measure after show
+    var mw = Math.max(r.width, 148);
+    menu.style.minWidth = mw + 'px';
+    var mh = menu.offsetHeight;
+    var left = r.left;
+    var top = r.bottom + 4;
+    if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    dd.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    boardDdActive = { st: st, el: el, dd: dd };
+  }
+
+  document.addEventListener('mousedown', function (e) {
+    if (!boardDdActive) return;
+    if (e.target.closest && (e.target.closest('#board-dd-menu') || e.target.closest('.board-dd'))) return;
+    closeBoardDd();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeBoardDd();
+  });
+  window.addEventListener('resize', closeBoardDd);
+  window.addEventListener('scroll', function (e) {
+    if (!boardDdActive) return;
+    // Scrolling inside the fixed menu must not close it (capture would otherwise catch it).
+    var t = e.target;
+    if (boardDdMenu && (t === boardDdMenu || (boardDdMenu.contains && boardDdMenu.contains(t)))) return;
+    closeBoardDd();
+  }, true);
+
+  // ---- Timing board column picker (lives in .p-head, not an in-iframe tools row) ----
+  var TIMING_COLS_STORAGE = 'f1-timing-columns';
+  var TIMING_COLS_DEF = [
+    { id: 'pos',  label: '#', always: true },
+    { id: 'who',  label: '车手', always: true },
+    { id: 'gap',  label: '差距', always: false },
+    { id: 'int',  label: '间隔', always: false },
+    { id: 'tyre', label: '胎',   always: false },
+    { id: 'laps', label: '圈',   always: false },
+    { id: 'pit',  label: '站',   always: false }
+  ];
+  var timingColsMenu = null;
+  var timingColsActive = null;
+
+  function syncTimingColsTog(el, boardId) {
+    var btn = el && el.querySelector('.timing-cols-tog');
+    if (!btn) return;
+    var show = (boardId || '') === 'timing';
+    btn.classList.toggle('show', show);
+    if (!show && timingColsActive && timingColsActive.el === el) closeTimingColsMenu();
+  }
+
+  var TM_VIEW_HINT = '滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位';
+
+  function syncTrackmapHead(el, boardId) {
+    var head = el && el.querySelector('[data-tm-head]');
+    if (!head) return;
+    var show = (boardId || '') === 'trackmap';
+    head.classList.toggle('show', show);
+    if (show) {
+      var hint = head.querySelector('.tm-hint');
+      if (hint) hint.title = TM_VIEW_HINT;
+      // Ask iframe for current status/rot (if already loaded).
+      requestTrackmapUi(el);
+    }
+  }
+
+  function updateTrackmapHeadUi(el, data) {
+    var head = el && el.querySelector('[data-tm-head]');
+    if (!head || !data) return;
+    var st = head.querySelector('.tm-head-status');
+    if (st && data.status != null) {
+      st.textContent = data.status;
+      st.title = data.status;
+    }
+    var lab = head.querySelector('.tm-rot-label');
+    if (lab && data.rot != null) lab.textContent = Math.round(Number(data.rot) || 0) + '°';
+    var hint = head.querySelector('.tm-hint');
+    if (hint && data.hint) hint.title = data.hint;
+  }
+
+  function requestTrackmapUi(el) {
+    var iframe = el && el.querySelector('iframe');
+    if (!iframe) return;
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1) {
+        updateTrackmapHeadUi(el, {
+          status: typeof w.F1.getTrackmapStatus === 'function' ? w.F1.getTrackmapStatus() : '',
+          rot: typeof w.F1.getTrackmapRot === 'function' ? w.F1.getTrackmapRot() : 0
+        });
+        return;
+      }
+    } catch (e) {}
+    try {
+      iframe.contentWindow.postMessage({ type: 'f1-trackmap-ui-req' }, '*');
+    } catch (e2) {}
+  }
+
+  function pushTrackmapRot(el, delta) {
+    var iframe = el && el.querySelector('iframe');
+    if (!iframe) return;
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1 && typeof w.F1.rotateTrackmap === 'function') {
+        w.F1.rotateTrackmap(delta);
+        // Optimistic label; iframe will confirm via postMessage.
+        var lab = el.querySelector('.tm-rot-label');
+        if (lab && typeof w.F1.getTrackmapRot === 'function') {
+          lab.textContent = Math.round(w.F1.getTrackmapRot()) + '°';
+        }
+        return;
+      }
+    } catch (e) {}
+    try {
+      iframe.contentWindow.postMessage({ type: 'f1-trackmap-rot', delta: delta }, '*');
+    } catch (e2) {}
+  }
+
+  function findPanelByFrameSource(source) {
+    if (!source) return null;
+    var nodes = stage.querySelectorAll('.fpanel');
+    for (var i = 0; i < nodes.length; i++) {
+      var iframe = nodes[i].querySelector('iframe');
+      try {
+        if (iframe && iframe.contentWindow === source) return nodes[i];
+      } catch (e) {}
+    }
+    return null;
+  }
+
+  window.addEventListener('message', function (ev) {
+    var d = ev && ev.data;
+    if (!d || typeof d !== 'object') return;
+    if (d.type !== 'f1-trackmap-ui') return;
+    var panel = findPanelByFrameSource(ev.source);
+    if (panel) updateTrackmapHeadUi(panel, d);
+  });
+
+  function loadTimingColsVis() {
+    var vis = {};
+    var i;
+    for (i = 0; i < TIMING_COLS_DEF.length; i++) vis[TIMING_COLS_DEF[i].id] = true;
+    try {
+      var raw = localStorage.getItem(TIMING_COLS_STORAGE);
+      if (!raw) return vis;
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return vis;
+      var chosen = {};
+      for (i = 0; i < arr.length; i++) chosen[arr[i]] = true;
+      for (i = 0; i < TIMING_COLS_DEF.length; i++) {
+        var c = TIMING_COLS_DEF[i];
+        vis[c.id] = c.always ? true : !!chosen[c.id];
+      }
+      if (!vis.pos && !vis.who) { vis.pos = true; vis.who = true; }
+      return vis;
+    } catch (e) {
+      return vis;
+    }
+  }
+
+  function timingColsArrayFromVis(vis) {
+    var out = [];
+    for (var i = 0; i < TIMING_COLS_DEF.length; i++) {
+      var c = TIMING_COLS_DEF[i];
+      if (c.always || (vis && vis[c.id])) out.push(c.id);
+    }
+    if (out.indexOf('pos') < 0) out.unshift('pos');
+    if (out.indexOf('who') < 0) out.splice(1, 0, 'who');
+    return out;
+  }
+
+  function pushTimingColsToAllBoards() {
+    var vis = loadTimingColsVis();
+    Object.keys(panels).forEach(function (id) {
+      var p = panels[id];
+      if (!p || !p.el) return;
+      if ((p.board || '') === 'timing') pushTimingColsToFrame(p.el, vis);
+    });
+  }
+
+  function applyTimingColumnsPref(arr) {
+    if (!Array.isArray(arr) || !arr.length) return false;
+    var cleaned = [];
+    var seen = {};
+    for (var i = 0; i < arr.length; i++) {
+      var id = String(arr[i] || '');
+      if (!id || seen[id]) continue;
+      seen[id] = true;
+      cleaned.push(id);
+    }
+    if (!seen.pos) cleaned.unshift('pos');
+    if (!seen.who) cleaned.splice(cleaned.indexOf('pos') >= 0 ? 1 : 0, 0, 'who');
+    try { localStorage.setItem(TIMING_COLS_STORAGE, JSON.stringify(cleaned)); } catch (e) {}
+    pushTimingColsToAllBoards();
+    return true;
+  }
+
+  function saveTimingColsVis(vis) {
+    var out = timingColsArrayFromVis(vis);
+    try { localStorage.setItem(TIMING_COLS_STORAGE, JSON.stringify(out)); } catch (e) {}
+    persistLayoutsToFile(false);
+  }
+
+  function pushTimingColsToFrame(el, vis) {
+    var iframe = el && el.querySelector('iframe');
+    if (!iframe) return;
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1 && typeof w.F1.setTimingColumns === 'function') {
+        w.F1.setTimingColumns(vis);
+        return;
+      }
+    } catch (e) {}
+    try {
+      iframe.contentWindow.postMessage({ type: 'f1-timing-cols-set', vis: vis }, '*');
+    } catch (e2) {}
+  }
+
+  function ensureTimingColsMenu() {
+    if (timingColsMenu) return timingColsMenu;
+    timingColsMenu = document.createElement('div');
+    timingColsMenu.id = 'timing-cols-menu';
+    timingColsMenu.setAttribute('role', 'menu');
+    document.body.appendChild(timingColsMenu);
+    timingColsMenu.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    return timingColsMenu;
+  }
+
+  function closeTimingColsMenu() {
+    if (timingColsMenu) timingColsMenu.classList.remove('open');
+    if (timingColsActive && timingColsActive.btn) {
+      timingColsActive.btn.setAttribute('aria-expanded', 'false');
+    }
+    timingColsActive = null;
+  }
+
+  function openTimingColsMenu(st, el, btn) {
+    if (timingColsActive && timingColsActive.btn === btn) {
+      closeTimingColsMenu();
+      return;
+    }
+    if (typeof closeBoardDd === 'function') closeBoardDd();
+    if (typeof closeLayoutMenu === 'function') closeLayoutMenu();
+    closeTimingColsMenu();
+
+    var menu = ensureTimingColsMenu();
+    var vis = loadTimingColsVis();
+    menu.innerHTML = '';
+    for (var i = 0; i < TIMING_COLS_DEF.length; i++) {
+      (function (col) {
+        var lab = document.createElement('label');
+        lab.className = 'timing-cols-item';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!vis[col.id];
+        if (col.always) {
+          cb.disabled = true;
+          lab.title = '名次与车手始终显示';
+        }
+        cb.addEventListener('change', function () {
+          var next = loadTimingColsVis();
+          next[col.id] = !!cb.checked;
+          if (!next.pos && !next.who) {
+            next.pos = true;
+            next.who = true;
+            cb.checked = true;
+          }
+          saveTimingColsVis(next);
+          pushTimingColsToFrame(el, next);
+        });
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(' ' + col.label));
+        menu.appendChild(lab);
+      })(TIMING_COLS_DEF[i]);
+    }
+
+    var r = btn.getBoundingClientRect();
+    menu.classList.add('open');
+    var mw = Math.max(r.width, 120);
+    menu.style.minWidth = mw + 'px';
+    var mh = menu.offsetHeight;
+    var left = r.right - mw;
+    var top = r.bottom + 4;
+    if (left < 8) left = 8;
+    if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    btn.setAttribute('aria-expanded', 'true');
+    timingColsActive = { st: st, el: el, btn: btn };
+  }
+
+  document.addEventListener('mousedown', function (e) {
+    if (!timingColsActive) return;
+    if (e.target.closest && (e.target.closest('#timing-cols-menu') || e.target.closest('.timing-cols-tog'))) return;
+    closeTimingColsMenu();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeTimingColsMenu();
+  });
+  window.addEventListener('resize', closeTimingColsMenu);
+
+  function resizeHandlesHtml() {
+    return ['n','s','e','w','nw','ne','sw','se'].map(function (d) {
+      return '<div class="resize-handle ' + d + '" data-dir="' + d + '"></div>';
+    }).join('');
+  }
+
+  function createLivePanel(st) {
+    var el = document.createElement('section');
+    el.className = 'fpanel live-panel';
+    el.dataset.panelId = st.id;
+    el.innerHTML =
+      '<div class="p-head" data-drag>' +
+        '<span class="live-badge">LIVE</span>' +
+        '<span class="title">直播画面</span>' +
+        '<span class="tag" id="liveTag">占位</span>' +
+        '<span class="spacer"></span>' +
+        '<span class="win-btns">' +
+          '<button type="button" class="live-url-tog" id="btnLiveUrlTog" title="显示/隐藏地址与延迟栏" aria-pressed="false">地址</button>' +
+          '<button type="button" class="live-fs" data-action="fs" id="btnLiveFs" title="铺满裁切：放大播放器区域并裁切网页四周；站点布局不同时用左下角微调。播放器自带全屏会被退出。快捷键 F / Esc 退出" aria-pressed="false">⛶ 铺满裁切</button>' +
+          '<button type="button" data-action="min" title="最小化">–</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="live-toolbar" data-no-drag title="延迟只推迟四周看板/左上角场次数据，不改变直播画面速度">' +
+        '<input class="stream-url" id="streamUrl" type="url" placeholder="粘贴直播链接（B站 / 抖音 / Twitch / 直链）" autocomplete="off">' +
+        '<button class="primary" id="btnApply" type="button">载入</button>' +
+        '<button id="btnClear" type="button">清除</button>' +
+        '<span class="tb-sep" aria-hidden="true"></span>' +
+        '<span class="delay-label" title="官方计时通常比转播更快；把看板数据故意延后以对齐画面">数据延迟</span>' +
+        '<input id="delaySlider" type="range" min="0" max="' + MAX_DELAY_SEC + '" step="1" value="0" aria-label="看板数据延迟秒数">' +
+        '<input id="delaySec" type="number" min="0" max="' + MAX_DELAY_SEC + '" step="1" value="0" aria-label="看板延迟秒数">' +
+        '<span class="delay-unit">秒</span>' +
+        '<button class="primary" id="btnDelayApply" type="button" title="应用看板数据延迟（不改直播画面）">应用</button>' +
+        '<button id="btnDelayReset" type="button" title="看板恢复实时">复位</button>' +
+        '<span class="delay-status off" id="delayStatus">看板实时</span>' +
+      '</div>' +
+      '<div class="p-body" id="liveFsRoot">' +
+        '<div class="live-placeholder" id="livePlaceholder">' +
+          '<h1>ON AIR</h1>' +
+          '<p>在上方输入框粘贴直播间链接，点「载入」嵌入主画面。</p>' +
+          '<div class="hint">支持：普通 https 页面（iframe）、.mp4 / .webm / .m3u8 直链（video）。<br>' +
+          'B站 / 抖音等常因防盗链无法直接嵌入，可另开浏览器看直播，看板照常环绕。</div>' +
+        '</div>' +
+        '<iframe class="live-frame hidden" id="liveIframe" title="live" allow="autoplay; picture-in-picture" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"></iframe>' +
+        '<video class="live-frame hidden" id="liveVideo" controls playsinline controlslist="nofullscreen"></video>' +
+        '<div class="live-crop-ui" id="liveCropUi" aria-label="铺满裁切微调">' +
+          '<button type="button" data-crop="scale-" title="缩小缩放">−</button>' +
+          '<span class="crop-readout" id="liveCropScaleLabel">1.45×</span>' +
+          '<button type="button" data-crop="scale+" title="放大缩放">+</button>' +
+          '<button type="button" data-crop="left" title="画面左移（露出右侧更少）">←</button>' +
+          '<button type="button" data-crop="right" title="画面右移">→</button>' +
+          '<button type="button" data-crop="up" title="画面上移">↑</button>' +
+          '<button type="button" data-crop="down" title="画面下移">↓</button>' +
+          '<button type="button" data-crop="preset-huya" title="常用直播站裁切预设">预设</button>' +
+          '<button type="button" data-crop="reset" title="复位默认">复位</button>' +
+        '</div>' +
+      '</div>' +
+      resizeHandlesHtml();
+    stage.appendChild(el);
+    return el;
+  }
+
+  function createBoardPanel(st) {
+    var el = document.createElement('section');
+    el.className = 'fpanel';
+    el.dataset.panelId = st.id;
+    el.innerHTML =
+      '<div class="p-head" data-drag>' +
+        boardDdHtml(st.board) +
+        '<span class="spacer"></span>' +
+        '<span class="tm-head" data-tm-head>' +
+          '<span class="tm-head-status" title=""></span>' +
+          '<span class="tm-hint" role="img" aria-label="轨迹图操作说明" title="滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位">ℹ</span>' +
+          '<span class="tm-head-tools">' +
+            '<button type="button" class="tm-tool" data-tm-rot="-90" title="逆时针 90°">↺</button>' +
+            '<button type="button" class="tm-tool" data-tm-rot="90" title="顺时针 90°">↻</button>' +
+            '<span class="tm-rot-label" title="当前旋转角">0°</span>' +
+          '</span>' +
+        '</span>' +
+        '<button type="button" class="timing-cols-tog" data-action="timing-cols" title="选择成绩榜显示的列" aria-haspopup="true" aria-expanded="false">列</button>' +
+        '<span class="win-btns">' +
+          '<button type="button" data-action="min" title="最小化">–</button>' +
+          '<button type="button" class="close" data-action="close" title="关闭">×</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="p-body"></div>' +
+      resizeHandlesHtml();
+    stage.appendChild(el);
+    // Build iframe via applyBoardToPanel so onload + once=1 + push work the same
+    // as dropdown switches (avoids blank panels from SSE connection starvation).
+    applyBoardToPanel(el, st.board || 'timing');
+    return el;
+  }
+
+  function bindPanel(st, el, opts) {
+    panels[st.id] = st;
+    st.el = el;
+    applyGeom(el, st, opts);
+
+    el.addEventListener('mousedown', function () {
+      bringToFront(st.id);
+    });
+
+    var head = el.querySelector('[data-drag]');
+    head.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return;
+      if (e.target.closest('.board-dd') || e.target.closest('button') || e.target.closest('.timing-cols-tog') || e.target.closest('[data-tm-head]')) return;
+      startDrag(st, e);
+    });
+
+    var colsBtn = el.querySelector('[data-action="timing-cols"]');
+    if (colsBtn) {
+      colsBtn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+      colsBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        openTimingColsMenu(st, el, colsBtn);
+      });
+      syncTimingColsTog(el, st.board || 'timing');
+    }
+
+    var tmHead = el.querySelector('[data-tm-head]');
+    if (tmHead) {
+      tmHead.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+      var tmTools = tmHead.querySelector('.tm-head-tools');
+      if (tmTools) {
+        tmTools.addEventListener('click', function (e) {
+          var btn = e.target && e.target.closest ? e.target.closest('[data-tm-rot]') : null;
+          if (!btn) return;
+          e.stopPropagation();
+          e.preventDefault();
+          pushTrackmapRot(el, Number(btn.getAttribute('data-tm-rot')) || 0);
+        });
+      }
+      syncTrackmapHead(el, st.board || 'timing');
+    }
+
+    el.querySelectorAll('.resize-handle').forEach(function (h) {
+      h.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        startResize(st, h.getAttribute('data-dir'), e);
+      });
+    });
+
+    var minBtn = el.querySelector('[data-action="min"]');
+    if (minBtn) {
+      minBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (layoutLocked) return;
+        if (st.minimized) {
+          st.minimized = false;
+          if (st._prevH) st.h = st._prevH;
+          applyGeom(el, st, { silentContent: true });
+          trySeparate(st, null);
+          applyGeom(el, st);
+        } else {
+          st._prevH = st.h;
+          st.minimized = true;
+          applyGeom(el, st);
+        }
+        saveLayout();
+      });
+    }
+
+    var closeBtn = el.querySelector('[data-action="close"]');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (layoutLocked) return;
+        el.remove();
+        delete panels[st.id];
+        saveLayout();
+      });
+    }
+
+    var dd = el.querySelector('[data-board-select]');
+    if (dd) {
+      // Keep dropdown interaction from starting a panel drag
+      dd.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+      dd.addEventListener('click', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        openBoardDd(st, el, dd);
+      });
+    }
+  }
+
+  function setInteracting(on) {
+    interacting = on;
+    stage.classList.toggle('interacting', on);
+  }
+
+  function clearDropHighlights() {
+    Object.keys(panels).forEach(function (id) {
+      panels[id].el.classList.remove('drop-target');
+    });
+  }
+
+  function panelHitHeight(p) {
+    return panelH(p);
+  }
+
+  /** Find topmost other panel whose slot contains stage-local point. */
+  function findSwapTarget(stageX, stageY, excludeId) {
+    var best = null;
+    var bestZ = -1;
+    Object.keys(panels).forEach(function (id) {
+      if (id === excludeId) return;
+      var p = panels[id];
+      var ph = panelHitHeight(p);
+      if (stageX >= p.x && stageX <= p.x + p.w && stageY >= p.y && stageY <= p.y + ph) {
+        if ((p.z || 0) > bestZ) {
+          bestZ = p.z || 0;
+          best = p;
+        }
+      }
+    });
+    return best;
+  }
+
+  function swapSlots(a, b) {
+    var ax = a.x, ay = a.y, aw = a.w, ah = a.h;
+    var amin = !!a.minimized, aprev = a._prevH;
+    a.x = b.x; a.y = b.y; a.w = b.w; a.h = b.h;
+    a.minimized = !!b.minimized; a._prevH = b._prevH;
+    b.x = ax; b.y = ay; b.w = aw; b.h = ah;
+    b.minimized = amin; b._prevH = aprev;
+    applyGeom(a.el, a);
+    applyGeom(b.el, b);
+  }
+
+  function startDrag(st, e) {
+    if (layoutLocked) return;
+    e.preventDefault();
+    bringToFront(st.id);
+    setInteracting(true);
+    st.el.classList.add('dragging');
+    var stageRect = stage.getBoundingClientRect();
+    var ox = e.clientX - stageRect.left - st.x;
+    var oy = e.clientY - stageRect.top - st.y;
+    var origin = { x: st.x, y: st.y, w: st.w, h: st.h, minimized: !!st.minimized, _prevH: st._prevH };
+    var hoverTarget = null;
+
+    function pointerOnStage(ev) {
+      var r = stage.getBoundingClientRect();
+      return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+    }
+
+    function move(ev) {
+      var pt = pointerOnStage(ev);
+      st.x = pt.x - ox;
+      st.y = pt.y - oy;
+      applyGeom(st.el, st, { silentContent: true });
+
+      // Hit-test against other panels' *current* slots.
+      // While we float the dragged panel, temporarily restore origin for hit geometry
+      // of the dragged id is skipped; targets use their live slots (unchanged).
+      var t = findSwapTarget(pt.x, pt.y, st.id);
+      if (t !== hoverTarget) {
+        clearDropHighlights();
+        hoverTarget = t;
+        if (hoverTarget) hoverTarget.el.classList.add('drop-target');
+      }
+    }
+    function up(ev) {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      st.el.classList.remove('dragging');
+      clearDropHighlights();
+      setInteracting(false);
+
+      var pt = pointerOnStage(ev);
+      var target = findSwapTarget(pt.x, pt.y, st.id);
+      if (target) {
+        // Put dragged panel back to origin first, then swap slots with target
+        st.x = origin.x; st.y = origin.y; st.w = origin.w; st.h = origin.h;
+        st.minimized = origin.minimized; st._prevH = origin._prevH;
+        swapSlots(st, target);
+        notifyPanelContentResize(st.el);
+        notifyPanelContentResize(target.el);
+      } else {
+        // Free place with collision resolve; snap back if no room
+        trySeparate(st, origin);
+        applyGeom(st.el, st);
+      }
+      saveLayout();
+    }
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
+
+  function startResize(st, dir, e) {
+    if (layoutLocked) return;
+    e.preventDefault();
+    bringToFront(st.id);
+    if (st.minimized) return;
+    setInteracting(true);
+    var startX = e.clientX, startY = e.clientY;
+    var sx = st.x, sy = st.y, sw = st.w, sh = st.h;
+    var minW = st.type === 'live' ? LIVE_MIN_W : MIN_W;
+    var minH = st.minimized ? HEAD_H : boardMinH(st);
+    // Snapshot every panel at gesture start so each mousemove can restore
+    // neighbors and re-apply push-shrink from a clean baseline (elastic).
+    var origins = {};
+    Object.keys(panels).forEach(function (id) {
+      var p = panels[id];
+      origins[id] = { x: p.x, y: p.y, w: p.w, h: p.h, minimized: !!p.minimized };
+    });
+    var touched = {};
+
+    function restoreOthers() {
+      Object.keys(origins).forEach(function (id) {
+        if (id === st.id) return;
+        var p = panels[id];
+        if (!p) return;
+        var o = origins[id];
+        p.x = o.x; p.y = o.y; p.w = o.w; p.h = o.h; p.minimized = o.minimized;
+      });
+    }
+
+    function move(ev) {
+      var dx = ev.clientX - startX;
+      var dy = ev.clientY - startY;
+      var x = sx, y = sy, w = sw, h = sh;
+      if (dir.indexOf('e') >= 0) w = sw + dx;
+      if (dir.indexOf('s') >= 0) h = sh + dy;
+      if (dir.indexOf('w') >= 0) { w = sw - dx; x = sx + dx; }
+      if (dir.indexOf('n') >= 0) { h = sh - dy; y = sy + dy; }
+      if (w < minW) {
+        if (dir.indexOf('w') >= 0) x = sx + sw - minW;
+        w = minW;
+      }
+      if (h < minH) {
+        if (dir.indexOf('n') >= 0) y = sy + sh - minH;
+        h = minH;
+      }
+      restoreOthers();
+      st.x = x; st.y = y; st.w = w; st.h = h;
+      touched = clampResizeAgainstOthers(st, dir) || {};
+      // Re-apply geom for any neighbor that was restored but not in touched
+      Object.keys(origins).forEach(function (id) {
+        if (id === st.id) return;
+        if (!touched[id] && panels[id]) {
+          applyGeom(panels[id].el, panels[id], { silentContent: true });
+        }
+      });
+      applyGeom(st.el, st, { silentContent: true });
+    }
+    function up() {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      setInteracting(false);
+      // Do not snap back to gesture start — that felt like the live panel
+      // "auto-shrinking". Re-clamp against neighbors; only nudge position.
+      if (overlapsAny(st)) {
+        clampResizeAgainstOthers(st, dir);
+        if (overlapsAny(st)) trySeparate(st, null);
+        applyGeom(st.el, st);
+      }
+      notifyPanelContentResize(st.el);
+      Object.keys(touched).forEach(function (id) {
+        if (panels[id]) notifyPanelContentResize(panels[id].el);
+      });
+      // Also refresh neighbors that were restored to origin (may have been touched earlier)
+      Object.keys(origins).forEach(function (id) {
+        if (id !== st.id && panels[id] && !touched[id]) {
+          notifyPanelContentResize(panels[id].el);
+        }
+      });
+      saveLayout();
+    }
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
+
+  function serialize() {
+    return Object.keys(panels).map(function (id) {
+      var p = panels[id];
+      var o = {
+        id: p.id, type: p.type,
+        x: p.x, y: p.y, w: p.w, h: p.h, z: p.z,
+        minimized: !!p.minimized
+      };
+      if (p.type === 'board') o.board = p.board;
+      if (p._prevH) o._prevH = p._prevH;
+      return o;
+    });
+  }
+
+  function rememberViewport() {
+    var s = stageSize();
+    lastViewport = { w: s.w, h: s.h };
+  }
+
+  function currentLayoutPlain() {
+    var s = stageSize();
+    if (s.w > 0 && s.h > 0) lastViewport = { w: s.w, h: s.h };
+    return {
+      vw: lastViewport.w || 0,
+      vh: lastViewport.h || 0,
+      panels: serialize()
+    };
+  }
+
+  function buildLayoutsFilePayload() {
+    var theme = document.documentElement.getAttribute('data-theme') || 'night';
+    var streamUrl = '';
+    try {
+      var input = document.getElementById('streamUrl');
+      streamUrl = (input && input.value) || localStorage.getItem(STORAGE_URL) || '';
+    } catch (e) {}
+    var liveToolbarHidden = false;
+    try {
+      liveToolbarHidden = localStorage.getItem(STORAGE_LIVE_TB) === '1';
+    } catch (e) {}
+    var curPlain = currentLayoutPlain();
+    // Locked: persist the pre-scale baseline so window size never rewrites layouts.json.
+    if (layoutLocked && layoutBaseline && layoutBaseline.panels && layoutBaseline.panels.length) {
+      curPlain = copyLayoutPlain(layoutBaseline);
+    }
+    return {
+      version: 1,
+      current: curPlain,
+      presets: presetsCache && typeof presetsCache === 'object' ? presetsCache : {},
+      theme: theme === 'day' ? 'day' : 'night',
+      streamUrl: streamUrl || '',
+      liveToolbarHidden: !!liveToolbarHidden,
+      layoutLocked: !!layoutLocked,
+      timingColumns: timingColsArrayFromVis(loadTimingColsVis())
+    };
+  }
+
+  function persistLayoutsToFile(immediate) {
+    function flush() {
+      layoutsPersistTimer = null;
+      var payload = buildLayoutsFilePayload();
+      try {
+        localStorage.setItem(STORAGE_LAYOUT, JSON.stringify(payload.current));
+        localStorage.setItem(STORAGE_PRESETS, JSON.stringify(payload.presets || {}));
+        if (payload.theme) localStorage.setItem(STORAGE_THEME, payload.theme);
+        if (payload.streamUrl) localStorage.setItem(STORAGE_URL, payload.streamUrl);
+        localStorage.setItem(STORAGE_LIVE_TB, payload.liveToolbarHidden ? '1' : '0');
+        localStorage.setItem(STORAGE_LAYOUT_LOCK, payload.layoutLocked ? '1' : '0');
+        if (payload.timingColumns && payload.timingColumns.length) {
+          localStorage.setItem(TIMING_COLS_STORAGE, JSON.stringify(payload.timingColumns));
+        }
+      } catch (e) {}
+      if (!layoutsHydrated) return;
+      var body = JSON.stringify(payload);
+      fetch(LAYOUTS_API, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: body,
+        cache: 'no-store'
+      }).then(function (r) {
+        layoutsFileOk = !!r.ok;
+        return r.ok ? r.json().catch(function () { return {}; }) : null;
+      }).catch(function () {
+        layoutsFileOk = false;
+      });
+    }
+    if (layoutsPersistTimer) {
+      clearTimeout(layoutsPersistTimer);
+      layoutsPersistTimer = null;
+    }
+    if (immediate) flush();
+    else layoutsPersistTimer = setTimeout(flush, 350);
+  }
+
+  function saveLayout() {
+    try {
+      var cur = currentLayoutPlain();
+      // Unlocked edits / resize become the new canonical baseline.
+      if (!layoutLocked) setLayoutBaselineFromPlain(cur);
+      localStorage.setItem(STORAGE_LAYOUT, JSON.stringify(cur));
+    } catch (e) {}
+    persistLayoutsToFile(false);
+  }
+
+  function copyLayoutPlain(src) {
+    if (!src || !Array.isArray(src.panels)) return null;
+    return {
+      vw: src.vw || 0,
+      vh: src.vh || 0,
+      panels: src.panels.map(function (p) {
+        var o = {
+          id: p.id,
+          type: p.type,
+          x: p.x, y: p.y, w: p.w, h: p.h,
+          z: p.z,
+          minimized: !!p.minimized
+        };
+        if (p.board) o.board = p.board;
+        if (p._prevH) o._prevH = p._prevH;
+        return o;
+      })
+    };
+  }
+
+  function setLayoutBaselineFromPlain(plain) {
+    layoutBaseline = copyLayoutPlain(plain);
+  }
+
+  function ensureLiveInList(list) {
+    list = (list || []).slice();
+    var hasLive = list.some(function (p) { return p.type === 'live' || p.id === 'live'; });
+    if (!hasLive) list.unshift(defaultLayout()[0]);
+    return list;
+  }
+
+  /** Uniform fit of a design viewport into the stage (letterbox).
+   *  Same scale on X/Y so relative gaps between panels match the saved layout;
+   *  empty margin on the unused axis is intentional. */
+  function layoutScalePlan(fromW, fromH, toW, toH) {
+    if (!fromW || !fromH || !toW || !toH) return null;
+    if (fromW === toW && fromH === toH) return { s: 1, ox: 0, oy: 0 };
+    var sx = toW / fromW;
+    var sy = toH / fromH;
+    var s = Math.min(sx, sy);
+    if (!isFinite(s) || s <= 0) return null;
+    return {
+      s: s,
+      ox: Math.round((toW - fromW * s) / 2),
+      oy: Math.round((toH - fromH * s) / 2)
+    };
+  }
+
+  function applyScalePlanToPlain(p, plan) {
+    // Round edges (not size) so neighboring panels keep ~equal gaps after scale.
+    var x = Math.round(p.x * plan.s) + plan.ox;
+    var y = Math.round(p.y * plan.s) + plan.oy;
+    var r = Math.round((p.x + p.w) * plan.s) + plan.ox;
+    var b = Math.round((p.y + p.h) * plan.s) + plan.oy;
+    var o = {
+      id: p.id,
+      type: p.type,
+      x: x,
+      y: y,
+      w: Math.max(1, r - x),
+      h: p.h,
+      z: p.z,
+      minimized: !!p.minimized
+    };
+    if (!o.minimized) o.h = Math.max(1, b - y);
+    if (p.board) o.board = p.board;
+    if (p._prevH) {
+      var pb = Math.round((p.y + p._prevH) * plan.s) + plan.oy;
+      o._prevH = Math.max(1, pb - y);
+    }
+    return o;
+  }
+
+  /** Scale plain panel objects in data space (before mount). Avoids clampToStage
+   *  crushing a large saved layout into a smaller window, then "scaling" the wreckage.
+   *  Uses uniform scale + centering so inter-panel gaps keep their saved ratios. */
+  function scalePanelsList(list, fromW, fromH, toW, toH) {
+    if (!list || !list.length) return [];
+    var out = list.map(function (p) {
+      var o = {
+        id: p.id,
+        type: p.type,
+        x: p.x, y: p.y, w: p.w, h: p.h,
+        z: p.z,
+        minimized: !!p.minimized
+      };
+      if (p.board) o.board = p.board;
+      if (p._prevH) o._prevH = p._prevH;
+      return o;
+    });
+    var plan = layoutScalePlan(fromW, fromH, toW, toH);
+    if (!plan) return out;
+    if (plan.s === 1 && plan.ox === 0 && plan.oy === 0) return out;
+    return out.map(function (p) { return applyScalePlanToPlain(p, plan); });
+  }
+
+  /** Apply a design-space layout onto live panels in place (no iframe remount). */
+  function applyDesignGeomToLive(designList, fromW, fromH, toW, toH) {
+    var plan = layoutScalePlan(fromW, fromH, toW, toH);
+    if (!plan) return false;
+    var byId = {};
+    (designList || []).forEach(function (p) { if (p && p.id) byId[p.id] = p; });
+    var ids = Object.keys(panels);
+    if (!ids.length) return false;
+    for (var i = 0; i < ids.length; i++) {
+      if (!byId[ids[i]]) return false;
+    }
+    ids.forEach(function (id) {
+      var src = byId[id];
+      var p = panels[id];
+      var scaled = applyScalePlanToPlain(src, plan);
+      p.x = scaled.x; p.y = scaled.y; p.w = scaled.w;
+      if (!p.minimized) p.h = scaled.h;
+      if (scaled._prevH) p._prevH = scaled._prevH;
+      p.z = scaled.z != null ? scaled.z : p.z;
+      applyGeom(p.el, p, { silentContent: true, skipClamp: true });
+    });
+    lastViewport = { w: toW, h: toH };
+    notifyAllContentResize();
+    return true;
+  }
+
+  /** Mount panels scaled from a design viewport into the current stage.
+   *  If the stage is not ready yet, defer until adaptToStageSize / resize. */
+  function mountLayoutForViewport(list, fromW, fromH) {
+    list = ensureLiveInList(list);
+    var s = stageSize();
+    if (s.w < 80 || s.h < 80) {
+      pendingMount = { list: list, vw: fromW || 0, vh: fromH || 0 };
+      return false;
+    }
+    pendingMount = null;
+    var plan = (fromW > 0 && fromH > 0) ? layoutScalePlan(fromW, fromH, s.w, s.h) : null;
+    var scaled = !!(plan && (plan.s !== 1 || plan.ox !== 0 || plan.oy !== 0));
+    if (fromW > 0 && fromH > 0) {
+      list = scalePanelsList(list, fromW, fromH, s.w, s.h);
+    }
+    mountLayout(list, scaled ? { skipClamp: true } : null);
+    lastViewport = { w: s.w, h: s.h };
+    // Faithful letterbox must not re-open gaps via GAP-aware untangle / min-size clamp.
+    if (!scaled) resolveAllOverlaps();
+    notifyAllContentResize();
+    return true;
+  }
+
+  function scaleLayoutToViewport(fromW, fromH, toW, toH) {
+    var plan = layoutScalePlan(fromW, fromH, toW, toH);
+    if (!plan) return false;
+    if (plan.s === 1 && plan.ox === 0 && plan.oy === 0) return false;
+    Object.keys(panels).forEach(function (id) {
+      var p = panels[id];
+      var scaled = applyScalePlanToPlain(p, plan);
+      p.x = scaled.x; p.y = scaled.y; p.w = scaled.w;
+      if (!p.minimized) p.h = scaled.h;
+      if (scaled._prevH) p._prevH = scaled._prevH;
+      applyGeom(p.el, p, { silentContent: true, skipClamp: true });
+    });
+    lastViewport = { w: toW, h: toH };
+    notifyAllContentResize();
+    return true;
+  }
+
+  function adaptToStageSize(forceSave) {
+    if (interacting) return;
+    var s = stageSize();
+    if (s.w < 80 || s.h < 80) return;
+    // Finish a deferred first mount now that the stage has a real size.
+    if (pendingMount) {
+      var pm = pendingMount;
+      if (mountLayoutForViewport(pm.list, pm.vw, pm.vh)) {
+        if (forceSave && !layoutLocked) saveLayout();
+      }
+      return;
+    }
+    if (!Object.keys(panels).length) {
+      lastViewport = { w: s.w, h: s.h };
+      return;
+    }
+    if (!lastViewport.w || !lastViewport.h) {
+      lastViewport = { w: s.w, h: s.h };
+      // Locked: keep in-memory viewport only — do not PUT scaled coords to disk.
+      if (forceSave && !layoutLocked) saveLayout();
+      return;
+    }
+    if (Math.abs(s.w - lastViewport.w) < 2 && Math.abs(s.h - lastViewport.h) < 2) {
+      return;
+    }
+    // Locked: always remap from the saved design baseline so gaps stay faithful
+    // across aspect changes (no chained non-uniform / letterbox drift).
+    if (layoutLocked && layoutBaseline && layoutBaseline.panels &&
+        layoutBaseline.panels.length && layoutBaseline.vw > 0 && layoutBaseline.vh > 0) {
+      if (!applyDesignGeomToLive(layoutBaseline.panels, layoutBaseline.vw, layoutBaseline.vh, s.w, s.h)) {
+        mountLayoutForViewport(layoutBaseline.panels, layoutBaseline.vw, layoutBaseline.vh);
+      }
+      return;
+    }
+    // Unlocked: uniform letterbox from the last stage size; persist new coords.
+    if (scaleLayoutToViewport(lastViewport.w, lastViewport.h, s.w, s.h)) {
+      if (!layoutLocked) saveLayout();
+    }
+  }
+
+  function clearPanels() {
+    Object.keys(panels).forEach(function (id) {
+      if (panels[id].el) panels[id].el.remove();
+    });
+    panels = {};
+  }
+
+  function mountLayout(list, opts) {
+    clearLiveMediaFill();
+    clearPanels();
+    var maxZ = 10;
+    list.forEach(function (raw) {
+      var st = {
+        id: raw.id,
+        type: raw.type || (raw.id === 'live' ? 'live' : 'board'),
+        board: raw.board || 'timing',
+        x: raw.x, y: raw.y, w: raw.w, h: raw.h,
+        z: raw.z || 10,
+        minimized: !!raw.minimized,
+        _prevH: raw._prevH
+      };
+      if (st.z > maxZ) maxZ = st.z;
+      var el = st.type === 'live' ? createLivePanel(st) : createBoardPanel(st);
+      bindPanel(st, el, opts);
+    });
+    zCounter = maxZ;
+    // re-wire live stream refs after remount
+    wireLiveControls();
+  }
+
+  function normalizeSaved(parsed) {
+    // v3: { vw, vh, panels: [...] } ; v2: bare array
+    if (Array.isArray(parsed)) {
+      return { vw: 0, vh: 0, panels: parsed };
+    }
+    if (parsed && Array.isArray(parsed.panels)) {
+      return {
+        vw: parsed.vw || 0,
+        vh: parsed.vh || 0,
+        panels: parsed.panels
+      };
+    }
+    return null;
+  }
+
+  function loadSavedOrDefault() {
+    var raw;
+    try { raw = localStorage.getItem(STORAGE_LAYOUT); } catch (e) {}
+    if (raw) {
+      try {
+        var parsed = normalizeSaved(JSON.parse(raw));
+        if (parsed && parsed.panels.length) {
+          setLayoutBaselineFromPlain(parsed);
+          mountLayoutForViewport(parsed.panels, parsed.vw, parsed.vh);
+          if (!layoutLocked) saveLayout();
+          return;
+        }
+      } catch (e) {}
+    }
+    mountLayout(defaultLayout());
+    resolveAllOverlaps();
+    rememberViewport();
+    setLayoutBaselineFromPlain(currentLayoutPlain());
+    if (!layoutLocked) saveLayout();
+  }
+
+  function nextPanelId() {
+    var n = 1;
+    while (panels['p' + n] || document.querySelector('[data-panel-id="p' + n + '"]')) n++;
+    // also avoid colliding with serialized ids not in DOM yet
+    var used = {};
+    Object.keys(panels).forEach(function (k) { used[k] = true; });
+    while (used['p' + n]) n++;
+    return 'p' + n;
+  }
+
+  document.getElementById('btnAddPanel').addEventListener('click', function () {
+    if (layoutLocked) return;
+    var id = nextPanelId();
+    zCounter += 1;
+    var w = 320, h = 240;
+    var spot = findFreeSpot(w, h);
+    var st = {
+      id: id, type: 'board', board: 'timing',
+      x: spot.x, y: spot.y,
+      w: w, h: h, z: zCounter, minimized: false
+    };
+    var el = createBoardPanel(st);
+    bindPanel(st, el);
+    trySeparate(st, null);
+    applyGeom(el, st);
+    bringToFront(id);
+    saveLayout();
+  });
+
+  // ---- layout menu (save / restore / reset) ----
+  var layoutPresetMenu = null;
+  var layoutPresetOpen = false;
+
+  function readPresets() {
+    if (presetsCache && typeof presetsCache === 'object' && !Array.isArray(presetsCache)) {
+      return presetsCache;
+    }
+    try {
+      var raw = localStorage.getItem(STORAGE_PRESETS);
+      if (!raw) return {};
+      var o = JSON.parse(raw);
+      if (o && typeof o === 'object' && !Array.isArray(o)) {
+        presetsCache = o;
+        return o;
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  function writePresets(map) {
+    presetsCache = map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+    try { localStorage.setItem(STORAGE_PRESETS, JSON.stringify(presetsCache)); } catch (e) {}
+    persistLayoutsToFile(true);
+  }
+
+  function nextDefaultPresetName(presets) {
+    var n = 1;
+    while (presets['布局' + n]) n++;
+    return '布局' + n;
+  }
+
+  function currentLayoutSnapshot() {
+    var s = stageSize();
+    if (s.w > 0 && s.h > 0) lastViewport = { w: s.w, h: s.h };
+    var theme = document.documentElement.getAttribute('data-theme') || 'night';
+    return {
+      savedAt: Date.now(),
+      theme: theme === 'day' ? 'day' : 'night',
+      vw: lastViewport.w || 0,
+      vh: lastViewport.h || 0,
+      panels: serialize()
+    };
+  }
+
+  function applyLayoutSnapshot(snap) {
+    if (!snap || !Array.isArray(snap.panels) || !snap.panels.length) return false;
+    setLayoutBaselineFromPlain({
+      vw: snap.vw || 0,
+      vh: snap.vh || 0,
+      panels: snap.panels
+    });
+    mountLayoutForViewport(snap.panels, snap.vw || 0, snap.vh || 0);
+    try {
+      var savedUrl = localStorage.getItem(STORAGE_URL);
+      if (savedUrl) {
+        var input = document.getElementById('streamUrl');
+        if (input) input.value = savedUrl;
+        applyStream(savedUrl);
+      }
+    } catch (e) {}
+    if (snap.theme === 'day' || snap.theme === 'night') {
+      applyTheme(snap.theme, true);
+    }
+    saveLayout();
+    return true;
+  }
+
+  function flashLayoutMenuBtn(tempText) {
+    var btn = document.getElementById('btnLayoutMenu');
+    if (!btn) return;
+    var old = btn.textContent;
+    btn.textContent = tempText;
+    setTimeout(function () {
+      if (btn.textContent === tempText) btn.textContent = old || '布局 ▾';
+    }, 1200);
+  }
+
+  function saveCurrentLayoutPreset() {
+    var presets = readPresets();
+    var def = nextDefaultPresetName(presets);
+    var name = window.prompt('保存当前布局为：', def);
+    if (name == null) return;
+    name = String(name).trim();
+    if (!name) return;
+    if (presets[name]) {
+      if (!window.confirm('已有同名布局「' + name + '」，要覆盖吗？')) return;
+    }
+    presets[name] = currentLayoutSnapshot();
+    writePresets(presets);
+    flashLayoutMenuBtn('已保存');
+  }
+
+  function resetLayoutToDefault() {
+    try { localStorage.removeItem(STORAGE_LAYOUT); } catch (e) {}
+    mountLayout(defaultLayout());
+    resolveAllOverlaps();
+    rememberViewport();
+    notifyAllContentResize();
+    try {
+      var saved = localStorage.getItem(STORAGE_URL);
+      if (saved) {
+        var input = document.getElementById('streamUrl');
+        if (input) input.value = saved;
+        applyStream(saved);
+      }
+    } catch (e) {}
+    saveLayout();
+  }
+
+  function closeLayoutMenu() {
+    if (layoutPresetMenu) layoutPresetMenu.classList.remove('open');
+    layoutPresetOpen = false;
+    var btn = document.getElementById('btnLayoutMenu');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function ensureLayoutMenu() {
+    if (layoutPresetMenu) return layoutPresetMenu;
+    layoutPresetMenu = document.createElement('div');
+    layoutPresetMenu.id = 'layout-preset-menu';
+    layoutPresetMenu.setAttribute('role', 'menu');
+    document.body.appendChild(layoutPresetMenu);
+    layoutPresetMenu.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    layoutPresetMenu.addEventListener('click', function (e) {
+      var act = e.target.closest('.layout-action');
+      if (act) {
+        e.preventDefault();
+        e.stopPropagation();
+        var action = act.getAttribute('data-action');
+        closeLayoutMenu();
+        if (action === 'save') saveCurrentLayoutPreset();
+        else if (action === 'reset') {
+          if (layoutLocked) {
+            flashLayoutMenuBtn('先解锁');
+            return;
+          }
+          resetLayoutToDefault();
+        }
+        return;
+      }
+      var del = e.target.closest('.layout-opt-del');
+      if (del) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (layoutLocked) {
+          flashLayoutMenuBtn('先解锁');
+          return;
+        }
+        var name = del.getAttribute('data-name');
+        if (!name) return;
+        if (!window.confirm('删除已保存的布局「' + name + '」？')) return;
+        var presets = readPresets();
+        delete presets[name];
+        writePresets(presets);
+        renderLayoutMenu();
+        return;
+      }
+      var opt = e.target.closest('.layout-opt');
+      if (!opt) return;
+      var applyName = opt.getAttribute('data-name');
+      if (!applyName) return;
+      var map = readPresets();
+      var snap = map[applyName];
+      closeLayoutMenu();
+      if (!snap) return;
+      if (layoutLocked) {
+        flashLayoutMenuBtn('先解锁');
+        return;
+      }
+      applyLayoutSnapshot(snap);
+    });
+    return layoutPresetMenu;
+  }
+
+  function renderLayoutMenu() {
+    var menu = ensureLayoutMenu();
+    var presets = readPresets();
+    var names = Object.keys(presets).sort(function (a, b) {
+      var ta = (presets[a] && presets[a].savedAt) || 0;
+      var tb = (presets[b] && presets[b].savedAt) || 0;
+      if (tb !== ta) return tb - ta;
+      return a.localeCompare(b, 'zh');
+    });
+    var html = '<button type="button" class="layout-action" role="menuitem" data-action="save">保存当前布局…</button>';
+    html += '<div class="layout-sep" role="separator"></div>';
+    if (!names.length) {
+      html += '<div class="layout-empty">暂无已保存的布局</div>';
+    } else {
+      html += names.map(function (name) {
+        var safe = String(name)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/"/g, '&quot;');
+        return '<div class="layout-opt" role="menuitem" data-name="' + safe + '" tabindex="0">' +
+          '<span class="layout-opt-name" title="' + safe + '">' + safe + '</span>' +
+          '<button type="button" class="layout-opt-del" data-name="' + safe + '"' +
+          (layoutLocked
+            ? ' disabled title="请先解锁布局" aria-label="删除（已锁定）"'
+            : ' title="删除此布局" aria-label="删除"') +
+          '>×</button>' +
+          '</div>';
+      }).join('');
+    }
+    html += '<div class="layout-sep" role="separator"></div>';
+    html += '<button type="button" class="layout-action danger" role="menuitem" data-action="reset"' +
+      (layoutLocked ? ' title="请先解锁布局"' : '') + '>重置布局</button>';
+    menu.innerHTML = html;
+  }
+
+  function openLayoutMenu() {
+    var btn = document.getElementById('btnLayoutMenu');
+    if (!btn) return;
+    if (layoutPresetOpen) {
+      closeLayoutMenu();
+      return;
+    }
+    closeBoardDd();
+    renderLayoutMenu();
+    var menu = ensureLayoutMenu();
+    var r = btn.getBoundingClientRect();
+    menu.classList.add('open');
+    layoutPresetOpen = true;
+    btn.setAttribute('aria-expanded', 'true');
+    var mw = Math.max(r.width, 200);
+    menu.style.minWidth = mw + 'px';
+    var mh = menu.offsetHeight;
+    var left = r.left;
+    var top = r.bottom + 4;
+    if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  document.getElementById('btnLayoutMenu').addEventListener('click', function (e) {
+    e.stopPropagation();
+    openLayoutMenu();
+  });
+
+  document.addEventListener('mousedown', function (e) {
+    if (!layoutPresetOpen) return;
+    if (e.target.closest && (e.target.closest('#layout-preset-menu') || e.target.closest('#btnLayoutMenu'))) return;
+    closeLayoutMenu();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeLayoutMenu();
+  });
+  window.addEventListener('resize', closeLayoutMenu);
+  window.addEventListener('scroll', function (e) {
+    if (!layoutPresetOpen) return;
+    var t = e.target;
+    if (layoutPresetMenu && (t === layoutPresetMenu || (layoutPresetMenu.contains && layoutPresetMenu.contains(t)))) return;
+    closeLayoutMenu();
+  }, true);
+
+  document.getElementById('btnReloadAll').addEventListener('click', function () {
+    Object.keys(panels).forEach(function (id) {
+      var p = panels[id];
+      if (p.type === 'board' && p.el) applyBoardToPanel(p.el, p.board || 'timing');
+    });
+    checkHealth();
+  });
+
+  document.getElementById('btnOpenMain').addEventListener('click', function () {
+    window.open(RC + '/', 'f1-main');
+  });
+
+  // ---- live stream ----
+  function hideLive() {
+    var liveIframe = document.getElementById('liveIframe');
+    var liveVideo = document.getElementById('liveVideo');
+    var placeholder = document.getElementById('livePlaceholder');
+    var liveTag = document.getElementById('liveTag');
+    if (!liveIframe) return;
+    liveIframe.classList.add('hidden');
+    liveVideo.classList.add('hidden');
+    liveIframe.removeAttribute('src');
+    liveVideo.removeAttribute('src');
+    if (liveVideo.pause) liveVideo.pause();
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (liveTag) liveTag.textContent = '占位';
+    syncLiveFsRootClass();
+  }
+
+  function isDirectVideo(url) {
+    return /\.(mp4|webm|ogg|m3u8)(\?|#|$)/i.test(url);
+  }
+
+  function applyStream(url) {
+    url = (url || '').trim();
+    var liveIframe = document.getElementById('liveIframe');
+    var liveVideo = document.getElementById('liveVideo');
+    var placeholder = document.getElementById('livePlaceholder');
+    var liveTag = document.getElementById('liveTag');
+    if (!liveIframe) return;
+    if (!url) { hideLive(); return; }
+    if (placeholder) placeholder.classList.add('hidden');
+    if (isDirectVideo(url)) {
+      liveIframe.classList.add('hidden');
+      liveIframe.removeAttribute('src');
+      liveVideo.classList.remove('hidden');
+      liveVideo.src = url;
+      if (liveVideo.play) liveVideo.play().catch(function () {});
+      if (liveTag) liveTag.textContent = 'video';
+    } else {
+      liveVideo.classList.add('hidden');
+      liveVideo.removeAttribute('src');
+      hardenLiveIframe(liveIframe);
+      liveIframe.classList.remove('hidden');
+      liveIframe.src = url;
+      if (liveTag) liveTag.textContent = 'iframe';
+    }
+    syncLiveFsRootClass();
+    try { localStorage.setItem(STORAGE_URL, url); } catch (e) {}
+  }
+
+  function getLiveFsRoot() {
+    return document.getElementById('liveFsRoot');
+  }
+
+  function getLivePanelEl() {
+    var root = getLiveFsRoot();
+    return root ? root.closest('.fpanel.live-panel') : null;
+  }
+
+  function liveFsElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function isLiveMediaFill() {
+    var panel = getLivePanelEl();
+    return !!(panel && panel.classList.contains('live-media-fill'));
+  }
+
+  function clearLiveMediaFill() {
+    var panel = getLivePanelEl();
+    if (panel) panel.classList.remove('live-media-fill');
+    var root = getLiveFsRoot();
+    if (root) root.classList.remove('live-media-fill');
+    updateLiveFsButton();
+  }
+
+  // Huya/QQ-like: player center-left, chat right, nav top — zoom+pan crops chrome.
+  var LIVE_CROP_DEFAULT = { scale: 1.45, x: 6, y: 4 };
+  var LIVE_CROP_HUYA = { scale: 1.55, x: 8, y: 6 };
+  var liveCrop = { scale: LIVE_CROP_DEFAULT.scale, x: LIVE_CROP_DEFAULT.x, y: LIVE_CROP_DEFAULT.y };
+
+  function clampCrop(c) {
+    return {
+      scale: Math.max(1, Math.min(2.6, Math.round((Number(c.scale) || 1) * 100) / 100)),
+      x: Math.max(-40, Math.min(40, Math.round(Number(c.x) || 0))),
+      y: Math.max(-40, Math.min(40, Math.round(Number(c.y) || 0)))
+    };
+  }
+
+  function loadLiveCrop() {
+    try {
+      var raw = localStorage.getItem(STORAGE_CROP);
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') liveCrop = clampCrop(parsed);
+    } catch (e) {}
+  }
+
+  function saveLiveCrop() {
+    try { localStorage.setItem(STORAGE_CROP, JSON.stringify(liveCrop)); } catch (e) {}
+  }
+
+  function applyLiveCropVars() {
+    var root = getLiveFsRoot();
+    if (!root) return;
+    liveCrop = clampCrop(liveCrop);
+    root.style.setProperty('--live-crop-scale', String(liveCrop.scale));
+    root.style.setProperty('--live-crop-x', liveCrop.x + '%');
+    root.style.setProperty('--live-crop-y', liveCrop.y + '%');
+    var label = document.getElementById('liveCropScaleLabel');
+    if (label) label.textContent = liveCrop.scale.toFixed(2).replace(/\.0$/, '').replace(/(\.\d)0$/, '$1') + '×';
+  }
+
+  function nudgeLiveCrop(action) {
+    if (action === 'scale+') liveCrop.scale += 0.05;
+    else if (action === 'scale-') liveCrop.scale -= 0.05;
+    else if (action === 'left') liveCrop.x -= 2;
+    else if (action === 'right') liveCrop.x += 2;
+    else if (action === 'up') liveCrop.y -= 2;
+    else if (action === 'down') liveCrop.y += 2;
+    else if (action === 'reset') liveCrop = { scale: LIVE_CROP_DEFAULT.scale, x: LIVE_CROP_DEFAULT.x, y: LIVE_CROP_DEFAULT.y };
+    else if (action === 'preset-huya') liveCrop = { scale: LIVE_CROP_HUYA.scale, x: LIVE_CROP_HUYA.x, y: LIVE_CROP_HUYA.y };
+    else return;
+    liveCrop = clampCrop(liveCrop);
+    applyLiveCropVars();
+    saveLiveCrop();
+  }
+
+  function wireLiveCropUi() {
+    var ui = document.getElementById('liveCropUi');
+    if (!ui || ui.dataset.wired === '1') return;
+    ui.dataset.wired = '1';
+    ui.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-crop]') : null;
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      nudgeLiveCrop(btn.getAttribute('data-crop'));
+    });
+    ui.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+  }
+
+  function setLiveMediaFill(on) {
+    var panel = getLivePanelEl();
+    var root = getLiveFsRoot();
+    if (!panel || !root) {
+      updateLiveFsButton();
+      return;
+    }
+    panel.classList.toggle('live-media-fill', !!on);
+    root.classList.toggle('live-media-fill', !!on);
+    if (on) applyLiveCropVars();
+    updateLiveFsButton();
+  }
+
+  var LIVE_FS_TITLE_OFF = '铺满裁切：放大播放器区域并裁切网页四周；站点布局不同时用左下角微调。播放器自带全屏会被退出。快捷键 F / Esc 退出';
+  var LIVE_FS_TITLE_ON = '退出铺满：恢复面板内正常显示。Esc / F';
+  var LIVE_FS_LABEL_OFF = '⛶ 铺满裁切';
+  var LIVE_FS_LABEL_ON = '⛶ 退出铺满';
+
+  function updateLiveFsButton() {
+    var btn = document.getElementById('btnLiveFs');
+    if (!btn) return;
+    var on = isLiveMediaFill();
+    btn.classList.toggle('on', on);
+    btn.title = on ? LIVE_FS_TITLE_ON : LIVE_FS_TITLE_OFF;
+    btn.textContent = on ? LIVE_FS_LABEL_ON : LIVE_FS_LABEL_OFF;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  function exitAnyFullscreen() {
+    var exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (!exit) return Promise.resolve();
+    try {
+      var r = exit.call(document);
+      if (r && typeof r.then === 'function') return r.catch(function () {});
+      return Promise.resolve();
+    } catch (e) {
+      return Promise.resolve();
+    }
+  }
+
+  function toggleLiveFullscreen() {
+    setLiveMediaFill(!isLiveMediaFill());
+  }
+
+  function hardenLiveIframe(iframe) {
+    if (!iframe) return;
+    try { iframe.removeAttribute('allowfullscreen'); } catch (e) {}
+    try { iframe.removeAttribute('webkitallowfullscreen'); } catch (e) {}
+    try { iframe.removeAttribute('mozallowfullscreen'); } catch (e) {}
+    // No fullscreen feature policy; keep playback-related tokens only.
+    try { iframe.setAttribute('allow', 'autoplay; picture-in-picture'); } catch (e) {}
+    // Omit allow-fullscreen so in-iframe Fullscreen API is blocked when sandbox sticks.
+    try {
+      iframe.setAttribute(
+        'sandbox',
+        'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation'
+      );
+    } catch (e) {}
+  }
+
+  function syncLiveFsRootClass() {
+    var root = getLiveFsRoot();
+    var iframe = document.getElementById('liveIframe');
+    if (!root) return;
+    var show = !!(iframe && !iframe.classList.contains('hidden') && iframe.getAttribute('src'));
+    root.classList.toggle('has-iframe', show);
+  }
+
+  function wireLiveFullscreen() {
+    var btn = document.getElementById('btnLiveFs');
+    var video = document.getElementById('liveVideo');
+    var iframe = document.getElementById('liveIframe');
+    hardenLiveIframe(iframe);
+    syncLiveFsRootClass();
+    wireLiveCropUi();
+    applyLiveCropVars();
+    if (btn && btn.dataset.fsWired !== '1') {
+      btn.dataset.fsWired = '1';
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        toggleLiveFullscreen();
+      });
+      btn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    }
+    if (video) {
+      try { video.setAttribute('controlsList', 'nofullscreen'); } catch (e) {}
+    }
+    if (!window.__liveFsDocWired) {
+      window.__liveFsDocWired = true;
+      loadLiveCrop();
+      applyLiveCropVars();
+      function onFsChange() {
+        // Any native fullscreen (foreign iframe / video / accidental): exit only.
+        // Never reclaim with requestFullscreen — that surprised users with OS fullscreen.
+        var fs = liveFsElement();
+        if (!fs) return;
+        exitAnyFullscreen().then(function () {
+          updateLiveFsButton();
+        }, function () {
+          updateLiveFsButton();
+        });
+      }
+      document.addEventListener('fullscreenchange', onFsChange);
+      document.addEventListener('webkitfullscreenchange', onFsChange);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          if (isLiveMediaFill()) setLiveMediaFill(false);
+          if (liveFsElement()) exitAnyFullscreen();
+          return;
+        }
+        if (e.key !== 'f' && e.key !== 'F') return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        var t = e.target;
+        var tag = (t && t.tagName) ? t.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+        if (!getLiveFsRoot()) return;
+        e.preventDefault();
+        toggleLiveFullscreen();
+      });
+    }
+    updateLiveFsButton();
+  }
+
+  function isLiveToolbarHidden() {
+    try { return localStorage.getItem(STORAGE_LIVE_TB) === '1'; } catch (e) { return false; }
+  }
+
+  function applyLiveToolbarHidden(hidden, persist) {
+    var panel = document.querySelector('.fpanel.live-panel');
+    var btn = document.getElementById('btnLiveUrlTog');
+    if (panel) panel.classList.toggle('live-toolbar-hidden', !!hidden);
+    if (btn) {
+      btn.classList.toggle('on', !!hidden);
+      btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+      btn.title = hidden ? '显示地址与延迟栏' : '隐藏地址与延迟栏';
+    }
+    if (persist) {
+      try {
+        if (hidden) localStorage.setItem(STORAGE_LIVE_TB, '1');
+        else localStorage.removeItem(STORAGE_LIVE_TB);
+      } catch (e) {}
+      if (typeof persistLayoutsToFile === 'function') persistLayoutsToFile(false);
+    }
+  }
+
+  function wireLiveToolbarToggle() {
+    var btn = document.getElementById('btnLiveUrlTog');
+    if (!btn || btn.dataset.wired === '1') {
+      applyLiveToolbarHidden(isLiveToolbarHidden(), false);
+      return;
+    }
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      applyLiveToolbarHidden(!isLiveToolbarHidden(), true);
+    });
+    btn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    applyLiveToolbarHidden(isLiveToolbarHidden(), false);
+  }
+
+  function wireLiveControls() {
+    wireLiveFullscreen();
+    wireLiveToolbarToggle();
+    var btnApply = document.getElementById('btnApply');
+    var btnClear = document.getElementById('btnClear');
+    var streamInput = document.getElementById('streamUrl');
+    if (!btnApply || !btnClear || !streamInput) return;
+    if (btnApply.dataset.wired === '1') return;
+    btnApply.dataset.wired = '1';
+    btnClear.dataset.wired = '1';
+    streamInput.dataset.wired = '1';
+    btnApply.addEventListener('click', function (e) {
+      e.stopPropagation();
+      applyStream(streamInput.value);
+    });
+    btnClear.addEventListener('click', function (e) {
+      e.stopPropagation();
+      streamInput.value = '';
+      try { localStorage.removeItem(STORAGE_URL); } catch (err) {}
+      hideLive();
+    });
+    streamInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyStream(streamInput.value);
+      }
+    });
+    // clicking the bar should not start a panel drag
+    streamInput.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    btnApply.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    btnClear.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+
+    var delaySlider = document.getElementById('delaySlider');
+    var delaySec = document.getElementById('delaySec');
+    var btnDelayApply = document.getElementById('btnDelayApply');
+    var btnDelayReset = document.getElementById('btnDelayReset');
+    if (!delaySlider || !delaySec || !btnDelayApply || !btnDelayReset) return;
+    if (btnDelayApply.dataset.wired === '1') {
+      syncDelayInputs(streamDelaySec);
+      updateDelayStatus({ ready: streamDelaySec <= 0 || !!displayState, waitSec: 0 });
+      return;
+    }
+    btnDelayApply.dataset.wired = '1';
+    delaySlider.addEventListener('input', function () {
+      delaySec.value = String(clampDelaySec(delaySlider.value));
+    });
+    delaySec.addEventListener('input', function () {
+      var v = clampDelaySec(delaySec.value);
+      delaySec.value = String(v);
+      delaySlider.value = String(v);
+    });
+    delaySec.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyStreamDelay(delaySec.value, true);
+      }
+    });
+    btnDelayApply.addEventListener('click', function (e) {
+      e.stopPropagation();
+      applyStreamDelay(delaySec.value, true);
+    });
+    btnDelayReset.addEventListener('click', function (e) {
+      e.stopPropagation();
+      applyStreamDelay(0, true);
+    });
+    [delaySlider, delaySec, btnDelayApply, btnDelayReset].forEach(function (node) {
+      node.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    });
+    syncDelayInputs(streamDelaySec);
+    updateDelayStatus({ ready: streamDelaySec <= 0 || !!displayState, waitSec: 0 });
+  }
+
+  // ---- health + shared feed ----
+  // Director must be opened via http://127.0.0.1:8720/director.html (Start.cmd).
+  // Opening the file:// copy makes fetch() fail CORS → false "未连接" while
+  // board iframes still work.
+  var statusEl = document.getElementById('rcStatus');
+  // One failed /api/health poll must not flip the UI red: a brief blip (or
+  // sleeping laptop) used to call setBoardFeedOk(false), and the green dots
+  // stayed red until the next SSE "state" — which never comes while the feed
+  // is quiet (backend only sends ": ping" comments). Require a short streak.
+  var healthFailStreak = 0;
+  var HEALTH_FAIL_LIMIT = 3; // 3 × 8s ≈ 24s before "未连接"
+  function checkHealth() {
+    fetch(RC + '/api/health', { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('bad');
+        return r.json().catch(function () { return {}; });
+      })
+      .then(function (h) {
+        healthFailStreak = 0;
+        var feedOk = !!(h && (h.open || h.listenerOpen));
+        var msg = 'Director：已连接 :8720';
+        msg += feedOk ? ' · 数据源在线' : ' · 等待赛会数据';
+        if (h && h.clients != null) msg += ' · 推送 ' + h.clients;
+        statusEl.textContent = msg;
+        statusEl.className = 'status ok';
+        if (!feedEs || feedEs.readyState === 2) connectFeed();
+        // Treat an open EventSource as connected even when no state events.
+        if (feedEs && feedEs.readyState === 1) setBoardFeedOk(true);
+        // Seed boards if SSE is quiet but /api/state has data
+        if (!stateBuffer.length) {
+          fetch(RC + '/api/state', { cache: 'no-store' })
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+              ingestLiveState(s);
+            })
+            .catch(function () {});
+        }
+      })
+      .catch(function () {
+        healthFailStreak++;
+        var originHint = (location.protocol === 'file:')
+          ? '（请用 Start.cmd 打开，不要双击 html）'
+          : '（请先运行 Start.cmd）';
+        if (healthFailStreak >= HEALTH_FAIL_LIMIT) {
+          statusEl.textContent = 'Director：未连接' + originHint;
+          statusEl.className = 'status bad';
+          setBoardFeedOk(false);
+        } else {
+          // Soft warning — keep last OK label/dots until streak confirms drop.
+          statusEl.textContent = 'Director：连接不稳定，重试中… (' +
+            healthFailStreak + '/' + HEALTH_FAIL_LIMIT + ')';
+          statusEl.className = 'status';
+        }
+      });
+  }
+
+
+  function updateLayoutLockUi() {
+    var btn = document.getElementById('btnLayoutLock');
+    var locked = !!layoutLocked;
+    document.body.classList.toggle('layout-locked', locked);
+    if (btn) {
+      btn.setAttribute('aria-pressed', locked ? 'true' : 'false');
+      btn.title = locked
+        ? '解锁布局（当前已锁定，无法拖动/缩放/增删面板）'
+        : '锁定布局（防止拖动/缩放/增删）';
+      btn.setAttribute('aria-label', locked ? '解锁布局' : '锁定布局');
+    }
+    var hint = document.querySelector('.hint-bar');
+    if (hint) {
+      hint.textContent = locked
+        ? '布局已锁定 · 点顶栏锁图标解锁后可再拖动/缩放'
+        : '拖到另一块上松开 = 交换 · 拖到空白处自动避让（不重叠） · 拖边缘放大时邻块沿共享边自动缩小 · 窗口缩放按比例适配';
+    }
+  }
+
+  function setLayoutLocked(on, persist) {
+    var next = !!on;
+    if (next && !layoutLocked) {
+      // Locking freezes what is currently on screen as the saved baseline.
+      setLayoutBaselineFromPlain(currentLayoutPlain());
+    }
+    layoutLocked = next;
+    updateLayoutLockUi();
+    try { localStorage.setItem(STORAGE_LAYOUT_LOCK, layoutLocked ? '1' : '0'); } catch (e) {}
+    if (persist !== false) persistLayoutsToFile(false);
+  }
+
+  function loadLayoutLock() {
+    var v = null;
+    try { v = localStorage.getItem(STORAGE_LAYOUT_LOCK); } catch (e) {}
+    layoutLocked = v === '1' || v === 'true';
+    updateLayoutLockUi();
+  }
+
+  document.getElementById('btnLayoutLock').addEventListener('click', function (e) {
+    e.stopPropagation();
+    setLayoutLocked(!layoutLocked, true);
+  });
+
+  document.getElementById('btnThemeDay').addEventListener('click', function () {
+    applyTheme('day', true);
+  });
+  document.getElementById('btnThemeNight').addEventListener('click', function () {
+    applyTheme('night', true);
+  });
+
+  function applyLayoutsFileData(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (data.presets && typeof data.presets === 'object' && !Array.isArray(data.presets)) {
+      presetsCache = data.presets;
+      try { localStorage.setItem(STORAGE_PRESETS, JSON.stringify(presetsCache)); } catch (e) {}
+    }
+    if (data.theme === 'day' || data.theme === 'night') {
+      applyTheme(data.theme, false);
+      try { localStorage.setItem(STORAGE_THEME, data.theme); } catch (e) {}
+    }
+    if (typeof data.streamUrl === 'string' && data.streamUrl) {
+      try { localStorage.setItem(STORAGE_URL, data.streamUrl); } catch (e) {}
+    }
+    if (data.liveToolbarHidden != null) {
+      try { localStorage.setItem(STORAGE_LIVE_TB, data.liveToolbarHidden ? '1' : '0'); } catch (e) {}
+    }
+    if (data.layoutLocked != null) {
+      layoutLocked = !!data.layoutLocked;
+      try { localStorage.setItem(STORAGE_LAYOUT_LOCK, layoutLocked ? '1' : '0'); } catch (e) {}
+      updateLayoutLockUi();
+    }
+    if (Array.isArray(data.timingColumns)) {
+      applyTimingColumnsPref(data.timingColumns);
+    }
+    var cur = normalizeSaved(data.current);
+    if (!(cur && cur.panels && cur.panels.length)) return false;
+    try { localStorage.setItem(STORAGE_LAYOUT, JSON.stringify(cur)); } catch (e) {}
+    setLayoutBaselineFromPlain(cur);
+    mountLayoutForViewport(cur.panels, cur.vw, cur.vh);
+    // Iframes mount async; onload also pushes cols — nudge once for already-ready frames.
+    if (Array.isArray(data.timingColumns)) pushTimingColsToAllBoards();
+    return true;
+  }
+
+  function fetchLayoutsFile() {
+    return fetch(LAYOUTS_API, { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('api ' + r.status);
+        layoutsFileOk = true;
+        return r.json();
+      })
+      .catch(function () {
+        return fetch(LAYOUTS_FILE, { cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('file ' + r.status);
+            layoutsFileOk = true;
+            return r.json();
+          });
+      })
+      .catch(function () {
+        layoutsFileOk = false;
+        return null;
+      });
+  }
+
+  // init — 项目 layouts.json 为真相；没有/坏了再用 localStorage，再不行默认布局
+  loadTheme();
+  loadStreamDelay();
+  loadLayoutLock();
+  ensureDelayTicker();
+  fetchLayoutsFile().then(function (data) {
+    var fromFile = applyLayoutsFileData(data);
+    if (!fromFile) {
+      // migrate any browser-only presets into cache before default mount
+      try {
+        var rawP = localStorage.getItem(STORAGE_PRESETS);
+        if (rawP) {
+          var o = JSON.parse(rawP);
+          if (o && typeof o === 'object' && !Array.isArray(o)) presetsCache = o;
+        }
+      } catch (e) {}
+      loadSavedOrDefault();
+    }
+    try {
+      var savedUrl = localStorage.getItem(STORAGE_URL);
+      if (savedUrl) {
+        document.getElementById('streamUrl').value = savedUrl;
+        applyStream(savedUrl);
+      }
+    } catch (e) {}
+    try {
+      applyLiveToolbarHidden(localStorage.getItem(STORAGE_LIVE_TB) === '1', false);
+    } catch (e) {}
+    syncDelayInputs(streamDelaySec);
+    updateDelayStatus({ ready: streamDelaySec <= 0 || !!displayState, waitSec: 0 });
+    updateLayoutLockUi();
+    layoutsHydrated = true;
+    // Ensure project file exists / is refreshed (also migrates localStorage → file).
+    // When locked, payload.current comes from layoutBaseline (not stage-scaled).
+    persistLayoutsToFile(true);
+    // Stage size can still be settling (Edge --app restore); reflow a few times.
+    setTimeout(function () { adaptToStageSize(true); }, 0);
+    setTimeout(function () { adaptToStageSize(true); }, 100);
+    setTimeout(function () { adaptToStageSize(true); }, 400);
+  });
+
+  // ---- lifecycle heartbeat (Run-Director.ps1 listens on :8721) ----
+  // Close tab → pagehide sends /goodbye; PS waits ~3s then kills Java unless a
+  // fresh heartbeat arrives (F5 reload cancels). MissGraceSec (~15s) is backup
+  // if the tab dies without a beacon. Enter / Stop.cmd still work.
+  // Prefer a Worker timer: main-thread setInterval is heavily throttled in
+  // background tabs and used to miss a short grace → false "server died".
+  function sendDirectorHeartbeat() {
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(HB);
+      }
+    } catch (e) {}
+    try {
+      fetch(HB + '?t=' + Date.now(), {
+        method: 'GET',
+        cache: 'no-store',
+        mode: 'cors',
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  function sendDirectorGoodbye() {
+    // Arm a short pending-stop on the PS host. Do not use for visibility alone.
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(HB_GOODBYE);
+      }
+    } catch (e) {}
+    try {
+      fetch(HB_GOODBYE + '?t=' + Date.now(), {
+        method: 'POST',
+        cache: 'no-store',
+        mode: 'cors',
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  sendDirectorHeartbeat();
+  var hbIntervalId = null;
+  try {
+    var hbBlob = new Blob(
+      ['setInterval(function () { postMessage(1); }, 2000);'],
+      { type: 'application/javascript' }
+    );
+    var hbWorker = new Worker(URL.createObjectURL(hbBlob));
+    hbWorker.onmessage = function () { sendDirectorHeartbeat(); };
+  } catch (e) {
+    hbIntervalId = setInterval(sendDirectorHeartbeat, 2000);
+  }
+  // Fallback / belt-and-suspenders if Worker is also throttled.
+  if (!hbIntervalId) {
+    hbIntervalId = setInterval(sendDirectorHeartbeat, 2000);
+  }
+  window.addEventListener('pagehide', function (ev) {
+    // bfcache freeze (persisted): keep the server; page may come back.
+    // Real close / navigate / F5: goodbye. F5 reconnects within GoodbyeGrace.
+    if (ev && ev.persisted) {
+      sendDirectorHeartbeat();
+      return;
+    }
+    sendDirectorGoodbye();
+  });
+  // beforeunload: keep a heartbeat so soft navigations stay alive until
+  // pagehide decides goodbye; do not arm stop here (F5 fires this too).
+  window.addEventListener('beforeunload', sendDirectorHeartbeat);
+  document.addEventListener('visibilitychange', function () {
+    // Tab switch must NOT goodbye — only refresh the beat.
+    sendDirectorHeartbeat();
+  });
+
+  connectFeed();
+  checkHealth();
+  setInterval(checkHealth, 8000);
+
+  function onViewportChange() {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      resizeTimer = null;
+      adaptToStageSize(true);
+    }, 80);
+  }
+
+  window.addEventListener('resize', onViewportChange);
+  document.addEventListener('fullscreenchange', onViewportChange);
+  document.addEventListener('webkitfullscreenchange', onViewportChange);
+  // Stage element size (more reliable than window alone for --app / DPI).
+  try {
+    if (typeof ResizeObserver !== 'undefined' && stage) {
+      var stageRoPending = null;
+      var stageRo = new ResizeObserver(function () {
+        if (stageRoPending) cancelAnimationFrame(stageRoPending);
+        stageRoPending = requestAnimationFrame(function () {
+          stageRoPending = null;
+          onViewportChange();
+        });
+      });
+      stageRo.observe(stage);
+    }
+  } catch (e) {}
+  // first paint: stage may still be settling after window open / maximize
+  window.addEventListener('load', function () {
+    setTimeout(function () { adaptToStageSize(true); }, 50);
+    setTimeout(function () { adaptToStageSize(true); }, 250);
+    setTimeout(function () { adaptToStageSize(true); }, 600);
+  });
+})();
+</script>
+</body>
+</html>

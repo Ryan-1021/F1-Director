@@ -1,0 +1,2 @@
+Circuit SVG outlines from https://github.com/f1db/f1db (src/assets/circuits/white-outline)
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)

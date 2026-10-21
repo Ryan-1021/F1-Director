@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>F1 Director</title>
+<script>
+(function(){try{var t=localStorage.getItem('f1-director-theme');if(t==='day'||t==='night'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();
+</script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<!-- 主界面：顶部旗语栏 + 左侧圆环 + 右侧 6 屏。
+     这一页和独立看板读的是同一个 /api/events，渲染用的是同一份 app.js。 -->
+<div id="main"></div>
+<script src="/app.js"></script>
+</body>
+</html>
