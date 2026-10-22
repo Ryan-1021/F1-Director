@@ -61,6 +61,8 @@
   //   静默失败是最难查的一类，所以把错误直接糊到页面上、并写进标题。
   window.addEventListener('error', function (ev) {
     var msg = (ev && ev.message) || '未知错误';
+    // Chrome/Edge benign: ResizeObserver callback caused layout in the same frame.
+    if (/ResizeObserver loop/i.test(msg)) return;
     try {
       document.title = 'JS错误: ' + msg;
       if (document.getElementById('jserr')) { return; }
@@ -827,7 +829,14 @@
     fitTimingTable(wrap);
     if (typeof ResizeObserver !== 'undefined') {
       try {
-        var ro = new ResizeObserver(function () { fitTimingTable(wrap); });
+        var roPending = null;
+        var ro = new ResizeObserver(function () {
+          if (roPending) cancelAnimationFrame(roPending);
+          roPending = requestAnimationFrame(function () {
+            roPending = null;
+            fitTimingTable(wrap);
+          });
+        });
         ro.observe(wrap);
       } catch (e) {}
     }
