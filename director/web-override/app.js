@@ -998,6 +998,121 @@
     });
   }
 
+
+  /** Pick S1/S2/S3 from a car object if the feed ever exposes them. */
+  function carSectorTime(c, idx) {
+    if (!c) return '';
+    var sectors = c.sectors || c.Sectors;
+    if (Array.isArray(sectors) && sectors[idx] != null) {
+      var v = sectors[idx];
+      if (v != null && typeof v === 'object') {
+        return String(v.Value || v.value || v.time || v.Time || '');
+      }
+      return String(v);
+    }
+    var keys = [
+      ['s1', 's2', 's3'],
+      ['sector1', 'sector2', 'sector3'],
+      ['Sector1', 'Sector2', 'Sector3'],
+      ['sector1Time', 'sector2Time', 'sector3Time']
+    ];
+    for (var k = 0; k < keys.length; k++) {
+      var key = keys[k][idx];
+      if (c[key] != null && c[key] !== '') return String(c[key]);
+    }
+    return '';
+  }
+
+  function carLastLapTime(c) {
+    if (!c) return '';
+    var v = c.lastLap || c.lastLapTime || c.lapTime || c.currentLapTime || c.LastLapTime;
+    if (v != null && typeof v === 'object') {
+      return String(v.Value || v.value || v.time || '');
+    }
+    return v != null && v !== '' ? String(v) : '';
+  }
+
+  /**
+   * Sector / current-lap detail board.
+   * Upstream F1Feed currently ships bestLap/gap/… on cars, but not per-driver
+   * S1–S3. Columns stay wired for those fields when a future feed adds them;
+   * until then cells show "—".
+   */
+  function renderSectors(box) {
+    clear(box);
+    if (!ONCE) panelTitle(box, '扇区成绩');
+    var cars = (state && state.cars) || [];
+    var race = (state && state.race) || {};
+    var meta = el('div', 'sectors-meta');
+    var lap = (race.lap != null ? race.lap : (race.currentLap != null ? race.currentLap : 0));
+    var total = race.totalLaps || 0;
+    var sc = race.sectorCount != null ? race.sectorCount : 3;
+    meta.appendChild(el('span', 'sectors-meta-item',
+      '当前圈 ' + lap + (total ? (' / ' + total) : '')));
+    meta.appendChild(el('span', 'sectors-meta-item', '区段 ' + sc));
+    box.appendChild(meta);
+
+    if (!cars.length) {
+      box.appendChild(el('div', 'sub', '还没有车手数据'));
+      return;
+    }
+
+    var wrap = el('div', 'sectors-wrap timing-wrap');
+    var t = el('table', 'timing sectors');
+    var head = el('tr');
+    ['#', '车手', '最快', '本圈', 'S1', 'S2', 'S3'].forEach(function (h, i) {
+      var cls = 'num';
+      if (i === 1) cls = 'who';
+      else if (i === 2) cls = 'col-best';
+      else if (i === 3) cls = 'col-last';
+      else if (i === 4) cls = 'col-s1';
+      else if (i === 5) cls = 'col-s2';
+      else if (i === 6) cls = 'col-s3';
+      if (i === 0) {
+        var th = el('th', cls);
+        th.appendChild(el('span', 'num-mark', ''));
+        th.appendChild(el('span', 'num-pos', h));
+        head.appendChild(th);
+      } else {
+        head.appendChild(el('th', cls, h));
+      }
+    });
+    t.appendChild(head);
+
+    var anySector = false;
+    for (var i = 0; i < cars.length; i++) {
+      var c = cars[i];
+      var tr = el('tr');
+      if (c.retired) tr.className = 'retired';
+      var numTd = el('td', 'num');
+      numTd.appendChild(el('span', 'num-mark' + (c.inPit ? ' pit-mark' : ''), c.inPit ? 'P' : ''));
+      numTd.appendChild(el('span', 'num-pos', c.position || ''));
+      tr.appendChild(numTd);
+      var who = el('td', 'who');
+      var bar = el('span', 'teambar');
+      bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
+      who.appendChild(bar);
+      who.appendChild(el('span', 'tla', c.tla || ''));
+      who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
+      tr.appendChild(who);
+      tr.appendChild(el('td', 'mono col-best', c.bestLap || '—'));
+      var last = carLastLapTime(c);
+      tr.appendChild(el('td', 'mono col-last', last || '—'));
+      for (var s = 0; s < 3; s++) {
+        var st = carSectorTime(c, s);
+        if (st) anySector = true;
+        tr.appendChild(el('td', 'mono col-s' + (s + 1), st || '—'));
+      }
+      t.appendChild(tr);
+    }
+    wrap.appendChild(t);
+    box.appendChild(wrap);
+    if (!anySector) {
+      box.appendChild(el('div', 'sub sectors-note',
+        '当前数据源未下发 S1–S3 / 本圈；最快圈有则显示。上游补字段后自动亮起。'));
+    }
+  }
+
   function renderWeather(box) {
     clear(box);
     // Title only in standalone board windows; director chrome already names the panel.
@@ -2096,7 +2211,7 @@
 
   var RENDER = {
     flags: renderFlags, ring: renderRing, trackmap: renderTrackmap, track: renderTrack,
-    tyres: renderTyres, timing: renderTiming, weather: renderWeather,
+    tyres: renderTyres, timing: renderTiming, sectors: renderSectors, weather: renderWeather,
     fastest: renderFastest, session: renderSession, messages: renderMessages
   };
 
@@ -2106,7 +2221,7 @@
     //   用户直接指出来了。下面那个 track 板其实是**文字**状态汇总，不是地图，
     //   所以改名"赛道状态"，免得两块板同名。
     flags: '顶部旗语栏', ring: '赛道图', trackmap: '轨迹图', track: '赛道状态', tyres: '轮胎进站',
-    timing: '成绩榜', weather: '天气', fastest: '最快圈', session: '环节',
+    timing: '成绩榜', sectors: '扇区成绩', weather: '天气', fastest: '最快圈', session: '环节',
     messages: '赛事通报'
   };
 

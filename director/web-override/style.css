@@ -623,6 +623,66 @@ td.who .carno {
 .timing-wrap.compact table.timing td { padding: 3px 3px; }
 table.timing tr:hover td { background: var(--hover-row); }
 table.timing tr.retired td { color: var(--muted2); opacity: .72; }
+
+/* ---------- sector / current-lap board ---------- */
+.b-box.b-sectors {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+.sectors-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--row-line);
+  flex: 0 0 auto;
+}
+.sectors-meta-item {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.sectors-wrap {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+.sectors-note {
+  padding: 6px 8px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted2);
+}
+table.sectors th.col-best,
+table.sectors td.col-best,
+table.sectors th.col-last,
+table.sectors td.col-last,
+table.sectors th.col-s1,
+table.sectors td.col-s1,
+table.sectors th.col-s2,
+table.sectors td.col-s2,
+table.sectors th.col-s3,
+table.sectors td.col-s3 {
+  text-align: right;
+  font-family: var(--mono);
+  padding-left: 6px;
+  padding-right: 6px;
+}
+table.sectors th.col-best,
+table.sectors td.col-best { width: 14%; }
+table.sectors th.col-last,
+table.sectors td.col-last { width: 14%; }
+table.sectors th.col-s1,
+table.sectors td.col-s1,
+table.sectors th.col-s2,
+table.sectors td.col-s2,
+table.sectors th.col-s3,
+table.sectors td.col-s3 { width: 11%; }
+
+
 td.num {
   color: var(--muted); font-weight: 700;
   font-family: var(--mono); font-size: 11px;
