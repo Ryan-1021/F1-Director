@@ -807,12 +807,15 @@ table.sectors th.num {
 .trk-status .trk-status-icon {
   display: block;
   height: 1.35em;
-  width: auto;
+  width: 1.35em;
+  flex: 0 0 auto;
+  object-fit: contain;
   image-rendering: auto;
 }
 .trk-status.trk-stopped .trk-status-icon {
+  width: 2.55em;
   height: 1.35em;
-}
+}
 .trk-status.trk-empty {
   min-width: 0;
   width: 0;
@@ -1077,10 +1080,20 @@ table.timing td.col-tyre .tlaps {
 .wvalue {
   font-size: 18px;
   font-weight: 750; letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
   font-family: var(--mono), ui-monospace, Consolas, monospace;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.wcell[data-weather-id="pressure"] {
+  flex: 1 1 120px;
+}
+.wcell[data-weather-id="pressure"] .wvalue {
+  font-size: 13px;
+  letter-spacing: 0;
 }
 .wcell:not(.wcell-hero) .wvalue {
   font-size: 14px;
@@ -1476,4 +1489,17 @@ table.sectors td.col-last.sec-yellow {
 }
 [data-theme="day"] table.sectors .sec-mini-dim {
   background: rgba(15,23,42,.22);
+}
+
+/* Timing title only: [成绩榜] … [列] [弹出] — other panels keep .p-pop { margin-left:auto } */
+.ptitle:has(> .timing-cols-bar) > .timing-cols-bar {
+  margin-left: auto;
+  order: 2;
+}
+.ptitle:has(> .timing-cols-bar) > .p-pop {
+  margin-left: 6px;
+  order: 3;
+}
+.ptitle:has(> .timing-cols-bar) > .ptitle-text {
+  order: 1;
 }

@@ -1006,10 +1006,19 @@
       head.appendChild(bar);
       return;
     }
-    // Main window panel: same row as 成绩榜 + 弹出
-    var title = titleRow('成绩榜', box.getAttribute('data-board'));
-    title.appendChild(bar);
-    box.appendChild(title);
+    // Main window panel: same row as 成绩榜 + 弹出 (reuse if already built)
+    var title = box.querySelector('.ptitle');
+    if (!title) {
+      title = titleRow('成绩榜', box.getAttribute('data-board'));
+      box.appendChild(title);
+    } else {
+      var oldBar = title.querySelector('.timing-cols-bar');
+      if (oldBar) oldBar.remove();
+    }
+    // 列在「弹出」左侧，弹出保持最右
+    var pop = title.querySelector('.p-pop');
+    if (pop) title.insertBefore(bar, pop);
+    else title.appendChild(bar);
   }
 
   function refreshTimingColumnsFromStorage() {
@@ -1057,43 +1066,153 @@
     return td;
   }
 
+  function buildTimingRow(c) {
+    var tr = el('tr');
+    if (carRowRetired(c)) { tr.className = 'retired'; }
+    tr.setAttribute('data-car', String(c.number != null ? c.number : (c.tla || '')));
+    tr.appendChild(el('td', 'num', c.position || ''));
+    var who = el('td', 'who');
+    var bar = el('span', 'teambar');
+    bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
+    who.appendChild(bar);
+    who.appendChild(el('span', 'tla', c.tla || ''));
+    who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
+    tr.appendChild(who);
+    tr.appendChild(trackStatusTd(c));
+    tr.appendChild(el('td', 'mono col-gap', c.gap || ''));
+    tr.appendChild(el('td', 'mono col-int', c.interval || ''));
+    var tyreTd = el('td', 'col-tyre');
+    var tyreCell = el('span', 'tyre-stint');
+    tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
+    var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
+    tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
+    tyreTd.appendChild(tyreCell);
+    tr.appendChild(tyreTd);
+    tr.appendChild(el('td', 'mono col-pit', c.pitStops || ''));
+    return tr;
+  }
+
+  function patchTrackStatusTd(td, car) {
+    var st = carTrackStatus(car);
+    var badge = td.querySelector('.trk-status');
+    if (!st) {
+      if (badge && badge.classList.contains('trk-empty')) return;
+      clear(td);
+      td.appendChild(el('span', 'trk-status trk-empty', ''));
+      return;
+    }
+    var wantClass = 'trk-status trk-' + st.kind;
+    var img = badge && badge.querySelector('img.trk-status-icon');
+    if (badge && img && badge.className === wantClass && badge.title === st.title) {
+      return; // same icon —avoid img reload flicker
+    }
+    clear(td);
+    badge = el('span', wantClass);
+    badge.title = st.title;
+    img = document.createElement('img');
+    img.className = 'trk-status-icon';
+    img.alt = st.title;
+    img.src = '/icons/status-' + st.kind + '.svg';
+    img.draggable = false;
+    img.width = (st.kind === 'stopped') ? 30 : 16;
+    img.height = 16;
+    badge.appendChild(img);
+    td.appendChild(badge);
+  }
+
+  function patchTimingRow(tr, c) {
+    tr.className = carRowRetired(c) ? 'retired' : '';
+    tr.setAttribute('data-car', String(c.number != null ? c.number : (c.tla || '')));
+    var tds = tr.children;
+    // 0 num, 1 who, 2 status, 3 gap, 4 int, 5 tyre, 6 pit
+    if (tds[0]) tds[0].textContent = c.position || '';
+    if (tds[1]) {
+      var bar = tds[1].querySelector('.teambar');
+      if (bar) bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
+      var tla = tds[1].querySelector('.tla');
+      if (tla) tla.textContent = c.tla || '';
+      var carno = tds[1].querySelector('.carno');
+      if (carno) carno.textContent = c.number != null && c.number !== '' ? String(c.number) : '';
+    }
+    if (tds[2]) patchTrackStatusTd(tds[2], c);
+    if (tds[3]) tds[3].textContent = c.gap || '';
+    if (tds[4]) tds[4].textContent = c.interval || '';
+        if (tds[5]) {
+      var badge = tds[5].querySelector('.tyre-stint');
+      var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
+      if (badge) {
+        var tlaps = badge.querySelector('.tlaps');
+        if (tlaps) tlaps.textContent = lapsTxt;
+        var wantLetter = compoundInfo(c.compound, c.compoundCn).letter;
+        var curBadge = badge.querySelector('.ttyre, .compound, .tyre');
+        var cur = curBadge ? String(curBadge.textContent || '').trim() : '';
+        if (wantLetter !== cur) {
+          clear(tds[5]);
+          var tyreCell = el('span', 'tyre-stint');
+          tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
+          tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
+          tds[5].appendChild(tyreCell);
+        }
+      } else {
+        clear(tds[5]);
+        var tyreCell2 = el('span', 'tyre-stint');
+        tyreCell2.appendChild(compoundBadge(c.compound, c.compoundCn));
+        tyreCell2.appendChild(el('span', 'tlaps', lapsTxt));
+        tds[5].appendChild(tyreCell2);
+      }
+    }
+    if (tds[6]) tds[6].textContent = c.pitStops || '';
+  }
+
   function renderTiming(box) {
-    clear(box);
     var cars = (state && state.cars) || [];
-    var wrap = el('div', 'timing-wrap');
+    var wrap = box.querySelector('.timing-wrap');
+    var table = wrap && wrap.querySelector('table.timing');
+    // In-place update: keeps density fit + avoids wipe flicker on every SSE.
+    if (wrap && table && table.getAttribute('data-live') === '1') {
+      var rows = [];
+      for (var ri = 0; ri < table.children.length; ri++) {
+        if (table.children[ri].tagName === 'TR') rows.push(table.children[ri]);
+      }
+      // rows[0] = header
+      while (rows.length - 1 > cars.length) {
+        table.removeChild(rows[rows.length - 1]);
+        rows.pop();
+      }
+      for (var i = 0; i < cars.length; i++) {
+        var tr = rows[i + 1];
+        if (!tr) {
+          table.appendChild(buildTimingRow(cars[i]));
+        } else {
+          patchTimingRow(tr, cars[i]);
+        }
+      }
+      // Keep existing title + column picker; re-placing would stack .ptitle rows.
+      // Prefer exact density fit (early-outs when size stable) so pop-out / first
+      // layout after avail=0 still shrinks rows — cheap never recomputes scale.
+      if (!wrap.__boardFit || !wrap.__boardFit.exact || wrap.__timingCars !== cars.length) {
+        wrap.__boardFit = null;
+      }
+      wrap.__timingCars = cars.length;
+      fitTimingTable(wrap, 'exact');
+      ensureBoardFitObserver(box, 'timing');
+      return;
+    }
+
+    clear(box);
+    wrap = el('div', 'timing-wrap');
     placeTimingColsControl(box, wrap);
-    var t = el('table', 'timing');
+    table = el('table', 'timing');
+    table.setAttribute('data-live', '1');
     var head = el('tr');
     TIMING_COLS.forEach(function (col) {
       head.appendChild(el('th', col.cls || null, col.label));
     });
-    t.appendChild(head);
-    for (var i = 0; i < cars.length; i++) {
-      var c = cars[i];
-      var tr = el('tr');
-      if (carRowRetired(c)) { tr.className = 'retired'; }
-      tr.appendChild(el('td', 'num', c.position || ''));
-      var who = el('td', 'who');
-      var bar = el('span', 'teambar');
-      bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
-      who.appendChild(bar);
-      who.appendChild(el('span', 'tla', c.tla || ''));
-      who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
-      tr.appendChild(who);
-      tr.appendChild(trackStatusTd(c));
-      tr.appendChild(el('td', 'mono col-gap', c.gap || ''));
-      tr.appendChild(el('td', 'mono col-int', c.interval || ''));
-      var tyreTd = el('td', 'col-tyre');
-      var tyreCell = el('span', 'tyre-stint');
-      tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
-      var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
-      tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
-      tyreTd.appendChild(tyreCell);
-      tr.appendChild(tyreTd);
-      tr.appendChild(el('td', 'mono col-pit', c.pitStops || ''));
-      t.appendChild(tr);
+    table.appendChild(head);
+    for (var j = 0; j < cars.length; j++) {
+      table.appendChild(buildTimingRow(cars[j]));
     }
-    wrap.appendChild(t);
+    wrap.appendChild(table);
     box.appendChild(wrap);
     fitTimingTable(wrap, 'exact');
     ensureBoardFitObserver(box, 'timing');
@@ -1101,12 +1220,14 @@
 
   function parseWeatherExtras(text) {
     var s = String(text || '');
-    var out = { humidity: '', wind: '', rain: '', raining: false };
+    var out = { humidity: '', wind: '', rain: '', raining: false, pressure: '' };
     var m;
     m = /湿度\s*([0-9]+(?:\.[0-9]+)?)\s*%/.exec(s);
     if (m) out.humidity = m[1] + '%';
     m = /风(?:速)?\s*([0-9]+(?:\.[0-9]+)?)\s*(m\/s|km\/h)?/i.exec(s);
     if (m) out.wind = m[1] + (m[2] ? (' ' + m[2]) : ' m/s');
+    m = /气压\s*([0-9]+(?:\.[0-9]+)?)\s*(hPa|mbar|mb)?/i.exec(s);
+    if (m) out.pressure = m[1] + (m[2] ? (' ' + m[2]) : ' hPa');
     // Only treat as raining on explicit positive signals (not the label alone).
     if (/(?:有雨|正在下雨|下雨中)/.test(s) || /Rainfall\s*[:=]?\s*1\b/i.test(s)) {
       out.raining = true;
@@ -1127,12 +1248,13 @@
   }
 
   var WEATHER_STORAGE = 'f1-weather-module-order';
-  var WEATHER_DEFAULT_ORDER = ['air', 'track', 'humidity', 'wind', 'rain'];
+  var WEATHER_DEFAULT_ORDER = ['air', 'track', 'humidity', 'wind', 'pressure', 'rain'];
   var WEATHER_LABELS = {
     air: '气温',
     track: '赛道温度',
     humidity: '湿度',
     wind: '风速',
+    pressure: '气压',
     rain: '降雨'
   };
 
@@ -1165,6 +1287,15 @@
     try { localStorage.setItem(WEATHER_STORAGE, JSON.stringify(order)); } catch (e) {}
   }
 
+/** F1 WeatherData.WindDirection is degrees from north, clockwise. */
+  function windDirCn(deg) {
+    var d = parseFloat(deg);
+    if (isNaN(d)) return '';
+    d = ((d % 360) + 360) % 360;
+    var names = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+    return names[Math.round(d / 45) % 8];
+  }
+
   function weatherValuesFromState() {
     var w = (state && state.weather) || {};
     var extras = parseWeatherExtras(w.text);
@@ -1190,30 +1321,70 @@
       var wv = String(w.wind).trim();
       wind = /m\/s|km\/h/i.test(wv) ? wv : (wv + ' m/s');
       if (w.windDirection != null && w.windDirection !== '') {
-        wind += ' · ' + String(w.windDirection).trim() + '°';
+        var degRaw = String(w.windDirection).trim();
+        var dir = windDirCn(degRaw);
+        wind += dir ? (' · ' + dir) : (' · ' + degRaw + '°');
       }
     } else {
       wind = extras.wind || '';
     }
-    var raining = (typeof w.rain === 'boolean')
-      ? w.rain
-      : (parseFloat(w.rainfall) > 0 ? true : !!extras.raining);
+    var pressure = '';
+    if (w.pressure != null && w.pressure !== '') {
+      var pv = String(w.pressure).trim();
+      pressure = /hPa|mbar|mb/i.test(pv) ? pv : (pv + ' hPa');
+    } else {
+      pressure = extras.pressure || '';
+    }
+        var rainRaw = (w.rainfall != null && w.rainfall !== '')
+      ? String(w.rainfall).trim()
+      : '';
+    var raining;
+    if (typeof w.rain === 'boolean') {
+      raining = w.rain;
+    } else if (rainRaw !== '' && isFinite(parseFloat(rainRaw))) {
+      raining = parseFloat(rainRaw) > 0;
+    } else {
+      raining = !!extras.raining;
+    }
+    // F1 WeatherData.Rainfall is officially 0/1 (no mm). Show status + raw code.
+    var rainText;
+    if (rainRaw !== '' && isFinite(parseFloat(rainRaw))) {
+      var rn = parseFloat(rainRaw);
+      if (rn <= 0) rainText = '无雨';
+      else if (rn === 1) rainText = '降雨中';
+      else rainText = String(rainRaw); // non 0/1: show raw value
+    } else if (extras.rain) {
+      rainText = extras.rain;
+    } else {
+      rainText = raining ? '降雨中' : '无雨';
+    }
     return {
       air: air || '—',
       track: track || '—',
       humidity: humidity || '—',
       wind: wind || '—',
-      rain: raining ? '有雨' : '无雨',
-      raining: !!raining
+      pressure: pressure || '—',
+      rain: rainText,
+      raining: !!raining,
+      rainRaw: rainRaw,
+      windDirDeg: (w.windDirection != null && w.windDirection !== '') ? String(w.windDirection).trim() : ''
     };
   }
 
-  function weatherMetric(id, value, raining) {
+  function weatherMetric(id, value, raining, vals) {
     var d = el('div', 'wcell' + ((id === 'air' || id === 'track') ? ' wcell-hero' : '') +
       ((id === 'rain' && raining) ? ' warn' : ''));
     d.setAttribute('data-weather-id', id);
     d.setAttribute('draggable', 'true');
-    d.title = '拖动可调整顺序';
+    var tip = '拖动可调整顺序';
+    if (id === 'wind' && vals && vals.windDirDeg) {
+      tip = '风向 ' + vals.windDirDeg + '°（从正北顺时针）· 拖动可调整顺序';
+    } else if (id === 'pressure' && value && value !== '—') {
+      tip = '气压 ' + value + ' · 拖动可调整顺序';
+    } else if (id === 'rain') {
+      tip = (value && value !== '—') ? ('降雨 ' + value + ' · 拖动可调整顺序') : '拖动可调整顺序';
+    }
+    d.title = tip;
     d.appendChild(el('div', 'wlabel', WEATHER_LABELS[id] || id));
     var row = el('div', 'wvalue-row');
     row.appendChild(el('div', 'wvalue', value || '—'));
@@ -1576,7 +1747,7 @@
     var order = loadWeatherOrder();
     for (var i = 0; i < order.length; i++) {
       var id = order[i];
-      wrap.appendChild(weatherMetric(id, vals[id], vals.raining));
+      wrap.appendChild(weatherMetric(id, vals[id], vals.raining, vals));
     }
     box.appendChild(wrap);
     bindWeatherDrag(wrap);
@@ -2897,18 +3068,94 @@
   // 主界面：顶部旗语栏 + 左侧圆环 + 右侧 6 屏
   // ---------------------------------------------------------------
 
-  function renderMain(root) {
-    clear(root);
+  function refreshMainDesktop(root) {
+    var r = (state && state.race) || {};
+    var title = root.querySelector('.m-title');
+    if (title) title.textContent = (r.meeting || 'F1 Director');
+    var sub = root.querySelector('.m-sub');
+    if (sub) {
+      sub.textContent = (r.session || '') + ' · ' + (r.status || '')
+        + ' · 第 ' + (r.lap || 0) + '/' + (r.totalLaps || 0) + ' 圈'
+        + (r.remaining ? ' · 剩 ' + r.remaining : '');
+    }
+    var status = root.querySelector('.m-status');
+    if (status) {
+      var dot = status.querySelector('.dot');
+      if (dot) dot.className = 'dot' + (connected ? ' ok' : ' bad');
+      // text node / span after dot — update first plain status span if present
+      var spans = status.querySelectorAll('span');
+      for (var si = 0; si < spans.length; si++) {
+        if (spans[si].classList.contains('dot')) continue;
+        if (spans[si].classList.contains('badge')) continue;
+        spans[si].textContent = connected
+          ? ('已连接 · ' + ago(lastPush)) : (errNote || '未连接');
+        break;
+      }
+      var ver = null;
+      for (var bi = 0; bi < spans.length; bi++) {
+        if (spans[bi].classList.contains('badge') && /^v/.test(spans[bi].textContent || '')) {
+          ver = spans[bi];
+          break;
+        }
+      }
+      if (ver) ver.textContent = 'v' + ((state && state.version) || '?');
+    }
 
+    var flags = root.querySelector('.m-flags');
+    if (flags) renderFlags(flags);
+
+    var msgs = (state && state.messages) || [];
+    var banner = root.querySelector('.m-banner');
+    var flagsCol = root.querySelector('.m-flags-col');
+    if (msgs.length) {
+      var line = msgLine(msgs[0]);
+      if (!banner && flagsCol && flagsCol.parentNode) {
+        banner = el('div', 'm-banner');
+        flagsCol.parentNode.insertBefore(banner, flagsCol.nextSibling);
+      }
+      if (banner) {
+        clear(banner);
+        banner.appendChild(el('span', 'banner-time', msgTime(msgs[0])));
+        banner.appendChild(el('span', 'banner-text', line.zh));
+        if (line.translated) banner.appendChild(el('span', 'banner-en', line.en));
+      }
+    } else if (banner && banner.parentNode) {
+      banner.parentNode.removeChild(banner);
+    }
+
+    var msgBox = root.querySelector('.panel.m-msgs, .panel[data-board="messages"]');
+    if (msgBox) renderMessages(msgBox);
+
+    var panels = root.querySelectorAll('.m-body .panel[data-board]');
+    for (var pi = 0; pi < panels.length; pi++) {
+      var id = panels[pi].getAttribute('data-board');
+      if (id && RENDER[id]) RENDER[id](panels[pi]);
+    }
+
+    var ringArea = root.querySelector('.ring-area');
+    if (ringArea) renderRing(ringArea);
+  }
+
+  function renderMain(root) {
     // 手机：只显示和安卓同款的内容，**而且比例也照安卓**。
     // ★ 必须一开始就分叉：第一版我把手机版"追加"在桌面排布**后面**，
     //   于是手机上出现了两个旗语栏、上面还压着 80px 的头部（头部 + 旗语栏
     //   吃掉 390px 里的 43%）。用 CDP 量高度才看出来 —— 眼睛看截图只觉得"有点挤"。
     var phone = phoneMode();
     if (phone) {
+      clear(root);
+      root.removeAttribute('data-main-built');
       renderPhoneMain(root, phone);
       return;
     }
+
+    // Desktop: refresh in place after first paint (avoids timing board twitch).
+    if (root.getAttribute('data-main-built') === '1' && root.querySelector('.m-body')) {
+      refreshMainDesktop(root);
+      return;
+    }
+
+    clear(root);
 
     var head = el('div', 'm-head');
     var brand = el('div', 'm-brand');
@@ -2999,6 +3246,7 @@
     //   都是 0，只能走 320 的回退值。那不只是圆不圆的问题：因为每次重绘都会
     //   重建整棵树，这个 0 会被反复量到，圆环就"永远只有 320px"、周围一大片空。
     renderRing(ringArea);
+    root.setAttribute('data-main-built', '1');
   }
 
   function renderBoard(root) {
