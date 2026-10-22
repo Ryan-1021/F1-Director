@@ -10,7 +10,7 @@
 
 ## Java Position.z
 
-- 当前分享包内的 `share/F1-RaceControl-Desktop.jar`（0.1.15）已含 Position / 赛道图所需接口能力
+- 当前分享包内的 `share/F1-RaceControl-Desktop-0.1.15_modify.jar`（0.1.15）已含 Position / 赛道图所需接口能力
 - 上游注释：`Position.z` 有时需要 F1TV/会话放开；无权限时订阅仍安全，只是 `carPositions.updatedAt` 为 0
 - 网页在官方无点时自动用 OpenF1，不挡用
 

@@ -35,7 +35,7 @@ javac -encoding UTF-8 -source 1.8 -target 1.8 -nowarn -d build/classes @build/ja
 jar cfm build/F1-RaceControl-Desktop.jar build/MANIFEST.MF -C build/classes .
 ```
 
-Copied to `F1-Director\share\F1-RaceControl-Desktop.jar`
+Copied to `F1-Director\share\F1-RaceControl-Desktop-0.1.15_modify.jar`
 Backup of prior jar: `share\F1-RaceControl-Desktop.jar.bak-0.1.16`
 
 ## Director UI

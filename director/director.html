@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="night">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light" id="colorSchemeMeta">
+<meta name="color-scheme" content="dark" id="colorSchemeMeta">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -779,7 +779,7 @@
     color: var(--muted);
     line-height: 1.2;
     opacity: 0.85;
-    cursor: default;
+    cursor: inherit;
   }
   .p-head .tm-hint {
     flex: 0 0 auto;
@@ -844,7 +844,7 @@
     color: var(--muted);
     padding: 0 1px;
     opacity: 0.85;
-    cursor: default;
+    cursor: inherit;
     user-select: none;
   }
   #timing-cols-menu {
@@ -1710,7 +1710,7 @@
     var has = !!(t && (label || detail || kinds.length || t.color != null || t.level != null));
     strip.classList.toggle('empty', !has);
     strip.classList.toggle('filled', has);
-    labelEl.textContent = has ? (label || '赛道状态') : '—';
+    labelEl.textContent = has ? (label || '状态') : '—';
     var bg = has ? trackArgb(t.color) : '';
     var fg = has ? trackArgb(t.textColor) : '';
     if (has && bg) {
@@ -1875,11 +1875,13 @@
 
   function loadTheme() {
     var saved = 'night';
+    var had = false;
     try {
       var v = localStorage.getItem(STORAGE_THEME);
-      if (v === 'day' || v === 'night') saved = v;
+      if (v === 'day' || v === 'night') { saved = v; had = true; }
     } catch (e) {}
-    applyTheme(saved, false);
+    // First visit: persist night so boards/iframes share the same default.
+    applyTheme(saved, !had);
   }
 
   function connectFeed() {
@@ -2540,14 +2542,16 @@
   // ---- Timing board column picker (lives in .p-head, not an in-iframe tools row) ----
   var TIMING_COLS_STORAGE = 'f1-timing-columns';
   var TIMING_COLS_DEF = [
-    { id: 'pos',  label: '#', always: true },
-    { id: 'who',  label: '车手', always: true },
-    { id: 'gap',  label: '榜首差距', always: false },
-    { id: 'int',  label: '前车差距', always: false },
-    { id: 'tyre', label: '胎',   always: false },
-    { id: 'laps', label: '圈',   always: false },
-    { id: 'pit',  label: '站',   always: false }
+    { id: 'pos',    label: '#', always: true },
+    { id: 'who',    label: '车手', always: true },
+    { id: 'status', label: '状态', menuLabel: '状态', always: false },
+    { id: 'gap',    label: '榜首差距', always: false },
+    { id: 'int',    label: '前车差距', always: false },
+    { id: 'tyre',   label: '轮胎', always: false },
+    { id: 'pit',    label: '进站', always: false }
   ];
+  var TIMING_COLS_VER_KEY = 'f1-timing-columns-v';
+  var TIMING_COLS_VER = '4';
   var timingColsMenu = null;
   var timingColsActive = null;
 
@@ -2652,7 +2656,10 @@
     for (i = 0; i < TIMING_COLS_DEF.length; i++) vis[TIMING_COLS_DEF[i].id] = true;
     try {
       var raw = localStorage.getItem(TIMING_COLS_STORAGE);
-      if (!raw) return vis;
+      if (!raw) {
+        try { localStorage.setItem(TIMING_COLS_VER_KEY, TIMING_COLS_VER); } catch (e0) {}
+        return vis;
+      }
       var arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return vis;
       var chosen = {};
@@ -2661,7 +2668,21 @@
         var c = TIMING_COLS_DEF[i];
         vis[c.id] = c.always ? true : !!chosen[c.id];
       }
+      // Migrate old separate 圈 (laps) into 轮胎 (tyre).
+      if (chosen.laps && !chosen.tyre) vis.tyre = true;
       if (!vis.pos && !vis.who) { vis.pos = true; vis.who = true; }
+      try {
+        if (localStorage.getItem(TIMING_COLS_VER_KEY) !== TIMING_COLS_VER) {
+          vis.status = true;
+          localStorage.setItem(TIMING_COLS_VER_KEY, TIMING_COLS_VER);
+          var outMig = [];
+          for (var mi = 0; mi < TIMING_COLS_DEF.length; mi++) {
+            var mc = TIMING_COLS_DEF[mi];
+            if (mc.always || vis[mc.id]) outMig.push(mc.id);
+          }
+          localStorage.setItem(TIMING_COLS_STORAGE, JSON.stringify(outMig));
+        }
+      } catch (eVer) {}
       return vis;
     } catch (e) {
       return vis;
@@ -2700,6 +2721,8 @@
     }
     if (!seen.pos) cleaned.unshift('pos');
     if (!seen.who) cleaned.splice(cleaned.indexOf('pos') >= 0 ? 1 : 0, 0, 'who');
+    // Drop legacy laps; tyre column already carries stint laps.
+    cleaned = cleaned.filter(function (id) { return id !== 'laps'; });
     try { localStorage.setItem(TIMING_COLS_STORAGE, JSON.stringify(cleaned)); } catch (e) {}
     pushTimingColsToAllBoards();
     return true;
@@ -2779,7 +2802,7 @@
           pushTimingColsToFrame(el, next);
         });
         lab.appendChild(cb);
-        lab.appendChild(document.createTextNode(' ' + col.label));
+        lab.appendChild(document.createTextNode(' ' + (col.menuLabel || col.label)));
         menu.appendChild(lab);
       })(TIMING_COLS_DEF[i]);
     }
@@ -2915,7 +2938,7 @@
     var head = el.querySelector('[data-drag]');
     head.addEventListener('mousedown', function (e) {
       if (e.button !== 0) return;
-      if (e.target.closest('.board-dd') || e.target.closest('button') || e.target.closest('.timing-cols-tog') || e.target.closest('[data-tm-head]')) return;
+      if (e.target.closest('.board-dd') || e.target.closest('button') || e.target.closest('.timing-cols-tog')) return;
       startDrag(st, e);
     });
 
@@ -2932,7 +2955,9 @@
 
     var tmHead = el.querySelector('[data-tm-head]');
     if (tmHead) {
-      tmHead.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+      tmHead.addEventListener('mousedown', function (e) {
+        if (e.target.closest('button') || e.target.closest('.tm-tool')) e.stopPropagation();
+      });
       var tmTools = tmHead.querySelector('.tm-head-tools');
       if (tmTools) {
         tmTools.addEventListener('click', function (e) {
@@ -3042,7 +3067,10 @@
   }
 
   function startDrag(st, e) {
-    if (layoutLocked) return;
+    if (layoutLocked) {
+      flashLayoutMenuBtn('请先解锁');
+      return;
+    }
     e.preventDefault();
     bringToFront(st.id);
     setInteracting(true);
@@ -3102,7 +3130,10 @@
   }
 
   function startResize(st, dir, e) {
-    if (layoutLocked) return;
+    if (layoutLocked) {
+      flashLayoutMenuBtn('请先解锁');
+      return;
+    }
     e.preventDefault();
     bringToFront(st.id);
     if (st.minimized) return;
@@ -3720,7 +3751,7 @@
         if (action === 'save') saveCurrentLayoutPreset();
         else if (action === 'reset') {
           if (layoutLocked) {
-            flashLayoutMenuBtn('先解锁');
+            flashLayoutMenuBtn('请先解锁');
             return;
           }
           resetLayoutToDefault();
@@ -3732,7 +3763,7 @@
         e.preventDefault();
         e.stopPropagation();
         if (layoutLocked) {
-          flashLayoutMenuBtn('先解锁');
+          flashLayoutMenuBtn('请先解锁');
           return;
         }
         var name = del.getAttribute('data-name');
@@ -3753,7 +3784,7 @@
       closeLayoutMenu();
       if (!snap) return;
       if (layoutLocked) {
-        flashLayoutMenuBtn('先解锁');
+        flashLayoutMenuBtn('请先解锁');
         return;
       }
       applyLayoutSnapshot(snap);
@@ -4319,7 +4350,9 @@
   function loadLayoutLock() {
     var v = null;
     try { v = localStorage.getItem(STORAGE_LAYOUT_LOCK); } catch (e) {}
-    layoutLocked = v === '1' || v === 'true';
+    // Default ON for new users (no key yet). Explicit "0" stays unlocked.
+    if (v == null || v === '') layoutLocked = true;
+    else layoutLocked = v === '1' || v === 'true';
     updateLayoutLockUi();
   }
 

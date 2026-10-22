@@ -13,7 +13,7 @@ echo Starting F1 Director bare board UI (upstream jar, no director shell)...
 echo Keep this window open. Close it or Ctrl+C to quit.
 echo For the full director shell, use ..\director\Start.cmd instead.
 echo.
-"%JAVA_EXE%" -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 -jar "%~dp0F1-RaceControl-Desktop.jar" --open %*
+"%JAVA_EXE%" -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 -jar "%~dp0F1-RaceControl-Desktop-0.1.15_modify.jar" --open %*
 echo.
 echo Exited.
 pause

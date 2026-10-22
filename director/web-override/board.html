@@ -1,15 +1,15 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="night">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>F1 Director · 看板</title>
 <script>
-(function(){try{var t=localStorage.getItem('f1-director-theme');if(t==='day'||t==='night'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();
+(function(){try{var t=localStorage.getItem('f1-director-theme');if(t!=='day'&&t!=='night'){t='night';try{localStorage.setItem('f1-director-theme',t);}catch(e0){}}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','night');}})();
 </script>
 <link rel="stylesheet" href="/style.css">
 </head>

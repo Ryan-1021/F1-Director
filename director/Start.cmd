@@ -4,20 +4,20 @@ title F1 Director Console
 
 rem Find share pack: sibling ../share, or jar beside / above this script.
 set "SHARE="
-if exist "%~dp0..\share\F1-RaceControl-Desktop.jar" (
+if exist "%~dp0..\share\F1-RaceControl-Desktop-0.1.15_modify.jar" (
   set "SHARE=%~dp0..\share"
 )
 if not defined SHARE if exist "%~dp0..\F1-RaceControl-Share-0.1.10-win64\F1-RaceControl-Desktop.jar" (
   set "SHARE=%~dp0..\F1-RaceControl-Share-0.1.10-win64"
 )
-if not defined SHARE if exist "%~dp0F1-RaceControl-Desktop.jar" (
+if not defined SHARE if exist "%~dp0F1-RaceControl-Desktop-0.1.15_modify.jar" (
   set "SHARE=%~dp0."
 )
-if not defined SHARE if exist "%~dp0..\F1-RaceControl-Desktop.jar" (
+if not defined SHARE if exist "%~dp0..\F1-RaceControl-Desktop-0.1.15_modify.jar" (
   set "SHARE=%~dp0.."
 )
 if not defined SHARE (
-  echo Cannot find F1-RaceControl-Desktop.jar
+  echo Cannot find F1-RaceControl-Desktop-0.1.15_modify.jar
   echo Put this director folder next to the share folder:
   echo   F1-Director\director
   echo   F1-Director\share
@@ -27,7 +27,8 @@ if not defined SHARE (
 )
 
 set "JAVA_EXE=%SHARE%\jre\bin\java.exe"
-set "JAR=%SHARE%\F1-RaceControl-Desktop.jar"
+set "JAR=%SHARE%\F1-RaceControl-Desktop-0.1.15_modify.jar"
+if not exist "%JAR%" if exist "%SHARE%\F1-RaceControl-Desktop.jar" set "JAR=%SHARE%\F1-RaceControl-Desktop.jar"
 if not exist "%JAVA_EXE%" (
   echo jre\bin\java.exe not found under:
   echo   %SHARE%
@@ -64,6 +65,10 @@ if exist "%~dp0web-override\app.js" (
 if exist "%~dp0web-override\circuits" (
   if not exist "%WEBDIR%\circuits" mkdir "%WEBDIR%\circuits" >nul 2>&1
   xcopy /Y /Q /E "%~dp0web-override\circuits\*" "%WEBDIR%\circuits\" >nul
+)
+if exist "%~dp0web-override\icons" (
+  if not exist "%WEBDIR%\icons" mkdir "%WEBDIR%\icons" >nul 2>&1
+  xcopy /Y /Q /E "%~dp0web-override\icons\*" "%WEBDIR%\icons\" >nul
 )
 copy /Y "%HTML%" "%WEBDIR%\director.html" >nul
 rem Seed layouts.json once (do not overwrite user-saved presets in share\web)

@@ -51,7 +51,7 @@ function Stop-F1Director {
         Where-Object {
             $_.Name -match '^(java|javaw)\.exe$' -and
             $_.CommandLine -and
-            ($_.CommandLine -like '*F1-RaceControl-Desktop.jar*')
+            ($_.CommandLine -like '*F1-RaceControl-Desktop*.jar*')
         } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
     & taskkill.exe /FI "WINDOWTITLE eq F1-Director-Server*" /T /F 2>$null | Out-Null
@@ -246,7 +246,7 @@ try {
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
             Where-Object {
                 $_.Name -match '^(java|javaw)\.exe$' -and
-                $_.CommandLine -like '*F1-RaceControl-Desktop.jar*'
+                $_.CommandLine -like '*F1-RaceControl-Desktop*.jar*'
             } |
             ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     } | Out-Null

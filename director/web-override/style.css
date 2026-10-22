@@ -417,6 +417,7 @@ html, body {
   align-self: stretch;
   width: 100%;
   min-height: 0;
+  padding: 0; /* flush table header to panel top bar */
   overflow: hidden; /* scroll on .timing-wrap */
   position: relative;
 }
@@ -453,8 +454,8 @@ html, body {
 .timing-wrap.hide-who .who { display: none; }
 .timing-wrap.hide-gap .col-gap { display: none; }
 .timing-wrap.hide-int .col-int { display: none; }
+.timing-wrap.hide-status .col-status { display: none; }
 .timing-wrap.hide-tyre .col-tyre { display: none; }
-.timing-wrap.hide-laps .col-laps { display: none; }
 .timing-wrap.hide-pit .col-pit { display: none; }
 /* .compact still marks narrow panels; font/padding come from --board-* vars */
 
@@ -549,11 +550,12 @@ html, body {
 /* Column % widths set by JS (--w-*) from content weights; hidden cols
    re-normalize so visible columns always sum to 100% of the panel. */
 .timing-wrap {
-  --w-pos: 8%;
-  --w-who: 22%;
-  --w-gap: 17%;
-  --w-int: 17%;
-  --w-tyre: 12%;
+  --w-pos: 7%;
+  --w-who: 20%;
+  --w-status: 8%;
+  --w-gap: 16%;
+  --w-int: 16%;
+  --w-tyre: 17%;
   --w-laps: 12%;
   --w-pit: 12%;
 }
@@ -604,6 +606,14 @@ table.timing td.who {
   padding-left: 4px;
   padding-right: 6px;
 }
+table.timing th.col-status,
+table.timing td.col-status {
+  width: var(--w-status);
+  padding-left: 2px;
+  padding-right: 2px;
+  text-align: center;
+  vertical-align: middle;
+}
 table.timing th.col-gap,
 table.timing td.col-gap {
   width: var(--w-gap);
@@ -621,15 +631,8 @@ table.timing td.col-int {
 table.timing th.col-tyre,
 table.timing td.col-tyre {
   width: var(--w-tyre);
-  padding-left: 4px;
-  padding-right: 4px;
-  text-align: center;
-}
-table.timing th.col-laps,
-table.timing td.col-laps {
-  width: var(--w-laps);
-  padding-left: 4px;
-  padding-right: 4px;
+  padding-left: 6px;
+  padding-right: 6px;
   text-align: center;
 }
 table.timing th.col-pit,
@@ -673,6 +676,7 @@ table.timing tr.retired td { color: var(--muted2); opacity: .72; }
   align-self: stretch;
   width: 100%;
   min-height: 0;
+  padding: 0; /* flush table header to panel top bar */
   overflow: hidden; /* scroll on .sectors-wrap */
   position: relative;
 }
@@ -687,12 +691,13 @@ table.timing tr.retired td { color: var(--muted2); opacity: .72; }
   overflow: auto;
   container-type: inline-size;
   --w-pos: 7%;
-  --w-who: 16%;
-  --w-best: 14%;
-  --w-last: 14%;
-  --w-s1: 16%;
-  --w-s2: 16%;
-  --w-s3: 17%;
+  --w-who: 14%;
+  --w-tyre: 10%;
+  --w-best: 13%;
+  --w-last: 13%;
+  --w-s1: 14%;
+  --w-s2: 14%;
+  --w-s3: 15%;
   --board-fs: 12px;
   --board-th-fs: 9px;
   --board-td-pad-y: 4px;
@@ -738,6 +743,8 @@ table.timing tr.retired td { color: var(--muted2); opacity: .72; }
 /* Narrow sectors: horizontal pad only; density via --board-* / --sec-* */
 .sectors-wrap.compact table.timing th { padding-left: 3px; padding-right: 3px; }
 .sectors-wrap.compact table.timing td { padding-left: 3px; padding-right: 3px; }
+table.sectors th.col-tyre,
+table.sectors td.col-tyre,
 table.sectors th.col-best,
 table.sectors td.col-best,
 table.sectors th.col-last,
@@ -766,6 +773,8 @@ table.sectors th.col-s2,
 table.sectors td.col-s2 { width: var(--w-s2); }
 table.sectors th.col-s3,
 table.sectors td.col-s3 { width: var(--w-s3); }
+table.sectors th.col-tyre,
+table.sectors td.col-tyre { width: var(--w-tyre); }
 /* num / who reuse timing rules (var(--w-pos) / var(--w-who)) set on .sectors-wrap */
 
 
@@ -773,31 +782,49 @@ td.num {
   color: var(--muted); font-weight: 700;
   font-family: var(--mono); font-size: 0.92em;
   white-space: nowrap;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
-table.timing th.num {
-  text-align: left;
+table.timing th.num,
+table.sectors th.num {
+  text-align: center;
   white-space: nowrap;
 }
-table.timing th.num .num-mark,
-td.num .num-mark {
-  display: inline-block;
-  width: 1.1ch;
-  min-width: 1.1ch;
-  text-align: center;
-  vertical-align: bottom;
-  font-weight: 800;
+
+/* Track status badges (成绩榜 · 状态) */
+.trk-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  line-height: 0;
+  vertical-align: middle;
+  box-sizing: border-box;
 }
-td.num .num-mark.pit-mark {
-  color: var(--warn);
+.trk-status .trk-status-icon {
+  display: block;
+  height: 1.35em;
+  width: auto;
+  image-rendering: auto;
 }
-table.timing th.num .num-pos,
-td.num .num-pos {
-  display: inline-block;
-  min-width: 2ch;
-  margin-left: 2px;
-  text-align: right;
-  vertical-align: bottom;
-  font-variant-numeric: tabular-nums;
+.trk-status.trk-stopped .trk-status-icon {
+  height: 1.35em;
+}
+.trk-status.trk-empty {
+  min-width: 0;
+  width: 0;
+  padding: 0;
+  opacity: 0;
+}
+.trk-status.trk-pit,
+.trk-status.trk-pitout,
+.trk-status.trk-stopped,
+.trk-status.trk-retired,
+.trk-status.trk-knocked {
+  /* color lives in the SVG */
 }
 td.who { white-space: nowrap; font-weight: 650; }
 td.mono, .mono {
@@ -973,6 +1000,20 @@ table.kv tr:last-child td { border-bottom: none; }
 table.timing td.col-tyre .ttyre {
   font-size: 12px;
   min-width: 1.4em; height: 1.4em;
+}
+table.timing td.col-tyre .tyre-stint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+table.timing td.col-tyre .tlaps {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .tlaps { color: var(--muted); font-family: var(--mono); font-size: 10px; flex: 0 0 auto; }
 .tpit {

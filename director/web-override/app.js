@@ -43,10 +43,14 @@
 
   function loadThemeFromStorage() {
     var saved = 'night';
+    var had = false;
     try {
       var v = localStorage.getItem(STORAGE_THEME);
-      if (v === 'day' || v === 'night') saved = v;
+      if (v === 'day' || v === 'night') { saved = v; had = true; }
     } catch (e) {}
+    if (!had) {
+      try { localStorage.setItem(STORAGE_THEME, 'night'); } catch (e1) {}
+    }
     applyTheme(saved);
   }
 
@@ -523,7 +527,7 @@
 
   function renderTrack(box) {
     clear(box);
-    if (!ONCE) panelTitle(box, '赛道状态');
+    if (!ONCE) panelTitle(box, '状态');
     var st = state, track = (st && st.track) || {};
     var wrap = el('div', 'track');
     var hero = el('div', 'track-hero');
@@ -576,19 +580,21 @@
   // Timing board column picker (persist which columns stay visible).
   var TIMING_COLS_STORAGE = 'f1-timing-columns';
   var TIMING_COLS = [
-    { id: 'pos',  cls: 'num',      label: '#', always: true },
-    { id: 'who',  cls: 'who',      label: '车手', always: true },
-    { id: 'gap',  cls: 'col-gap',  label: '榜首差距', always: false },
-    { id: 'int',  cls: 'col-int',  label: '前车差距', always: false },
-    { id: 'tyre', cls: 'col-tyre', label: '胎',   always: false },
-    { id: 'laps', cls: 'col-laps', label: '圈',   always: false },
-    { id: 'pit',  cls: 'col-pit',  label: '站',   always: false }
+    { id: 'pos',    cls: 'num',         label: '#', always: true },
+    { id: 'who',    cls: 'who',         label: '车手', always: true },
+    { id: 'status', cls: 'col-status',  label: '状态', menuLabel: '状态', always: false },
+    { id: 'gap',    cls: 'col-gap',     label: '榜首差距', always: false },
+    { id: 'int',    cls: 'col-int',     label: '前车差距', always: false },
+    { id: 'tyre',   cls: 'col-tyre',    label: '轮胎', always: false },
+    { id: 'pit',    cls: 'col-pit',     label: '进站', always: false }
   ];
   var TIMING_COLS_DEFAULT = TIMING_COLS.map(function (c) { return c.id; });
   // Content-ish weights; visible columns are re-normalized to 100% panel width.
   var TIMING_COL_WEIGHTS = {
-    pos: 8, who: 22, gap: 17, int: 17, tyre: 12, laps: 12, pit: 12
+    pos: 7, who: 20, status: 8, gap: 16, int: 16, tyre: 17, pit: 12
   };
+  var TIMING_COLS_VER_KEY = 'f1-timing-columns-v';
+  var TIMING_COLS_VER = '3'; // v2: dedicated 状态 (track status) column
   // Survives full table rebuilds on each SSE push so the menu can stay open.
   var timingColsMenuOpen = false;
 
@@ -598,7 +604,10 @@
     for (i = 0; i < TIMING_COLS.length; i++) vis[TIMING_COLS[i].id] = true;
     try {
       var raw = localStorage.getItem(TIMING_COLS_STORAGE);
-      if (!raw) return vis;
+      if (!raw) {
+        try { localStorage.setItem(TIMING_COLS_VER_KEY, TIMING_COLS_VER); } catch (e0) {}
+        return vis;
+      }
       var arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return vis;
       var chosen = {};
@@ -607,8 +616,24 @@
         var c = TIMING_COLS[i];
         vis[c.id] = c.always ? true : !!chosen[c.id];
       }
+      // Migrate old separate 圈 (laps) into 轮胎 (tyre).
+      if (chosen.laps && !chosen.tyre) vis.tyre = true;
       // Sensible minimum: never hide both 名次 and 车手.
       if (!vis.pos && !vis.who) { vis.pos = true; vis.who = true; }
+      // v3+: ensure 状态 column defaults on when prefs version lags.
+      try {
+        if (localStorage.getItem(TIMING_COLS_VER_KEY) !== TIMING_COLS_VER) {
+          vis.status = true;
+          localStorage.setItem(TIMING_COLS_VER_KEY, TIMING_COLS_VER);
+          // Persist so a refresh does not treat missing id as "user hid it".
+          var outMig = [];
+          for (var mi = 0; mi < TIMING_COLS.length; mi++) {
+            var mc = TIMING_COLS[mi];
+            if (mc.always || vis[mc.id]) outMig.push(mc.id);
+          }
+          localStorage.setItem(TIMING_COLS_STORAGE, JSON.stringify(outMig));
+        }
+      } catch (eVer) {}
       return vis;
     } catch (e) {
       return vis;
@@ -797,14 +822,14 @@
 
   // Sector board: same dense fill as timing (no column picker; all cols visible).
   var SECTOR_COL_WEIGHTS = {
-    pos: 7, who: 16, best: 14, last: 14, s1: 16, s2: 16, s3: 17
+    pos: 7, who: 14, tyre: 10, best: 13, last: 13, s1: 14, s2: 14, s3: 15
   };
 
   function applySectorColumnWidths(wrap) {
     if (!wrap) return;
     // Percent widths are constant — apply once per wrap lifetime.
     if (wrap.__sectorColsApplied) return;
-    var ids = ['pos', 'who', 'best', 'last', 's1', 's2', 's3'];
+    var ids = ['pos', 'who', 'tyre', 'best', 'last', 's1', 's2', 's3'];
     var total = 0;
     var i;
     for (i = 0; i < ids.length; i++) total += SECTOR_COL_WEIGHTS[ids[i]] || 0;
@@ -916,7 +941,7 @@
           applyTimingColumnVisibility(wrap);
         });
         lab.appendChild(cb);
-        lab.appendChild(document.createTextNode(' ' + col.label));
+        lab.appendChild(document.createTextNode(' ' + (col.menuLabel || col.label)));
         menu.appendChild(lab);
       })(TIMING_COLS[i]);
     }
@@ -992,6 +1017,46 @@
     for (var i = 0; i < wraps.length; i++) applyTimingColumnVisibility(wraps[i]);
   }
 
+
+  /**
+   * Driver track status for the 状态 column.
+   * Priority when several flags are true: retired > knockedOut > stopped > inPit > pitOut.
+   */
+  /** Row greys out for retired / knocked-out on timing + sectors boards. */
+  function carRowRetired(car) {
+    return !!(car && (car.retired || car.knockedOut));
+  }
+
+    function carTrackStatus(car) {
+    if (!car) return null;
+    // SVG icons in icons/status-*.svg — 进站↓红 / 出站↑绿 / 停车 STOP / 退赛✕红 / 淘汰─红
+    if (car.retired) return { kind: 'retired', title: '退赛' };
+    if (car.knockedOut) return { kind: 'knocked', title: '淘汰' };
+    if (car.stopped) return { kind: 'stopped', title: '停车' };
+    if (car.inPit) return { kind: 'pit', title: '进站' };
+    if (car.pitOut) return { kind: 'pitout', title: '出站' };
+    return null;
+  }
+
+  function trackStatusTd(car) {
+    var td = el('td', 'col-status');
+    var st = carTrackStatus(car);
+    if (!st) {
+      td.appendChild(el('span', 'trk-status trk-empty', ''));
+      return td;
+    }
+    var badge = el('span', 'trk-status trk-' + st.kind);
+    badge.title = st.title;
+    var img = document.createElement('img');
+    img.className = 'trk-status-icon';
+    img.alt = st.title;
+    img.src = '/icons/status-' + st.kind + '.svg';
+    img.draggable = false;
+    badge.appendChild(img);
+    td.appendChild(badge);
+    return td;
+  }
+
   function renderTiming(box) {
     clear(box);
     var cars = (state && state.cars) || [];
@@ -999,33 +1064,15 @@
     placeTimingColsControl(box, wrap);
     var t = el('table', 'timing');
     var head = el('tr');
-    ['#', '车手', '榜首差距', '前车差距', '胎', '圈', '站'].forEach(function (h, i) {
-      var cls = '';
-      if (i === 0) cls = 'num';
-      else if (i === 1) cls = 'who';
-      else if (i === 2) cls = 'col-gap';
-      else if (i === 3) cls = 'col-int';
-      else if (i === 4) cls = 'col-tyre';
-      else if (i === 5) cls = 'col-laps';
-      else if (i === 6) cls = 'col-pit';
-      if (i === 0) {
-        var th = el('th', cls);
-        th.appendChild(el('span', 'num-mark', ''));
-        th.appendChild(el('span', 'num-pos', h));
-        head.appendChild(th);
-      } else {
-        head.appendChild(el('th', cls || null, h));
-      }
+    TIMING_COLS.forEach(function (col) {
+      head.appendChild(el('th', col.cls || null, col.label));
     });
     t.appendChild(head);
     for (var i = 0; i < cars.length; i++) {
       var c = cars[i];
       var tr = el('tr');
-      if (c.retired) { tr.className = 'retired'; }
-      var numTd = el('td', 'num');
-      numTd.appendChild(el('span', 'num-mark' + (c.inPit ? ' pit-mark' : ''), c.inPit ? 'P' : ''));
-      numTd.appendChild(el('span', 'num-pos', c.position || ''));
-      tr.appendChild(numTd);
+      if (carRowRetired(c)) { tr.className = 'retired'; }
+      tr.appendChild(el('td', 'num', c.position || ''));
       var who = el('td', 'who');
       var bar = el('span', 'teambar');
       bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
@@ -1033,12 +1080,16 @@
       who.appendChild(el('span', 'tla', c.tla || ''));
       who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
       tr.appendChild(who);
+      tr.appendChild(trackStatusTd(c));
       tr.appendChild(el('td', 'mono col-gap', c.gap || ''));
       tr.appendChild(el('td', 'mono col-int', c.interval || ''));
       var tyreTd = el('td', 'col-tyre');
-      tyreTd.appendChild(compoundBadge(c.compound, c.compoundCn));
+      var tyreCell = el('span', 'tyre-stint');
+      tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
+      var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
+      tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
+      tyreTd.appendChild(tyreCell);
       tr.appendChild(tyreTd);
-      tr.appendChild(el('td', 'mono col-laps', c.tyreLaps || ''));
       tr.appendChild(el('td', 'mono col-pit', c.pitStops || ''));
       t.appendChild(tr);
     }
@@ -1371,22 +1422,18 @@
     var wrap = el('div', 'sectors-wrap');
     var t = el('table', 'timing sectors');
     var head = el('tr');
-    ['#', '车手', '最快圈', '本圈', 'S1', 'S2', 'S3'].forEach(function (h, i) {
-      var cls = 'num';
-      if (i === 1) cls = 'who';
-      else if (i === 2) cls = 'col-best';
-      else if (i === 3) cls = 'col-last';
-      else if (i === 4) cls = 'col-s1';
-      else if (i === 5) cls = 'col-s2';
-      else if (i === 6) cls = 'col-s3';
-      if (i === 0) {
-        var th = el('th', cls);
-        th.appendChild(el('span', 'num-mark', ''));
-        th.appendChild(el('span', 'num-pos', h));
-        head.appendChild(th);
-      } else {
-        head.appendChild(el('th', cls, h));
-      }
+    var headCols = [
+      { label: '#', cls: 'num' },
+      { label: '车手', cls: 'who' },
+      { label: '轮胎', cls: 'col-tyre' },
+      { label: '最快圈', cls: 'col-best' },
+      { label: '本圈', cls: 'col-last' },
+      { label: 'S1', cls: 'col-s1' },
+      { label: 'S2', cls: 'col-s2' },
+      { label: 'S3', cls: 'col-s3' }
+    ];
+    headCols.forEach(function (col) {
+      head.appendChild(el('th', col.cls, col.label));
     });
     t.appendChild(head);
 
@@ -1420,11 +1467,8 @@
     for (var i = 0; i < cars.length; i++) {
       var c = cars[i];
       var tr = el('tr');
-      if (c.retired) tr.className = 'retired';
-      var numTd = el('td', 'num');
-      numTd.appendChild(el('span', 'num-mark' + (c.inPit ? ' pit-mark' : ''), c.inPit ? 'P' : ''));
-      numTd.appendChild(el('span', 'num-pos', c.position || ''));
-      tr.appendChild(numTd);
+      if (carRowRetired(c)) tr.className = 'retired';
+      tr.appendChild(el('td', 'num', c.position || ''));
       var who = el('td', 'who');
       var bar = el('span', 'teambar');
       bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
@@ -1432,6 +1476,13 @@
       who.appendChild(el('span', 'tla', c.tla || ''));
       who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
       tr.appendChild(who);
+      var tyreTd = el('td', 'col-tyre');
+      var tyreCell = el('span', 'tyre-stint');
+      tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
+      var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
+      tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
+      tyreTd.appendChild(tyreCell);
+      tr.appendChild(tyreTd);
       var bestLap = c.bestLap || '';
       var bestCls = 'mono col-best';
       if (bestLap) {
@@ -1673,7 +1724,7 @@
     svgOk: false,
     pollBusy: false,
     outlineBusy: false,
-    viewZoom: 1,
+    viewZoom: 1.05,
     viewPanX: 0,
     viewPanY: 0,
     viewRotDeg: 0
@@ -1729,7 +1780,7 @@
   }
 
   function resetTrackmapView() {
-    TRACKMAP.viewZoom = 1;
+    TRACKMAP.viewZoom = 1.05;
     TRACKMAP.viewPanX = 0;
     TRACKMAP.viewPanY = 0;
     TRACKMAP.viewRotDeg = 0;
@@ -2035,7 +2086,7 @@
     var bh = bounds.maxY - bounds.minY;
     if (bw < 1) bw = 1;
     if (bh < 1) bh = 1;
-    var pad = 0.06;
+    var pad = 0.04;
     var baseScale = Math.min(w / bw, h / bh) * (1 - pad * 2);
     var oldZ = clampTrackmapZoom(TRACKMAP.viewZoom);
     var oldS = baseScale * oldZ;
@@ -2475,8 +2526,8 @@
       if (p.y > maxY) maxY = p.y;
     }
     if (!isFinite(minX)) return null;
-    var padX = (maxX - minX) * 0.08 || 200;
-    var padY = (maxY - minY) * 0.08 || 200;
+    var padX = (maxX - minX) * 0.06 || 150;
+    var padY = (maxY - minY) * 0.06 || 150;
     return { minX: minX - padX, minY: minY - padY, maxX: maxX + padX, maxY: maxY + padY };
   }
 
@@ -2536,7 +2587,7 @@
     var bh = bounds.maxY - bounds.minY;
     if (bw < 1) bw = 1;
     if (bh < 1) bh = 1;
-    var pad = 0.06;
+    var pad = 0.04;
     var baseScale = Math.min(w / bw, h / bh) * (1 - pad * 2);
     var zoom = clampTrackmapZoom(TRACKMAP.viewZoom);
     TRACKMAP.viewZoom = zoom;
@@ -2660,7 +2711,7 @@
     // ★ 圆环就叫「赛段状态」—— 它画的就是赛道（一圈区段），和安卓一致
     //   （安卓 MODE_NAMES 第一项就是"赛段状态"）。以前这里写"车手圆环"，
     //   用户直接指出来了。下面那个 track 板其实是**文字**状态汇总，不是地图，
-    //   所以改名"赛道状态"，免得两块板同名。
+    //   所以改名"状态"，免得两块板同名。
     flags: '顶部旗语栏', ring: '赛段状态', trackmap: '赛道图', track: '赛道状态', tyres: '轮胎进站',
     timing: '成绩榜', sectors: '赛段成绩', weather: '天气', fastest: '最快圈', session: '环节',
     messages: '赛事通报'

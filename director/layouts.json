@@ -1,140 +1,169 @@
 {
-  "version": 1,
-  "current": {
-    "vw": 1920,
-    "vh": 971,
-    "panels": [
-      {
-        "id": "live",
-        "type": "live",
-        "x": 450,
-        "y": 80,
-        "w": 1464,
-        "h": 885,
-        "z": 70,
-        "minimized": false
-      },
-      {
-        "id": "p1",
-        "type": "board",
-        "x": 6,
-        "y": 8,
-        "w": 438,
-        "h": 406,
-        "z": 86,
-        "minimized": false,
-        "board": "timing"
-      },
-      {
-        "id": "p2",
-        "type": "board",
-        "x": 6,
-        "y": 420,
-        "w": 438,
-        "h": 309,
-        "z": 88,
-        "minimized": false,
-        "board": "trackmap"
-      },
-      {
-        "id": "p5",
-        "type": "board",
-        "x": 6,
-        "y": 735,
-        "w": 438,
-        "h": 230,
-        "z": 85,
-        "minimized": false,
-        "board": "messages"
-      },
-      {
-        "id": "p3",
-        "type": "board",
-        "x": 450,
-        "y": 6,
-        "w": 1464,
-        "h": 68,
-        "z": 73,
-        "minimized": false,
-        "board": "flags"
-      }
-    ]
-  },
-  "presets": {
-    "user": {
-      "savedAt": 1792590922923,
-      "theme": "day",
-      "vw": 1920,
-      "vh": 971,
-      "panels": [
-        {
-          "id": "live",
-          "type": "live",
-          "x": 450,
-          "y": 80,
-          "w": 1464,
-          "h": 885,
-          "z": 70,
-          "minimized": false
-        },
-        {
-          "id": "p1",
-          "type": "board",
-          "x": 6,
-          "y": 8,
-          "w": 438,
-          "h": 406,
-          "z": 86,
-          "minimized": false,
-          "board": "timing"
-        },
-        {
-          "id": "p2",
-          "type": "board",
-          "x": 6,
-          "y": 420,
-          "w": 438,
-          "h": 309,
-          "z": 88,
-          "minimized": false,
-          "board": "trackmap"
-        },
-        {
-          "id": "p5",
-          "type": "board",
-          "x": 6,
-          "y": 735,
-          "w": 438,
-          "h": 230,
-          "z": 85,
-          "minimized": false,
-          "board": "messages"
-        },
-        {
-          "id": "p3",
-          "type": "board",
-          "x": 450,
-          "y": 6,
-          "w": 1464,
-          "h": 68,
-          "z": 73,
-          "minimized": false,
-          "board": "flags"
-        }
-      ]
-    }
-  },
-  "theme": "day",
-  "streamUrl": "",
-  "liveToolbarHidden": true,
-  "layoutLocked": true,
-  "timingColumns": [
-    "pos",
-    "who",
-    "gap",
-    "int",
-    "tyre",
-    "laps",
-    "pit"
-  ]
+    "version":  1,
+    "current":  {
+                    "vw":  1920,
+                    "vh":  971,
+                    "panels":  [
+                                   {
+                                       "id":  "live",
+                                       "type":  "live",
+                                       "x":  450,
+                                       "y":  80,
+                                       "w":  1464,
+                                       "h":  885,
+                                       "z":  70,
+                                       "minimized":  false
+                                   },
+                                   {
+                                       "id":  "p1",
+                                       "type":  "board",
+                                       "x":  6,
+                                       "y":  330,
+                                       "w":  438,
+                                       "h":  635,
+                                       "z":  107,
+                                       "minimized":  false,
+                                       "board":  "timing"
+                                   },
+                                   {
+                                       "id":  "p2",
+                                       "type":  "board",
+                                       "x":  6,
+                                       "y":  8,
+                                       "w":  438,
+                                       "h":  316,
+                                       "z":  104,
+                                       "minimized":  false,
+                                       "board":  "trackmap"
+                                   },
+                                   {
+                                       "id":  "p3",
+                                       "type":  "board",
+                                       "x":  450,
+                                       "y":  6,
+                                       "w":  1464,
+                                       "h":  68,
+                                       "z":  73,
+                                       "minimized":  false,
+                                       "board":  "flags"
+                                   }
+                               ]
+                },
+    "presets":  {
+                    "正赛":  {
+                               "savedAt":  1792686516542,
+                               "theme":  "night",
+                               "vw":  1920,
+                               "vh":  971,
+                               "panels":  [
+                                              {
+                                                  "id":  "live",
+                                                  "type":  "live",
+                                                  "x":  450,
+                                                  "y":  80,
+                                                  "w":  1464,
+                                                  "h":  885,
+                                                  "z":  70,
+                                                  "minimized":  false
+                                              },
+                                              {
+                                                  "id":  "p1",
+                                                  "type":  "board",
+                                                  "x":  6,
+                                                  "y":  330,
+                                                  "w":  438,
+                                                  "h":  635,
+                                                  "z":  107,
+                                                  "minimized":  false,
+                                                  "board":  "timing"
+                                              },
+                                              {
+                                                  "id":  "p2",
+                                                  "type":  "board",
+                                                  "x":  6,
+                                                  "y":  8,
+                                                  "w":  438,
+                                                  "h":  316,
+                                                  "z":  104,
+                                                  "minimized":  false,
+                                                  "board":  "trackmap"
+                                              },
+                                              {
+                                                  "id":  "p3",
+                                                  "type":  "board",
+                                                  "x":  450,
+                                                  "y":  6,
+                                                  "w":  1464,
+                                                  "h":  68,
+                                                  "z":  73,
+                                                  "minimized":  false,
+                                                  "board":  "flags"
+                                              }
+                                          ]
+                           },
+                    "练习/排位赛":  {
+                                   "savedAt":  1792686586904,
+                                   "theme":  "night",
+                                   "vw":  1920,
+                                   "vh":  971,
+                                   "panels":  [
+                                                  {
+                                                      "id":  "live",
+                                                      "type":  "live",
+                                                      "x":  488,
+                                                      "y":  80,
+                                                      "w":  1426,
+                                                      "h":  885,
+                                                      "z":  108,
+                                                      "minimized":  false
+                                                  },
+                                                  {
+                                                      "id":  "p1",
+                                                      "type":  "board",
+                                                      "x":  6,
+                                                      "y":  282,
+                                                      "w":  476,
+                                                      "h":  683,
+                                                      "z":  119,
+                                                      "minimized":  false,
+                                                      "board":  "sectors"
+                                                  },
+                                                  {
+                                                      "id":  "p2",
+                                                      "type":  "board",
+                                                      "x":  6,
+                                                      "y":  8,
+                                                      "w":  476,
+                                                      "h":  268,
+                                                      "z":  116,
+                                                      "minimized":  false,
+                                                      "board":  "trackmap"
+                                                  },
+                                                  {
+                                                      "id":  "p3",
+                                                      "type":  "board",
+                                                      "x":  488,
+                                                      "y":  6,
+                                                      "w":  1426,
+                                                      "h":  68,
+                                                      "z":  110,
+                                                      "minimized":  false,
+                                                      "board":  "flags"
+                                                  }
+                                              ]
+                               }
+                },
+    "theme":  "night",
+    "streamUrl":  "",
+    "liveToolbarHidden":  false,
+    "layoutLocked":  true,
+    "timingColumns":  [
+                          "pos",
+                          "who",
+                          "status",
+                          "gap",
+                          "int",
+                          "tyre",
+                          "pit"
+                      ]
 }

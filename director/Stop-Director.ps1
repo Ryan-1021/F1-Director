@@ -9,7 +9,7 @@ function Stop-F1Director {
         Where-Object {
             $_.Name -match '^(java|javaw)\.exe$' -and
             $_.CommandLine -and
-            ($_.CommandLine -like '*F1-RaceControl-Desktop.jar*')
+            ($_.CommandLine -like '*F1-RaceControl-Desktop*.jar*')
         } |
         ForEach-Object {
             Write-Host ("  kill java PID {0}" -f $_.ProcessId)
