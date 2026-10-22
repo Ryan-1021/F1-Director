@@ -366,7 +366,7 @@ html, body {
   font-size: 11px; color: var(--muted); margin-left: auto;
   font-variant-numeric: tabular-nums; font-family: var(--mono);
 }
-.b-box { flex: 1 1 auto; padding: 10px 12px; overflow: auto; min-height: 0; }
+.b-box { flex: 1 1 0%; padding: 10px 12px; overflow: auto; min-height: 0; }
 .b-box.b-ring { padding: 0; background: var(--ring-bg); }
 .b-box.b-flags {
   padding: 0;
@@ -402,18 +402,48 @@ html, body {
   position: relative;
   height: 100%; min-height: 0; overflow: auto;
   container-type: inline-size;
+  /* Vertical density (set by fitBoardVertical); fallbacks = comfortable defaults */
+  --board-fs: 12px;
+  --board-th-fs: 9px;
+  --board-td-pad-y: 4px;
+  --board-th-pad-y: 4px;
+  --board-th-pad-b: 6px;
 }
 /* Timing board fills the panel; no dedicated tools row. */
 .b-box.b-timing {
   display: flex;
   flex-direction: column;
+  flex: 1 1 0%;
+  align-self: stretch;
+  width: 100%;
   min-height: 0;
+  overflow: hidden; /* scroll on .timing-wrap */
   position: relative;
 }
 .b-box.b-timing > .timing-wrap {
-  flex: 1 1 auto;
-  height: auto;
+  flex: 1 1 0%;
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
   min-height: 0;
+  overflow: auto;
+}
+/* Main-grid .panel host (non-iframe): pass height down to the wrap */
+.panel[data-board="timing"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.panel[data-board="timing"] > .ptitle,
+.panel[data-board="timing"] > .timing-cols-bar {
+  flex: 0 0 auto;
+}
+.panel[data-board="timing"] > .timing-wrap {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: auto;
+  overflow: auto;
 }
 /* Legacy tools strip (removed): never reclaim vertical space if an old build left one. */
 .b-box.b-timing > .timing-tools { display: none !important; height: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; overflow: hidden; }
@@ -426,7 +456,7 @@ html, body {
 .timing-wrap.hide-tyre .col-tyre { display: none; }
 .timing-wrap.hide-laps .col-laps { display: none; }
 .timing-wrap.hide-pit .col-pit { display: none; }
-.timing-wrap.compact table.timing { font-size: 11px; }
+/* .compact still marks narrow panels; font/padding come from --board-* vars */
 
 /* Column picker: quiet control in title row (standalone / main). Director uses .p-head. */
 .timing-cols-bar {
@@ -531,7 +561,15 @@ table.timing {
   width: 100%;
   table-layout: fixed;
   border-collapse: separate; border-spacing: 0;
-  font-size: 12px; font-variant-numeric: tabular-nums;
+  font-size: var(--board-fs, 12px); font-variant-numeric: tabular-nums;
+}
+/* When JS stretches table height to fill the wrap, keep thead content-sized
+   so leftover vertical space goes to body rows (no dead grey under P22). */
+table.timing thead tr {
+  height: 0;
+}
+table.timing tbody tr {
+  height: auto;
 }
 table.timing thead, table.timing tr:first-child th {
   position: sticky; top: 0; z-index: 1;
@@ -540,14 +578,14 @@ table.timing thead, table.timing tr:first-child th {
 }
 table.timing th {
   text-align: left; color: var(--muted); font-weight: 700;
-  font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
-  padding: 4px 4px 6px; border-bottom: 1px solid var(--border-hi);
+  font-size: var(--board-th-fs, 9px); letter-spacing: .06em; text-transform: uppercase;
+  padding: var(--board-th-pad-y, 4px) 4px var(--board-th-pad-b, 6px); border-bottom: 1px solid var(--border-hi);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 table.timing td {
-  padding: 4px 5px;
+  padding: var(--board-td-pad-y, 4px) 5px;
   border-bottom: 1px solid var(--row-line);
   vertical-align: middle;
   white-space: nowrap;
@@ -571,12 +609,14 @@ table.timing td.col-gap {
   width: var(--w-gap);
   padding-left: 8px;
   padding-right: 6px;
+  text-align: center;
 }
 table.timing th.col-int,
 table.timing td.col-int {
   width: var(--w-int);
   padding-left: 8px;
   padding-right: 6px;
+  text-align: center;
 }
 table.timing th.col-tyre,
 table.timing td.col-tyre {
@@ -615,47 +655,89 @@ td.who .carno {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-  font-size: 11px;
+  font-size: 0.92em;
   color: var(--muted);
   vertical-align: bottom;
 }
-.timing-wrap.compact table.timing th { padding: 3px 3px 5px; }
-.timing-wrap.compact table.timing td { padding: 3px 3px; }
+/* Narrow: horizontal pad only; vertical pad owned by --board-* */
+.timing-wrap.compact table.timing th { padding-left: 3px; padding-right: 3px; }
+.timing-wrap.compact table.timing td { padding-left: 3px; padding-right: 3px; }
 table.timing tr:hover td { background: var(--hover-row); }
 table.timing tr.retired td { color: var(--muted2); opacity: .72; }
 
-/* ---------- sector / current-lap board ---------- */
+/* ---------- sector / current-lap board (dense fill like timing) ---------- */
 .b-box.b-sectors {
   display: flex;
   flex-direction: column;
+  flex: 1 1 0%;
+  align-self: stretch;
+  width: 100%;
   min-height: 0;
+  overflow: hidden; /* scroll on .sectors-wrap */
   position: relative;
 }
-.sectors-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  padding: 4px 8px 6px;
-  font-size: 11px;
-  color: var(--muted);
-  border-bottom: 1px solid var(--row-line);
-  flex: 0 0 auto;
-}
-.sectors-meta-item {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
+/* Same scroll / fill contract as .timing-wrap */
 .sectors-wrap {
-  flex: 1 1 auto;
-  height: auto;
+  position: relative;
+  flex: 1 1 0%;
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  container-type: inline-size;
+  --w-pos: 7%;
+  --w-who: 16%;
+  --w-best: 14%;
+  --w-last: 14%;
+  --w-s1: 16%;
+  --w-s2: 16%;
+  --w-s3: 17%;
+  --board-fs: 12px;
+  --board-th-fs: 9px;
+  --board-td-pad-y: 4px;
+  --board-th-pad-y: 4px;
+  --board-th-pad-b: 6px;
+  --sec-mini-h: 5px;
+  --sec-mini-gap: 1px;
+  --sec-band-gap: 1px;
+}
+.b-box.b-sectors > .sectors-wrap {
+  flex: 1 1 0%;
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+.panel[data-board="sectors"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   min-height: 0;
 }
+.panel[data-board="sectors"] > .ptitle {
+  flex: 0 0 auto;
+}
+.panel[data-board="sectors"] > .sectors-wrap {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: auto;
+  overflow: auto;
+}
+.panel[data-board="sectors"] > .sectors-note {
+  flex: 0 0 auto;
+}
 .sectors-note {
-  padding: 6px 8px 8px;
-  font-size: 11px;
+  padding: 4px 6px 6px;
+  font-size: 10px;
   line-height: 1.35;
   color: var(--muted2);
+  flex: 0 0 auto;
 }
+/* Narrow sectors: horizontal pad only; density via --board-* / --sec-* */
+.sectors-wrap.compact table.timing th { padding-left: 3px; padding-right: 3px; }
+.sectors-wrap.compact table.timing td { padding-left: 3px; padding-right: 3px; }
 table.sectors th.col-best,
 table.sectors td.col-best,
 table.sectors th.col-last,
@@ -666,26 +748,30 @@ table.sectors th.col-s2,
 table.sectors td.col-s2,
 table.sectors th.col-s3,
 table.sectors td.col-s3 {
-  text-align: right;
+  text-align: center;
   font-family: var(--mono);
   padding-left: 6px;
   padding-right: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 table.sectors th.col-best,
-table.sectors td.col-best { width: 14%; }
+table.sectors td.col-best { width: var(--w-best); }
 table.sectors th.col-last,
-table.sectors td.col-last { width: 14%; }
+table.sectors td.col-last { width: var(--w-last); }
 table.sectors th.col-s1,
-table.sectors td.col-s1,
+table.sectors td.col-s1 { width: var(--w-s1); }
 table.sectors th.col-s2,
-table.sectors td.col-s2,
+table.sectors td.col-s2 { width: var(--w-s2); }
 table.sectors th.col-s3,
-table.sectors td.col-s3 { width: 11%; }
+table.sectors td.col-s3 { width: var(--w-s3); }
+/* num / who reuse timing rules (var(--w-pos) / var(--w-who)) set on .sectors-wrap */
 
 
 td.num {
   color: var(--muted); font-weight: 700;
-  font-family: var(--mono); font-size: 11px;
+  font-family: var(--mono); font-size: 0.92em;
   white-space: nowrap;
 }
 table.timing th.num {
@@ -1270,4 +1356,83 @@ html[data-theme="day"] .svalue.hero {
 [data-theme="day"] .tm-hint:hover {
   color: #263238;
   background: rgba(15,23,42,0.06);
+}
+/* S1-S3: fixed 3-band cell — mini strip / current / best (F1 TV style) */
+table.sectors td.sec-cell {
+  vertical-align: middle;
+  line-height: 1.05;
+  padding-top: max(1px, calc(var(--board-td-pad-y, 4px) * 0.5));
+  padding-bottom: max(1px, calc(var(--board-td-pad-y, 4px) * 0.5));
+  white-space: normal;
+}
+table.sectors .sec-mini {
+  display: flex;
+  gap: var(--sec-mini-gap, 1px);
+  height: var(--sec-mini-h, 5px);
+  width: 100%;
+  max-width: 78px;
+  margin: 0 auto var(--sec-band-gap, 1px);
+  flex: 0 0 var(--sec-mini-h, 5px);
+}
+table.sectors .sec-mini-bit {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 1px;
+  background: rgba(255,255,255,.14);
+}
+table.sectors .sec-mini-yellow { background: #e6c200; }
+table.sectors .sec-mini-green { background: #1db954; }
+table.sectors .sec-mini-purple { background: #b24bff; }
+table.sectors .sec-mini-dim { background: rgba(255,255,255,.28); }
+table.sectors .sec-cur {
+  display: block;
+  height: 1.2em;
+  line-height: 1.2em;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+table.sectors .sec-best {
+  display: block;
+  height: 1.15em;
+  line-height: 1.15em;
+  margin-top: var(--sec-band-gap, 1px);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.95;
+}
+/* Purple / green / yellow: bottom best sector + col-best / col-last */
+table.sectors .sec-best.sec-purple,
+table.sectors td.col-best.sec-purple,
+table.sectors td.col-last.sec-purple {
+  color: #c44dff;
+  font-weight: 700;
+  opacity: 1;
+}
+table.sectors .sec-best.sec-green,
+table.sectors td.col-best.sec-green,
+table.sectors td.col-last.sec-green {
+  color: #2ecc71;
+  font-weight: 700;
+  opacity: 1;
+}
+table.sectors .sec-best.sec-yellow,
+table.sectors td.col-best.sec-yellow,
+table.sectors td.col-last.sec-yellow {
+  color: #f1c40f;
+  font-weight: 600;
+  opacity: 1;
+}
+[data-theme="day"] table.sectors .sec-mini-bit {
+  background: rgba(15,23,42,.12);
+}
+[data-theme="day"] table.sectors .sec-mini-dim {
+  background: rgba(15,23,42,.22);
 }

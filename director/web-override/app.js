@@ -578,8 +578,8 @@
   var TIMING_COLS = [
     { id: 'pos',  cls: 'num',      label: '#', always: true },
     { id: 'who',  cls: 'who',      label: '车手', always: true },
-    { id: 'gap',  cls: 'col-gap',  label: '差距', always: false },
-    { id: 'int',  cls: 'col-int',  label: '间隔', always: false },
+    { id: 'gap',  cls: 'col-gap',  label: '榜首差距', always: false },
+    { id: 'int',  cls: 'col-int',  label: '前车差距', always: false },
     { id: 'tyre', cls: 'col-tyre', label: '胎',   always: false },
     { id: 'laps', cls: 'col-laps', label: '圈',   always: false },
     { id: 'pit',  cls: 'col-pit',  label: '站',   always: false }
@@ -655,14 +655,232 @@
     applyTimingColumnWidths(wrap, vis);
   }
 
-  function fitTimingTable(wrap) {
+  // Vertical density: scale font / padding / sector bands so rows fill panel height.
+  // t=0 minimum readable, t=1 roomy ceiling; then stretch table to absorb leftover.
+  // Compact only changes horizontal pad (CSS) — never lowers these vertical ceilings,
+  // otherwise shrinking the window width leaves a dead grey gap under the last row.
+  function applyBoardDensityScale(wrap, t, isSectors) {
     if (!wrap) return;
-    var w = wrap.clientWidth || 0;
-    // User picks columns; only tighten font when the panel is narrow.
-    wrap.classList.toggle('compact', w > 0 && w < 520);
-    applyTimingColumnVisibility(wrap);
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    var minFs = 9;
+    var maxFs = isSectors ? 15.5 : 17;
+    var minPad = 1;
+    var maxPad = isSectors ? 12 : 16;
+    var minThPad = 2;
+    var maxThPad = 8;
+    var minThFs = 8;
+    var maxThFs = 12;
+    var minMini = 3;
+    var maxMini = 10;
+    var fs = minFs + (maxFs - minFs) * t;
+    var tdPad = minPad + (maxPad - minPad) * t;
+    var thPad = minThPad + (maxThPad - minThPad) * t;
+    var thFs = minThFs + (maxThFs - minThFs) * t;
+    var mini = minMini + (maxMini - minMini) * t;
+    // Skip style writes when nothing changed (avoids layout thrash during resize).
+    var key = (isSectors ? 's' : 't') + ':' + t.toFixed(3);
+    if (wrap.__boardDensityKey === key) return;
+    wrap.__boardDensityKey = key;
+    wrap.style.setProperty('--board-fs', fs.toFixed(2) + 'px');
+    wrap.style.setProperty('--board-th-fs', thFs.toFixed(2) + 'px');
+    wrap.style.setProperty('--board-td-pad-y', tdPad.toFixed(2) + 'px');
+    wrap.style.setProperty('--board-th-pad-y', thPad.toFixed(2) + 'px');
+    wrap.style.setProperty('--board-th-pad-b', (thPad + 2).toFixed(2) + 'px');
+    if (isSectors) {
+      wrap.style.setProperty('--sec-mini-h', mini.toFixed(2) + 'px');
+      wrap.style.setProperty('--sec-mini-gap', (0.5 + 0.5 * t).toFixed(2) + 'px');
+      wrap.style.setProperty('--sec-band-gap', (0.5 + 0.5 * t).toFixed(2) + 'px');
+    }
   }
 
+  function setTableHeightPx(table, px) {
+    if (!table) return;
+    var next = (px == null || px === '') ? '' : (px + 'px');
+    if (table.style.height === next) return;
+    table.style.height = next;
+  }
+
+  /**
+   * Fit board rows to wrap height.
+   * mode 'cheap': keep last density, only stretch/clear height (for live drag).
+   * mode 'exact' (default): binary-search density, then stretch if spare room.
+   */
+  function fitBoardVertical(wrap, isSectors, mode) {
+    if (!wrap) return;
+    var table = wrap.querySelector('table');
+    if (!table) return;
+    mode = mode || 'exact';
+    var avail = wrap.clientHeight || 0;
+    if (avail <= 0 && wrap.parentElement) avail = wrap.parentElement.clientHeight || 0;
+    if (avail <= 0) return;
+
+    var prev = wrap.__boardFit || {};
+    if (Math.abs((prev.avail || 0) - avail) < 2 &&
+        !!prev.isSectors === !!isSectors &&
+        prev.exact && mode === 'exact') {
+      // Size stable since last exact fit — only keep stretch in sync.
+      if (prev.stretched) setTableHeightPx(table, avail);
+      return;
+    }
+
+    if (mode === 'cheap') {
+      // During drag: no scrollHeight reads. Keep density; only adjust stretch.
+      if (prev.t == null) {
+        // First paint mid-drag: one light exact later via settle; for now fill.
+        setTableHeightPx(table, avail);
+        wrap.__boardFit = { avail: avail, t: prev.t, isSectors: !!isSectors, exact: false, stretched: true };
+        return;
+      }
+      if (prev.stretched) setTableHeightPx(table, avail);
+      else setTableHeightPx(table, '');
+      wrap.__boardFit = {
+        avail: avail,
+        t: prev.t,
+        isSectors: !!isSectors,
+        exact: false,
+        stretched: !!prev.stretched
+      };
+      return;
+    }
+
+    // Exact: measure natural height under density scale.
+    setTableHeightPx(table, '');
+    var lo = 0;
+    var hi = 1;
+    var i;
+    var t = 1;
+    applyBoardDensityScale(wrap, 1, isSectors);
+    var needed = table.scrollHeight;
+    if (needed > avail + 2) {
+      // Binary-search largest t that fits; 7 iters ≈ 0.8% — enough for px fonts.
+      for (i = 0; i < 7; i++) {
+        var mid = (lo + hi) / 2;
+        applyBoardDensityScale(wrap, mid, isSectors);
+        needed = table.scrollHeight;
+        if (needed <= avail + 2) lo = mid;
+        else hi = mid;
+      }
+      t = lo;
+      applyBoardDensityScale(wrap, t, isSectors);
+      setTableHeightPx(table, '');
+      wrap.__boardFit = { avail: avail, t: t, isSectors: !!isSectors, exact: true, stretched: false };
+      return;
+    }
+    // Spare vertical space: stretch table so leftover distributes across rows.
+    setTableHeightPx(table, avail);
+    wrap.__boardFit = { avail: avail, t: 1, isSectors: !!isSectors, exact: true, stretched: true };
+  }
+
+  function fitTimingTable(wrap, mode) {
+    if (!wrap) return;
+    var w = wrap.clientWidth || 0;
+    var h = wrap.clientHeight || 0;
+    var prev = wrap.__boardFitSize || {};
+    if (mode === 'cheap' &&
+        Math.abs((prev.w || 0) - w) < 2 &&
+        Math.abs((prev.h || 0) - h) < 2) {
+      return;
+    }
+    wrap.__boardFitSize = { w: w, h: h };
+    var wantCompact = w > 0 && w < 520;
+    if (wrap.classList.contains('compact') !== wantCompact) {
+      wrap.classList.toggle('compact', wantCompact);
+    }
+    // Column visibility is independent of size; skip on cheap drag frames.
+    if (mode !== 'cheap' || !wrap.__timingColsReady) {
+      applyTimingColumnVisibility(wrap);
+      wrap.__timingColsReady = true;
+    }
+    fitBoardVertical(wrap, false, mode);
+  }
+
+  // Sector board: same dense fill as timing (no column picker; all cols visible).
+  var SECTOR_COL_WEIGHTS = {
+    pos: 7, who: 16, best: 14, last: 14, s1: 16, s2: 16, s3: 17
+  };
+
+  function applySectorColumnWidths(wrap) {
+    if (!wrap) return;
+    // Percent widths are constant — apply once per wrap lifetime.
+    if (wrap.__sectorColsApplied) return;
+    var ids = ['pos', 'who', 'best', 'last', 's1', 's2', 's3'];
+    var total = 0;
+    var i;
+    for (i = 0; i < ids.length; i++) total += SECTOR_COL_WEIGHTS[ids[i]] || 0;
+    if (total <= 0) total = 1;
+    for (i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      var pct = (SECTOR_COL_WEIGHTS[id] || 0) / total * 100;
+      wrap.style.setProperty('--w-' + id, pct.toFixed(2) + '%');
+    }
+    wrap.__sectorColsApplied = true;
+  }
+
+  function fitSectorsTable(wrap, mode) {
+    if (!wrap) return;
+    var w = wrap.clientWidth || 0;
+    var h = wrap.clientHeight || 0;
+    var prev = wrap.__boardFitSize || {};
+    if (mode === 'cheap' &&
+        Math.abs((prev.w || 0) - w) < 2 &&
+        Math.abs((prev.h || 0) - h) < 2) {
+      return;
+    }
+    wrap.__boardFitSize = { w: w, h: h };
+    var wantCompact = w > 0 && w < 560;
+    if (wrap.classList.contains('compact') !== wantCompact) {
+      wrap.classList.toggle('compact', wantCompact);
+    }
+    applySectorColumnWidths(wrap);
+    fitBoardVertical(wrap, true, mode);
+  }
+
+  /**
+   * One ResizeObserver per board box lifetime (survives clear()+rebuild).
+   * Live drag: rAF + cheap fit (no binary search). Settle ~80ms: one exact fit.
+   */
+  function ensureBoardFitObserver(box, kind) {
+    if (!box || box.__boardFitRo) return;
+    var rafId = null;
+    var settleId = null;
+    var lastW = -1;
+    var lastH = -1;
+    function wrapOf() {
+      return box.querySelector(kind === 'sectors' ? '.sectors-wrap' : '.timing-wrap');
+    }
+    function runFit(mode) {
+      var wrap = wrapOf();
+      if (!wrap) return;
+      if (kind === 'sectors') fitSectorsTable(wrap, mode);
+      else fitTimingTable(wrap, mode);
+    }
+    try {
+      var ro = new ResizeObserver(function () {
+        var wrap = wrapOf();
+        if (!wrap) return;
+        var w = wrap.clientWidth || 0;
+        var h = wrap.clientHeight || 0;
+        // Also accept box size when wrap has not stretched yet.
+        if (h <= 0) h = box.clientHeight || 0;
+        if (Math.abs(w - lastW) < 2 && Math.abs(h - lastH) < 2) return;
+        lastW = w;
+        lastH = h;
+        if (rafId != null) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(function () {
+          rafId = null;
+          runFit('cheap');
+          if (settleId != null) clearTimeout(settleId);
+          settleId = setTimeout(function () {
+            settleId = null;
+            runFit('exact');
+          }, 80);
+        });
+      });
+      ro.observe(box);
+      box.__boardFitRo = ro;
+    } catch (e) { /* ignore */ }
+  }
   function buildTimingColsMenu(wrap) {
     var bar = el('div', 'timing-cols-bar');
     var btn = el('button', 'timing-cols-btn', '列');
@@ -781,7 +999,7 @@
     placeTimingColsControl(box, wrap);
     var t = el('table', 'timing');
     var head = el('tr');
-    ['#', '车手', '差距', '间隔', '胎', '圈', '站'].forEach(function (h, i) {
+    ['#', '车手', '榜首差距', '前车差距', '胎', '圈', '站'].forEach(function (h, i) {
       var cls = '';
       if (i === 0) cls = 'num';
       else if (i === 1) cls = 'who';
@@ -826,20 +1044,8 @@
     }
     wrap.appendChild(t);
     box.appendChild(wrap);
-    fitTimingTable(wrap);
-    if (typeof ResizeObserver !== 'undefined') {
-      try {
-        var roPending = null;
-        var ro = new ResizeObserver(function () {
-          if (roPending) cancelAnimationFrame(roPending);
-          roPending = requestAnimationFrame(function () {
-            roPending = null;
-            fitTimingTable(wrap);
-          });
-        });
-        ro.observe(wrap);
-      } catch (e) {}
-    }
+    fitTimingTable(wrap, 'exact');
+    ensureBoardFitObserver(box, 'timing');
   }
 
   function parseWeatherExtras(text) {
@@ -921,13 +1127,33 @@
       var mt = /赛道(?:温(?:度)?)?\s*([0-9]+(?:\.[0-9]+)?)\s*°?\s*C?/i.exec(String(w.text || ''));
       if (mt) track = mt[1] + '°C';
     }
+    var humidity = '';
+    if (w.humidity != null && w.humidity !== '') {
+      var h = String(w.humidity).trim();
+      humidity = /%$/.test(h) ? h : (h + '%');
+    } else {
+      humidity = extras.humidity || '';
+    }
+    var wind = '';
+    if (w.wind != null && w.wind !== '') {
+      var wv = String(w.wind).trim();
+      wind = /m\/s|km\/h/i.test(wv) ? wv : (wv + ' m/s');
+      if (w.windDirection != null && w.windDirection !== '') {
+        wind += ' · ' + String(w.windDirection).trim() + '°';
+      }
+    } else {
+      wind = extras.wind || '';
+    }
+    var raining = (typeof w.rain === 'boolean')
+      ? w.rain
+      : (parseFloat(w.rainfall) > 0 ? true : !!extras.raining);
     return {
       air: air || '—',
       track: track || '—',
-      humidity: extras.humidity || '—',
-      wind: extras.wind || '—',
-      rain: extras.raining ? (extras.rain || '有雨') : '无雨',
-      raining: !!extras.raining
+      humidity: humidity || '—',
+      wind: wind || '—',
+      rain: raining ? '有雨' : '无雨',
+      raining: !!raining
     };
   }
 
@@ -1008,16 +1234,78 @@
   }
 
 
-  /** Pick S1/S2/S3 from a car object if the feed ever exposes them. */
-  function carSectorTime(c, idx) {
+  /**
+   * Read S1/S2/S3 from a car. Prefers cars[].sectors[{value,personalBest,overallBest,status,segments}]
+   * from the patched Race Control jar; falls back to flat s1/s2/s3 keys.
+   * Returns { value, personalBest, overallBest, status, segments, bestValue }.
+   * bestValue is TimingStats personal-best sector (stable green when live status ages to 0).
+   */
+  function carBestSectorValue(c, idx) {
     if (!c) return '';
+    var bs = c.bestSectors || c.BestSectors;
+    if (Array.isArray(bs) && bs[idx] != null && bs[idx] !== '') {
+      var b = bs[idx];
+      if (b != null && typeof b === 'object') return String(b.Value || b.value || '');
+      return String(b);
+    }
+    return '';
+  }
+
+  function normalizeSegments(raw) {
+    var out = [];
+    if (!raw) return out;
+    if (Array.isArray(raw)) {
+      for (var i = 0; i < raw.length; i++) {
+        var s = raw[i];
+        if (s != null && typeof s === 'object') out.push(Number(s.status || s.Status || 0) || 0);
+        else out.push(Number(s) || 0);
+      }
+      return out;
+    }
+    if (typeof raw === 'object') {
+      var keys = Object.keys(raw).filter(function (k) { return /^\d+$/.test(k); })
+        .map(Number).sort(function (a, b) { return a - b; });
+      for (var j = 0; j < keys.length; j++) {
+        var seg = raw[String(keys[j])];
+        if (seg != null && typeof seg === 'object') out.push(Number(seg.status || seg.Status || 0) || 0);
+        else out.push(Number(seg) || 0);
+      }
+    }
+    return out;
+  }
+
+  function carSectorInfo(c, idx) {
+    var empty = { value: '', personalBest: false, overallBest: false, status: 0, segments: [], bestValue: '' };
+    if (!c) return empty;
+    var bestValue = carBestSectorValue(c, idx);
     var sectors = c.sectors || c.Sectors;
     if (Array.isArray(sectors) && sectors[idx] != null) {
       var v = sectors[idx];
       if (v != null && typeof v === 'object') {
-        return String(v.Value || v.value || v.time || v.Time || '');
+        var val = String(v.Value || v.value || v.time || v.Time || '');
+        var overall = !!(v.overallBest || v.OverallFastest || v.OverallBest);
+        var personal = !!(v.personalBest || v.PersonalFastest || v.PersonalBest);
+        var status = Number(v.status || v.Status || 0) || 0;
+        if (!overall && !personal && status) {
+          overall = status === 2051;
+          personal = status === 2051 || status === 2049;
+        }
+        // When live Status ages to 0, match value against TimingStats bestSectors for green.
+        if (!overall && !personal && val && bestValue) {
+          var a = parseSectorSeconds(val);
+          var b = parseSectorSeconds(bestValue);
+          if (isFinite(a) && isFinite(b) && Math.abs(a - b) < 0.0005) personal = true;
+        }
+        return {
+          value: val,
+          personalBest: personal,
+          overallBest: overall,
+          status: status,
+          segments: normalizeSegments(v.segments || v.Segments),
+          bestValue: bestValue
+        };
       }
-      return String(v);
+      return { value: String(v), personalBest: false, overallBest: false, status: 0, segments: [], bestValue: bestValue };
     }
     var keys = [
       ['s1', 's2', 's3'],
@@ -1027,11 +1315,35 @@
     ];
     for (var k = 0; k < keys.length; k++) {
       var key = keys[k][idx];
-      if (c[key] != null && c[key] !== '') return String(c[key]);
+      if (c[key] != null && c[key] !== '') {
+        return { value: String(c[key]), personalBest: false, overallBest: false, status: 0, segments: [], bestValue: bestValue };
+      }
     }
-    return '';
+    empty.bestValue = bestValue;
+    return empty;
   }
 
+  function carSectorTime(c, idx) {
+    return carSectorInfo(c, idx).value;
+  }
+
+  /** Parse "1:23.456" / "28.123" into seconds; NaN if unusable. */
+  function parseSectorSeconds(str) {
+    if (!str) return NaN;
+    var s = String(str).trim();
+    if (!s || s === '—' || s === '-') return NaN;
+    var m = s.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+    if (m) return (+m[1]) * 60 + (+m[2]);
+    var n = Number(s);
+    return isFinite(n) ? n : NaN;
+  }
+
+  function formatSectorDelta(sec) {
+    if (!isFinite(sec) || sec <= 0.0005) return '';
+    var t = sec.toFixed(3);
+    if (t.charAt(0) !== '+') t = '+' + t;
+    return t;
+  }
   function carLastLapTime(c) {
     if (!c) return '';
     var v = c.lastLap || c.lastLapTime || c.lapTime || c.currentLapTime || c.LastLapTime;
@@ -1044,32 +1356,22 @@
   /**
    * Sector / current-lap detail board.
    * Upstream F1Feed currently ships bestLap/gap/… on cars, but not per-driver
-   * S1–S3. Columns stay wired for those fields when a future feed adds them;
+   * S1-S3 from patched F1Feed (lastLap + sectors[] with PB/overall flags).
    * until then cells show "—".
    */
   function renderSectors(box) {
     clear(box);
     if (!ONCE) panelTitle(box, '赛段成绩');
     var cars = (state && state.cars) || [];
-    var race = (state && state.race) || {};
-    var meta = el('div', 'sectors-meta');
-    var lap = (race.lap != null ? race.lap : (race.currentLap != null ? race.currentLap : 0));
-    var total = race.totalLaps || 0;
-    var sc = race.sectorCount != null ? race.sectorCount : 3;
-    meta.appendChild(el('span', 'sectors-meta-item',
-      '当前圈 ' + lap + (total ? (' / ' + total) : '')));
-    meta.appendChild(el('span', 'sectors-meta-item', '区段 ' + sc));
-    box.appendChild(meta);
-
     if (!cars.length) {
       box.appendChild(el('div', 'sub', '还没有车手数据'));
       return;
     }
 
-    var wrap = el('div', 'sectors-wrap timing-wrap');
+    var wrap = el('div', 'sectors-wrap');
     var t = el('table', 'timing sectors');
     var head = el('tr');
-    ['#', '车手', '最快', '本圈', 'S1', 'S2', 'S3'].forEach(function (h, i) {
+    ['#', '车手', '最快圈', '本圈', 'S1', 'S2', 'S3'].forEach(function (h, i) {
       var cls = 'num';
       if (i === 1) cls = 'who';
       else if (i === 2) cls = 'col-best';
@@ -1089,6 +1391,32 @@
     t.appendChild(head);
 
     var anySector = false;
+    // Field-wide min of personal bestSectors[i] — purple on the bottom "最快赛段" row.
+    var fieldBestSec = [NaN, NaN, NaN];
+    for (var bi = 0; bi < cars.length; bi++) {
+      for (var bs = 0; bs < 3; bs++) {
+        var bv = carBestSectorValue(cars[bi], bs);
+        if (!bv) continue;
+        var bsecs = parseSectorSeconds(bv);
+        if (!isFinite(bsecs)) continue;
+        if (!isFinite(fieldBestSec[bs]) || bsecs < fieldBestSec[bs]) fieldBestSec[bs] = bsecs;
+      }
+    }
+    // Field-wide min bestLap / lastLap for purple on col-best / col-last.
+    var fieldBestLapMs = Infinity;
+    var fieldLastLapMs = Infinity;
+    for (var fi = 0; fi < cars.length; fi++) {
+      var fBest = cars[fi].bestLap;
+      if (fBest) {
+        var fbm = lapMs(fBest);
+        if (isFinite(fbm) && fbm < fieldBestLapMs) fieldBestLapMs = fbm;
+      }
+      var fLast = carLastLapTime(cars[fi]);
+      if (fLast) {
+        var flm = lapMs(fLast);
+        if (isFinite(flm) && flm < fieldLastLapMs) fieldLastLapMs = flm;
+      }
+    }
     for (var i = 0; i < cars.length; i++) {
       var c = cars[i];
       var tr = el('tr');
@@ -1104,13 +1432,77 @@
       who.appendChild(el('span', 'tla', c.tla || ''));
       who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
       tr.appendChild(who);
-      tr.appendChild(el('td', 'mono col-best', c.bestLap || '—'));
+      var bestLap = c.bestLap || '';
+      var bestCls = 'mono col-best';
+      if (bestLap) {
+        var bestMs = lapMs(bestLap);
+        if (isFinite(bestMs) && isFinite(fieldBestLapMs) && Math.abs(bestMs - fieldBestLapMs) < 0.5) {
+          bestCls += ' sec-purple';
+        } else {
+          bestCls += ' sec-green';
+        }
+      }
+      tr.appendChild(el('td', bestCls, bestLap || '—'));
       var last = carLastLapTime(c);
-      tr.appendChild(el('td', 'mono col-last', last || '—'));
+      var lastCls = 'mono col-last';
+      if (last) {
+        var lastMs = lapMs(last);
+        var lastOverall = false;
+        var lastPersonal = false;
+        var rawLast = c.lastLap || c.lastLapTime || c.LastLapTime;
+        if (rawLast != null && typeof rawLast === 'object') {
+          lastOverall = !!(rawLast.overallBest || rawLast.OverallBest ||
+            rawLast.lastLapOverallBest || rawLast.LastLapOverallBest);
+          lastPersonal = !!(rawLast.personalBest || rawLast.PersonalBest);
+        }
+        if (!lastOverall && isFinite(lastMs) && isFinite(fieldLastLapMs) &&
+            Math.abs(lastMs - fieldLastLapMs) < 0.5) lastOverall = true;
+        if (!lastPersonal && bestLap && isFinite(lastMs)) {
+          var pbMs = lapMs(bestLap);
+          if (isFinite(pbMs) && Math.abs(lastMs - pbMs) < 0.5) lastPersonal = true;
+        }
+        if (lastOverall) lastCls += ' sec-purple';
+        else if (lastPersonal) lastCls += ' sec-green';
+        else lastCls += ' sec-yellow';
+      }
+      tr.appendChild(el('td', lastCls, last || '—'));
       for (var s = 0; s < 3; s++) {
-        var st = carSectorTime(c, s);
-        if (st) anySector = true;
-        tr.appendChild(el('td', 'mono col-s' + (s + 1), st || '—'));
+        var info = carSectorInfo(c, s);
+        var st = info.value;
+        var bestSt = info.bestValue || '';
+        if (st || bestSt) anySector = true;
+        var td = el('td', 'mono col-s' + (s + 1) + ' sec-cell');
+
+        // Top: mini-sector strip (fixed band; empty if no segments)
+        var strip = el('div', 'sec-mini');
+        if (info.segments && info.segments.length) {
+          for (var mi = 0; mi < info.segments.length; mi++) {
+            var mst = info.segments[mi] | 0;
+            var mcls = 'sec-mini-bit';
+            if (mst === 2051) mcls += ' sec-mini-purple';
+            else if (mst === 2049) mcls += ' sec-mini-green';
+            else if (mst === 2048) mcls += ' sec-mini-yellow';
+            else if (mst) mcls += ' sec-mini-dim';
+            strip.appendChild(el('span', mcls, ''));
+          }
+        }
+        td.appendChild(strip);
+
+        // Middle: current sector time (plain mono)
+        td.appendChild(el('div', 'sec-cur', st || '—'));
+
+        // Bottom: personal best sector — purple = field overall, green = PB, else yellow
+        var bestCls = 'sec-best';
+        if (bestSt) {
+          var bestSecs = parseSectorSeconds(bestSt);
+          var isFieldBest = isFinite(bestSecs) && isFinite(fieldBestSec[s]) &&
+            Math.abs(bestSecs - fieldBestSec[s]) < 0.0005;
+          if (isFieldBest) bestCls += ' sec-purple';
+          else bestCls += ' sec-green';
+        }
+        td.appendChild(el('div', bestCls, bestSt || '—'));
+
+        tr.appendChild(td);
       }
       t.appendChild(tr);
     }
@@ -1118,8 +1510,10 @@
     box.appendChild(wrap);
     if (!anySector) {
       box.appendChild(el('div', 'sub sectors-note',
-        '当前数据源未下发 S1–S3 / 本圈；最快圈有则显示。上游补字段后自动亮起。'));
+        '本场次暂无 S1–S3 / 本圈时间（字段已接通，有分段后会自动填色）'));
     }
+    fitSectorsTable(wrap, 'exact');
+    ensureBoardFitObserver(box, 'sectors');
   }
 
   function renderWeather(box) {
@@ -2592,13 +2986,16 @@
   // 连接
   // ---------------------------------------------------------------
 
-  function repaint() {
+  function repaint(opts) {
+    opts = opts || {};
+    var layoutOnly = !!opts.layoutOnly;
     var main = document.getElementById('main');
-    if (main) { renderMain(main); }
+    // Resize/layout passes skip the main grid rebuild (trackmap etc. still re-render below).
+    if (main && !layoutOnly) { renderMain(main); }
     var board = document.getElementById('board');
     if (board) {
       // 看板不做全量重建：重建会闪、也会丢掉 canvas 的滚动手感。
-      // ★ 但骨架必须先存在 —— 第一次 repaint 时 #board 还是空的，
+      // — 但骨架必须先存在 — 第一次 repaint 时 #board 还是空的，
       //   这时候得走一次完整渲染，否则页面永远是白的。
       var box0 = board.querySelector('.b-box');
       if (!box0) { renderBoard(board); return; }
@@ -2612,7 +3009,18 @@
         var dot = board.querySelector('.b-head .dot');
         if (dot) { dot.className = 'dot' + (connected ? ' ok' : ' bad'); }
         var box = board.querySelector('.b-box');
-        if (box) { RENDER[id](box); }
+        if (box) {
+          // Timing / sectors: resize only needs density re-fit, not DOM rebuild.
+          if (layoutOnly && (id === 'timing' || id === 'sectors')) {
+            var wrap = box.querySelector(id === 'sectors' ? '.sectors-wrap' : '.timing-wrap');
+            if (wrap) {
+              if (id === 'sectors') fitSectorsTable(wrap, 'exact');
+              else fitTimingTable(wrap, 'exact');
+              return;
+            }
+          }
+          RENDER[id](box);
+        }
       } else {
         renderBoard(board);
       }
@@ -2658,7 +3066,7 @@
   var resizeTimer = null;
   window.addEventListener('resize', function () {
     if (resizeTimer) { clearTimeout(resizeTimer); }
-    resizeTimer = setTimeout(function () { resizeTimer = null; repaint(); }, 120);
+    resizeTimer = setTimeout(function () { resizeTimer = null; repaint({ layoutOnly: true }); }, 120);
   });
 
   // 进出全屏也要重画：不仅是按钮上的字要换，圆环也得按新高度重新量一次。
@@ -2667,7 +3075,7 @@
   for (var fi = 0; fi < fsEvents.length; fi++) {
     document.addEventListener(fsEvents[fi], function () {
       if (resizeTimer) { clearTimeout(resizeTimer); }
-      resizeTimer = setTimeout(function () { resizeTimer = null; repaint(); }, 120);
+      resizeTimer = setTimeout(function () { resizeTimer = null; repaint({ layoutOnly: true }); }, 120);
     });
   }
 
@@ -2756,7 +3164,7 @@
     try {
       var __ro = new ResizeObserver(function () {
         if (resizeTimer) { clearTimeout(resizeTimer); }
-        resizeTimer = setTimeout(function () { resizeTimer = null; repaint(); }, 80);
+        resizeTimer = setTimeout(function () { resizeTimer = null; repaint({ layoutOnly: true }); }, 80);
       });
       __ro.observe(document.documentElement);
     } catch (e) { /* ignore */ }

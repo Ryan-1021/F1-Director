@@ -27,3 +27,7 @@ ehthumbs.db
 __pycache__/
 *.pyc
 .cache/
+
+# Local jar backups from sector-timing rebuilds (do not commit)
+share/*.jar.bak*
+share/F1-RaceControl-Desktop.jar.bak*
