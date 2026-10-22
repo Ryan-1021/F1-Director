@@ -92,17 +92,17 @@
   // 圆环量不到尺寸时允许补几次重绘（见 renderRing）。
   var refitLeft = 3;
 
-  // 手机横屏时右栏显示哪一屏（安卓默认是"赛道图"，也就是圆环）。
+  // 手机横屏时右栏显示哪一屏（安卓默认是"赛段状态"，也就是圆环）。
   var mobilePanel = 'ring';
   // 手机状态行上的一句临时提示（比如"全屏没成功"）—— 手机版没有头部，
   // 消息只能挂在这一行上。几秒后自己消失。
   var phoneNotice = '';
 
   // 手机右栏那条窄框图标 —— 和安卓 RightPanelView 的 MODE_ICONS/MODE_NAMES 一一对应：
-  //   0 ◎ 赛道图(圆环)  1 ◍ 轮胎  2 ≡ 成绩  3 ☂ 天气  4 ⏱ 最快圈  5 ⓘ 环节
+  //   0 ◎ 赛段状态(圆环)  1 ◍ 轮胎  2 ≡ 成绩  3 ☂ 天气  4 ⏱ 最快圈  5 ⓘ 环节
   // 用单字符是为了不依赖任何字体资源（安卓那边也是这个理由）。
   var PHONE_MODES = [
-    ['ring', '◎', '赛道图（圆环）'],
+    ['ring', '◎', '赛段状态（圆环）'],
     ['tyres', '◍', '轮胎 / 进站'],
     ['timing', '≡', '成绩榜'],
     ['weather', '☂', '天气'],
@@ -1049,7 +1049,7 @@
    */
   function renderSectors(box) {
     clear(box);
-    if (!ONCE) panelTitle(box, '扇区成绩');
+    if (!ONCE) panelTitle(box, '赛段成绩');
     var cars = (state && state.cars) || [];
     var race = (state && state.race) || {};
     var meta = el('div', 'sectors-meta');
@@ -1259,7 +1259,7 @@
 
 
   // ---------------------------------------------------------------
-  // 轨迹图（真实赛道轮廓 + 车位点）
+  // 赛道图（真实赛道轮廓 + 车位点）
   // ---------------------------------------------------------------
   // 数据优先 state.carPositions（Java 解析的官方 Position.z）；
   // 没有则用 OpenF1 /v1/location（与 Position.z 同坐标系）。
@@ -1285,6 +1285,38 @@
     viewRotDeg: 0
   };
 
+  var TM_CACHE_KEY = 'f1-trackmap-cache-v1';
+
+  function saveTrackmapCache() {
+    try {
+      if (!TRACKMAP.lastRaceKey || !TRACKMAP.sessionKey) return;
+      if (!TRACKMAP.outline || TRACKMAP.outline.length < 30) return;
+      sessionStorage.setItem(TM_CACHE_KEY, JSON.stringify({
+        raceKey: TRACKMAP.lastRaceKey,
+        sessionKey: TRACKMAP.sessionKey,
+        sessionMeta: TRACKMAP.sessionMeta,
+        outline: TRACKMAP.outline,
+        status: TRACKMAP.status,
+        savedAt: Date.now()
+      }));
+    } catch (e) { /* ignore quota / private mode */ }
+  }
+
+  function restoreTrackmapCache(rk) {
+    try {
+      var raw = sessionStorage.getItem(TM_CACHE_KEY);
+      if (!raw) return false;
+      var c = JSON.parse(raw);
+      if (!c || c.raceKey !== rk) return false;
+      if (!c.outline || c.outline.length < 30) return false;
+      if (c.savedAt && (Date.now() - c.savedAt) > 6 * 3600 * 1000) return false;
+      TRACKMAP.sessionKey = c.sessionKey || null;
+      TRACKMAP.sessionMeta = c.sessionMeta || null;
+      TRACKMAP.outline = c.outline;
+      if (c.status) TRACKMAP.status = c.status;
+      return true;
+    } catch (e) { return false; }
+  }
   var TM_ZOOM_MIN = 0.5;
   var TM_ZOOM_MAX = 4;
 
@@ -1347,7 +1379,7 @@
         textEl = el('span', 'tm-status-text');
         hintEl = el('span', 'tm-hint');
         hintEl.setAttribute('role', 'img');
-        hintEl.setAttribute('aria-label', '轨迹图操作说明');
+        hintEl.setAttribute('aria-label', '赛道图操作说明');
         hintEl.textContent = 'ℹ';
         badge.appendChild(textEl);
         badge.appendChild(hintEl);
@@ -1402,7 +1434,7 @@
     st.title = trackmapStatusText();
     var hint = el('span', 'tm-hint');
     hint.setAttribute('role', 'img');
-    hint.setAttribute('aria-label', '轨迹图操作说明');
+    hint.setAttribute('aria-label', '赛道图操作说明');
     hint.textContent = 'ℹ';
     hint.title = TM_VIEW_HINT;
     var tools = el('span', 'tm-head-tools');
@@ -1458,7 +1490,7 @@
     }
     var title = box.querySelector('.ptitle');
     if (!title) {
-      title = titleRow('轨迹图', box.getAttribute('data-board'));
+      title = titleRow('赛道图', box.getAttribute('data-board'));
       box.insertBefore(title, box.firstChild);
     }
     title.appendChild(bar);
@@ -1830,11 +1862,14 @@
   function tickTrackmapData() {
     if (applyOfficialPositions()) {
       TRACKMAP.frozen = false;
-      // Still may want OpenF1 outline if outline empty — but official samples fill it
       if (document.querySelector('.b-trackmap')) {
-        // soft redraw without full clear: call render which is idempotent-ish
         var box = document.querySelector('.b-trackmap');
         if (box) drawTrackmap(box);
+      }
+      // Official cars paint immediately; outline still needs OpenF1 (same coords).
+      if (TRACKMAP.outline.length < 30) {
+        if (!TRACKMAP.sessionKey) resolveOpenF1Session();
+        else loadOpenF1Outline();
       }
       return;
     }
@@ -1907,6 +1942,7 @@
         TRACKMAP.sessionKey = best.session_key;
         TRACKMAP.sessionMeta = best;
         TRACKMAP.status = 'OpenF1 · ' + (best.session_name || '') + ' #' + best.session_key;
+        saveTrackmapCache();
         loadOpenF1Outline();
         pollOpenF1Locations();
       })
@@ -1918,7 +1954,7 @@
 
   function loadOpenF1Outline() {
     if (TRACKMAP.outlineBusy || !TRACKMAP.sessionKey || !TRACKMAP.sessionMeta) return;
-    if (TRACKMAP.outline.length > 80) return;
+    if (TRACKMAP.outline.length >= 30) return;
     TRACKMAP.outlineBusy = true;
     var meta = TRACKMAP.sessionMeta;
     var start = parseOpenF1Date(meta.date_start);
@@ -1956,6 +1992,7 @@
           pts = closeTrailIfNear(pts, 500 * 500);
           if (pts.length > 30) {
             TRACKMAP.outline = pts;
+            saveTrackmapCache();
             TRACKMAP.outlineBusy = false;
             var box = document.querySelector('.b-trackmap');
             if (box) drawTrackmap(box);
@@ -2193,12 +2230,13 @@
       TRACKMAP.frozen = false;
       resetTrackmapView();
       stopTrackmapPoll();
+      restoreTrackmapCache(rk);
     }
 
     if (!box.getAttribute('data-tm')) {
       clear(box);
       box.setAttribute('data-tm', '1');
-      if (!ONCE) panelTitle(box, '轨迹图');
+      if (!ONCE) panelTitle(box, '赛道图');
       var wrap = el('div', 'tm-wrap');
       wrap.appendChild(el('div', 'tm-svg'));
       wrap.appendChild(el('canvas', 'tm-canvas'));
@@ -2225,12 +2263,12 @@
   };
 
   var TITLES = {
-    // ★ 圆环就叫「赛道图」—— 它画的就是赛道（一圈区段），和安卓一致
-    //   （安卓 MODE_NAMES 第一项就是"赛道图"）。以前这里写"车手圆环"，
+    // ★ 圆环就叫「赛段状态」—— 它画的就是赛道（一圈区段），和安卓一致
+    //   （安卓 MODE_NAMES 第一项就是"赛段状态"）。以前这里写"车手圆环"，
     //   用户直接指出来了。下面那个 track 板其实是**文字**状态汇总，不是地图，
     //   所以改名"赛道状态"，免得两块板同名。
-    flags: '顶部旗语栏', ring: '赛道图', trackmap: '轨迹图', track: '赛道状态', tyres: '轮胎进站',
-    timing: '成绩榜', sectors: '扇区成绩', weather: '天气', fastest: '最快圈', session: '环节',
+    flags: '顶部旗语栏', ring: '赛段状态', trackmap: '赛道图', track: '赛道状态', tyres: '轮胎进站',
+    timing: '成绩榜', sectors: '赛段成绩', weather: '天气', fastest: '最快圈', session: '环节',
     messages: '赛事通报'
   };
 
@@ -2654,6 +2692,10 @@
     try {
       var d = ev.data;
       if (!d || typeof d !== 'object') { return; }
+      if (d.type === 'f1-set-board' && d.board) {
+        setBoard(d.board);
+        return;
+      }
       if (d.type === 'f1-push-state' && d.state) {
         pushState(d.state);
         return;
@@ -2720,9 +2762,24 @@
     } catch (e) { /* ignore */ }
   }
 
+
+  function setBoard(id) {
+    if (!id || !RENDER[id]) return false;
+    try {
+      var q = location.search || '';
+      history.replaceState(null, '', '/board/' + id + q);
+    } catch (e) { /* ignore */ }
+    if (id !== 'trackmap') {
+      try { stopTrackmapPoll(); } catch (e2) { /* ignore */ }
+    }
+    var board = document.getElementById('board');
+    if (!board) return false;
+    renderBoard(board);
+    return true;
+  }
   window.F1 = {
     connect: connect, RENDER: RENDER, TITLES: TITLES, argb: argb,
-    renderMain: renderMain, renderBoard: renderBoard,
+    renderMain: renderMain, renderBoard: renderBoard, setBoard: setBoard,
     state: function () { return state; },
     pushState: pushState,
     relayout: relayout,

@@ -1381,9 +1381,9 @@
 
   var BOARD_OPTS = [
     { id: 'timing', label: '成绩榜' },
-    { id: 'sectors', label: '扇区成绩' },
-    { id: 'ring', label: '赛道图' },
-    { id: 'trackmap', label: '轨迹图' },
+    { id: 'sectors', label: '赛段成绩' },
+    { id: 'ring', label: '赛段状态' },
+    { id: 'trackmap', label: '赛道图' },
     { id: 'track', label: '赛道状态' },
     { id: 'tyres', label: '轮胎进站' },
     { id: 'weather', label: '天气' },
@@ -1916,26 +1916,7 @@
    *  All /board/<id> URLs serve the same board.html; some browsers skip a
    *  real reload when only the path segment changes, so title/label update
    *  while the old board keeps painting. Recreate the iframe + cache-bust. */
-  function applyBoardToPanel(el, boardId) {
-    var body = el.querySelector('.p-body');
-    if (!body) return;
-    el.classList.toggle('board-flags', boardId === 'flags');
-    var oldFrame = body.querySelector('iframe');
-    var iframe = document.createElement('iframe');
-    iframe.title = boardId;
-    iframe.setAttribute('data-board', boardId);
-    iframe.onload = function () {
-      pushStateToFrame(iframe);
-      pushThemeToFrame(iframe);
-      if (boardId === 'trackmap') requestTrackmapUi(el);
-      if (boardId === 'timing') pushTimingColsToFrame(el, loadTimingColsVis());
-    };
-    iframe.src = boardUrl(boardId, true);
-    if (oldFrame) {
-      body.replaceChild(iframe, oldFrame);
-    } else {
-      body.appendChild(iframe);
-    }
+  function syncBoardChrome(el, boardId) {
     var dd = el.querySelector('[data-board-select]');
     if (dd) {
       dd.setAttribute('data-value', boardId);
@@ -1944,6 +1925,52 @@
     }
     syncTimingColsTog(el, boardId);
     syncTrackmapHead(el, boardId);
+  }
+
+  /** Prefer in-place board switch (keeps JS/OpenF1 cache). Fall back to iframe recreate. */
+  function applyBoardToPanel(el, boardId) {
+    var body = el.querySelector('.p-body');
+    if (!body) return;
+    el.classList.toggle('board-flags', boardId === 'flags');
+    var oldFrame = body.querySelector('iframe');
+
+    function finishLive(iframe) {
+      pushStateToFrame(iframe);
+      pushThemeToFrame(iframe);
+      if (boardId === 'trackmap') requestTrackmapUi(el);
+      if (boardId === 'timing') pushTimingColsToFrame(el, loadTimingColsVis());
+      syncBoardChrome(el, boardId);
+    }
+
+    if (oldFrame && oldFrame.getAttribute('data-board') === boardId) {
+      finishLive(oldFrame);
+      return;
+    }
+
+    // Same iframe document: switch renderer without reload (fast path for 赛道图).
+    if (oldFrame) {
+      try {
+        var w = oldFrame.contentWindow;
+        if (w && w.F1 && typeof w.F1.setBoard === 'function' && w.F1.setBoard(boardId)) {
+          oldFrame.title = boardId;
+          oldFrame.setAttribute('data-board', boardId);
+          finishLive(oldFrame);
+          return;
+        }
+      } catch (e) { /* cross-origin or old build — recreate below */ }
+    }
+
+    var iframe = document.createElement('iframe');
+    iframe.title = boardId;
+    iframe.setAttribute('data-board', boardId);
+    iframe.onload = function () { finishLive(iframe); };
+    iframe.src = boardUrl(boardId, true);
+    if (oldFrame) {
+      body.replaceChild(iframe, oldFrame);
+    } else {
+      body.appendChild(iframe);
+    }
+    syncBoardChrome(el, boardId);
   }
 
   function boardLabel(id) {
@@ -2854,7 +2881,7 @@
         '<span class="spacer"></span>' +
         '<span class="tm-head" data-tm-head>' +
           '<span class="tm-head-status" title=""></span>' +
-          '<span class="tm-hint" role="img" aria-label="轨迹图操作说明" title="滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位">ℹ</span>' +
+          '<span class="tm-hint" role="img" aria-label="赛道图操作说明" title="滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位">ℹ</span>' +
           '<span class="tm-head-tools">' +
             '<button type="button" class="tm-tool" data-tm-rot="-90" title="逆时针 90°">↺</button>' +
             '<button type="button" class="tm-tool" data-tm-rot="90" title="顺时针 90°">↻</button>' +

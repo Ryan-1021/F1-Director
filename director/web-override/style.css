@@ -1104,7 +1104,7 @@ html[data-theme="day"] .svalue.hero {
   color: var(--teal);
 }
 
-/* ---- track map (轨迹图) ---- */
+/* ---- track map (赛道图) ---- */
 .b-box.b-trackmap {
   padding: 0;
   display: flex;
