@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="zh-CN" data-theme="night">
 <head>
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark" id="colorSchemeMeta">
@@ -21,13 +23,13 @@
     --border-hi: rgba(255, 255, 255, 0.12);
     --accent: #e10600;
     --accent-dim: rgba(225, 6, 0, 0.18);
-    --teal: #00d2be;
-    --teal-dim: rgba(0, 210, 190, 0.14);
+    --teal: #e10600;
+    --teal-dim: rgba(225, 6, 0, 0.18);
     --text: #eef3f8;
     --muted: #7d8b9c;
     --muted2: #5a6778;
     --live: #ff3b5c;
-    --ok: #3dd6c3;
+    --ok: #ff5a5a;
     --bad: #ff6b7a;
     --warn: #f0b429;
     --bar-h: 46px;
@@ -54,14 +56,14 @@
     --dd-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.35);
     --inset-line: rgba(255, 255, 255, 0.03);
     --live-ph-bg: radial-gradient(ellipse at center, #1a0c10 0%, #050607 68%);
-    --theme-active-bg: rgba(0, 210, 190, 0.18);
-    --theme-active-fg: #00d2be;
-    --status-ok-border: rgba(61, 214, 195, 0.28);
-    --status-ok-bg: rgba(61, 214, 195, 0.08);
+    --theme-active-bg: rgba(225, 6, 0, 0.18);
+    --theme-active-fg: #e10600;
+    --status-ok-border: rgba(225, 6, 0, 0.35);
+    --status-ok-bg: rgba(225, 6, 0, 0.10);
   }
   html[data-theme="day"] {
     color-scheme: light;
-    --teal: #0a8f82;
+    --teal: #c40500;
     --bg: #eef2f7;
     --bg-stage: #e4eaf2;
     --bg-elev: #f5f7fb;
@@ -71,7 +73,7 @@
     --border: rgba(15, 23, 42, 0.10);
     --border-hi: rgba(15, 23, 42, 0.16);
     --accent-dim: rgba(225, 6, 0, 0.10);
-    --teal-dim: rgba(0, 160, 145, 0.12);
+    --teal-dim: rgba(225, 6, 0, 0.10);
     --text: #0f172a;
     --muted: #5b6b7c;
     --muted2: #8494a7;
@@ -93,11 +95,11 @@
     --dd-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.06);
     --inset-line: rgba(15, 23, 42, 0.04);
     --live-ph-bg: radial-gradient(ellipse at center, #ffe8ec 0%, #f4eef0 68%);
-    --theme-active-bg: rgba(0, 120, 110, 0.16);
-    --theme-active-fg: #06665c;
-    --ok: #06665c;
-    --status-ok-border: rgba(6, 102, 92, 0.38);
-    --status-ok-bg: rgba(6, 102, 92, 0.12);
+    --theme-active-bg: rgba(225, 6, 0, 0.10);
+    --theme-active-fg: #c40500;
+    --ok: #b91c1c;
+    --status-ok-border: rgba(196, 5, 0, 0.38);
+    --status-ok-bg: rgba(196, 5, 0, 0.10);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -229,13 +231,13 @@
     gap: 5px;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: min(420px, 36vw);
+    max-width: min(560px, 48vw);
     padding: 3px 8px;
     border-radius: 999px;
     background: var(--status-bg);
     border: 1px solid var(--border);
     white-space: nowrap;
-    overflow: hidden;
+    overflow: visible;
   }
   .weather-strip .ws-chip {
     display: inline-flex;
@@ -267,14 +269,25 @@
     background: rgba(255, 107, 122, 0.10);
   }
   .weather-strip .ws-chip.rain-warn .ws-v { color: var(--bad); }
+
+  .weather-strip .ws-chip[data-ws="pressure"] {
+    flex-shrink: 0;
+  }
+  .weather-strip .ws-chip[data-ws="pressure"] .ws-v {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
   .weather-strip.empty .ws-v { color: var(--muted2); font-weight: 500; }
   @media (max-width: 1280px) {
-    .weather-strip { max-width: min(340px, 30vw); }
+    .weather-strip { max-width: min(480px, 42vw); }
     .weather-strip .ws-chip[data-ws="humidity"],
     .weather-strip .ws-chip[data-ws="wind"] { display: none; }
   }
   @media (max-width: 980px) {
-    .weather-strip { max-width: min(220px, 26vw); }
+    .weather-strip { max-width: min(360px, 38vw); }
     .weather-strip .ws-chip[data-ws="track"] { display: none; }
   }
 
@@ -313,7 +326,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #43a047;
+    background: var(--accent);
     box-shadow: 0 0 0 1px rgba(0,0,0,0.18);
   }
   .track-strip .ts-label {
@@ -363,7 +376,7 @@
   }
   .live-toolbar .stream-url::placeholder { color: var(--muted2); }
   .live-toolbar .stream-url:focus {
-    border-color: rgba(0, 210, 190, 0.45);
+    border-color: rgba(225, 6, 0, 0.45);
     box-shadow: 0 0 0 3px var(--teal-dim);
   }
   .live-toolbar > button {
@@ -405,7 +418,7 @@
     text-align: center;
   }
   .live-toolbar input[type="number"]:focus {
-    border-color: rgba(0, 210, 190, 0.45);
+    border-color: rgba(225, 6, 0, 0.45);
     box-shadow: 0 0 0 3px var(--teal-dim);
   }
   .live-toolbar .delay-unit {
@@ -422,7 +435,7 @@
     padding: 2px 7px;
     border-radius: 999px;
     background: var(--teal-dim);
-    border: 1px solid rgba(0, 210, 190, 0.28);
+    border: 1px solid rgba(225, 6, 0, 0.28);
     white-space: nowrap;
   }
   .live-toolbar .delay-status.warming {
@@ -452,7 +465,7 @@
   .p-head .win-btns button.live-url-tog.on {
     color: var(--teal);
     background: var(--teal-dim);
-    border-color: rgba(0, 210, 190, 0.28);
+    border-color: rgba(225, 6, 0, 0.28);
   }
   @media (max-width: 900px) {
     .live-toolbar { flex-wrap: wrap; }
@@ -540,24 +553,24 @@
     content: "";
     position: absolute; left: 0; top: 0; bottom: 0;
     width: 2px;
-    background: linear-gradient(180deg, rgba(0,210,190,0.55), rgba(0,210,190,0.08));
+    background: linear-gradient(180deg, rgba(225,6,0,0.55), rgba(225,6,0,0.08));
     z-index: 6;
     pointer-events: none;
     opacity: 0.7;
   }
   .fpanel.active {
-    border-color: rgba(0, 210, 190, 0.35);
-    box-shadow: var(--shadow), 0 0 0 1px rgba(0, 210, 190, 0.12);
+    border-color: rgba(225, 6, 0, 0.35);
+    box-shadow: var(--shadow), 0 0 0 1px rgba(225, 6, 0, 0.12);
   }
   .fpanel.active::before { opacity: 1; background: var(--teal); }
   .fpanel.dragging {
     opacity: 0.92;
-    border-color: rgba(0, 210, 190, 0.45);
+    border-color: rgba(225, 6, 0, 0.45);
     box-shadow: var(--shadow);
   }
   .fpanel.drop-target {
-    border-color: rgba(0, 210, 190, 0.65) !important;
-    box-shadow: 0 0 0 2px rgba(0, 210, 190, 0.35), var(--shadow);
+    border-color: rgba(225, 6, 0, 0.65) !important;
+    box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.35), var(--shadow);
   }
   .fpanel.drop-target::after {
     content: "交换位置";
@@ -566,7 +579,7 @@
     transform: translate(-50%, -50%);
     z-index: 20;
     pointer-events: none;
-    background: rgba(0, 210, 190, 0.95);
+    background: rgba(225, 6, 0, 0.95);
     color: #041016;
     font-weight: 700;
     font-size: 12px;
@@ -637,7 +650,7 @@
     overflow: hidden; text-overflow: ellipsis;
     max-width: 72px;
     opacity: 0.75;
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   }
   /* Custom board-type dropdown (native <option> contrast is unreliable on Windows) */
   .board-dd {
@@ -664,15 +677,15 @@
     box-shadow: 0 0 6px rgba(255, 107, 122, 0.55);
   }
   .board-dd-status.ok {
-    background: #00d2be;
-    box-shadow: 0 0 6px rgba(0, 210, 190, 0.7);
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(225, 6, 0, 0.7);
   }
   .board-dd-btn:hover,
   .board-dd.open .board-dd-btn,
   .board-dd-btn:focus-visible {
-    border-color: rgba(0, 210, 190, 0.5);
+    border-color: rgba(225, 6, 0, 0.5);
     background: var(--dd-hover);
-    box-shadow: 0 0 0 2px rgba(0, 210, 190, 0.12);
+    box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.12);
   }
   .board-dd-label {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -682,7 +695,7 @@
     flex-shrink: 0; font-size: 9px; color: var(--muted);
     line-height: 1;
   }
-  .board-dd.open .board-dd-caret { color: #00d2be; }
+  .board-dd.open .board-dd-caret { color: var(--accent); }
   /* Portal menu — fixed so panel overflow:hidden cannot clip it */
   #board-dd-menu {
     position: fixed;
@@ -1084,7 +1097,7 @@
     width: calc(50% - 2px);
     border-radius: 999px;
     background: var(--theme-active-bg);
-    box-shadow: inset 0 0 0 1px rgba(0, 210, 190, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(225, 6, 0, 0.18);
     transform: translateX(0);
     transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
     pointer-events: none;
@@ -1139,7 +1152,7 @@
     transform: scale(0.92) rotate(14deg);
   }
   html[data-theme="day"] .theme-toggle-pill {
-    box-shadow: inset 0 0 0 1px rgba(6, 102, 92, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(196, 5, 0, 0.16);
   }
 
   /* Layout menu (save / restore / reset) */
@@ -1260,7 +1273,7 @@
   #btnLayoutLock[aria-pressed="true"] {
     color: var(--teal);
     background: var(--teal-dim);
-    border-color: rgba(0, 210, 190, 0.35);
+    border-color: rgba(225, 6, 0, 0.35);
   }
   #btnLayoutLock[aria-pressed="true"] .lock-icon-open { display: none; }
   #btnLayoutLock[aria-pressed="true"] .lock-icon-locked { display: block; }
@@ -1305,11 +1318,12 @@
       <span class="ss-chip" id="ssLaps">L —/—</span>
       <span class="ss-chip clock" id="ssClock">—</span>
     </div>
-    <div class="weather-strip empty" id="weatherStrip" title="天气（来自 Director）" aria-live="polite">
+    <div class="weather-strip empty" id="weatherStrip" title="天气" aria-live="polite">
       <span class="ws-chip" data-ws="air" id="wsAir"><span class="ws-k">气</span><span class="ws-v">—</span></span>
       <span class="ws-chip" data-ws="track" id="wsTrack"><span class="ws-k">道</span><span class="ws-v">—</span></span>
       <span class="ws-chip" data-ws="humidity" id="wsHumidity"><span class="ws-k">湿</span><span class="ws-v">—</span></span>
       <span class="ws-chip" data-ws="wind" id="wsWind"><span class="ws-k">风</span><span class="ws-v">—</span></span>
+      <span class="ws-chip" data-ws="pressure" id="wsPressure"><span class="ws-k">压</span><span class="ws-v">—</span></span>
       <span class="ws-chip" data-ws="rain" id="wsRain"><span class="ws-k">雨</span><span class="ws-v">—</span></span>
     </div>
     <div class="track-strip empty" id="trackStrip" title="赛道旗语（来自 Director）" aria-live="polite">
@@ -1615,12 +1629,14 @@
 
   function parseWeatherExtras(text) {
     var s = String(text || '');
-    var out = { humidity: '', wind: '', rain: '', raining: false };
+    var out = { humidity: '', wind: '', rain: '', raining: false, pressure: '' };
     var m;
     m = /湿度\s*([0-9]+(?:\.[0-9]+)?)\s*%/.exec(s);
     if (m) out.humidity = m[1] + '%';
     m = /风(?:速)?\s*([0-9]+(?:\.[0-9]+)?)\s*(m\/s|km\/h)?/i.exec(s);
     if (m) out.wind = m[1] + (m[2] ? (' ' + m[2]) : ' m/s');
+    m = /气压\s*([0-9]+(?:\.[0-9]+)?)\s*(hPa|mbar|mb)?/i.exec(s);
+    if (m) out.pressure = m[1] + (m[2] ? (' ' + m[2]) : ' hPa');
     if (/(?:有雨|正在下雨|下雨中)/.test(s) || /Rainfall\s*[:=]?\s*1\b/i.test(s)) {
       out.raining = true;
       out.rain = '有雨';
@@ -1628,6 +1644,14 @@
       out.raining = false;
     }
     return out;
+  }
+
+  function windDirCn(deg) {
+    var d = parseFloat(deg);
+    if (isNaN(d)) return '';
+    d = ((d % 360) + 360) % 360;
+    var names = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+    return names[Math.round(d / 45) % 8];
   }
 
   function weatherValuesFromState(st) {
@@ -1643,13 +1667,61 @@
       var mt = /赛道(?:温(?:度)?)?\s*([0-9]+(?:\.[0-9]+)?)\s*°?\s*C?/i.exec(String(w.text || ''));
       if (mt) track = mt[1] + '°C';
     }
+    var humidity = '';
+    if (w.humidity != null && w.humidity !== '') {
+      var h = String(w.humidity).trim();
+      humidity = /%$/.test(h) ? h : (h + '%');
+    } else {
+      humidity = extras.humidity || '';
+    }
+    var wind = '';
+    if (w.wind != null && w.wind !== '') {
+      var wv = String(w.wind).trim();
+      wind = /m\/s|km\/h/i.test(wv) ? wv : (wv + ' m/s');
+      if (w.windDirection != null && w.windDirection !== '') {
+        var degRaw = String(w.windDirection).trim(); var dir = windDirCn(degRaw); wind += dir ? (' · ' + dir) : (' · ' + degRaw + '°');
+      }
+    } else {
+      wind = extras.wind || '';
+    }
+    var pressure = '';
+    if (w.pressure != null && w.pressure !== '') {
+      var pv = String(w.pressure).trim();
+      pressure = /hPa|mbar|mb/i.test(pv) ? pv : (pv + ' hPa');
+    } else {
+      pressure = extras.pressure || '';
+    }
+    var rainRaw = (w.rainfall != null && w.rainfall !== '')
+      ? String(w.rainfall).trim()
+      : '';
+    var raining;
+    if (typeof w.rain === 'boolean') {
+      raining = w.rain;
+    } else if (rainRaw !== '' && isFinite(parseFloat(rainRaw))) {
+      raining = parseFloat(rainRaw) > 0;
+    } else {
+      raining = !!extras.raining;
+    }
+    var rainText;
+    if (rainRaw !== '' && isFinite(parseFloat(rainRaw))) {
+      var rn = parseFloat(rainRaw);
+      if (rn <= 0) rainText = '无雨';
+      else if (rn === 1) rainText = '降雨中';
+      else rainText = String(rainRaw);
+    } else if (extras.rain) {
+      rainText = extras.rain;
+    } else {
+      rainText = raining ? '降雨中' : '无雨';
+    }
     return {
       air: air || '—',
       track: track || '—',
-      humidity: extras.humidity || '—',
-      wind: extras.wind || '—',
-      rain: extras.raining ? (extras.rain || '有雨') : '无雨',
-      raining: !!extras.raining
+      humidity: humidity || '—',
+      wind: wind || '—',
+      pressure: pressure || '—',
+      rain: rainText,
+      raining: !!raining,
+      windDirDeg: (w.windDirection != null && w.windDirection !== '') ? String(w.windDirection).trim() : ''
     };
   }
 
@@ -1666,23 +1738,30 @@
     var vals = weatherValuesFromState(latestState);
     var has = !!(latestState && latestState.weather && (
       vals.air !== '—' || vals.track !== '—' || vals.humidity !== '—' ||
-      vals.wind !== '—' || (latestState.weather.text)
+      vals.wind !== '—' || vals.pressure !== '—' || (latestState.weather.text)
     ));
     strip.classList.toggle('empty', !has);
-    setWeatherChip('wsAir', vals.air);
-    setWeatherChip('wsTrack', vals.track);
-    setWeatherChip('wsHumidity', vals.humidity);
-    setWeatherChip('wsWind', vals.wind);
-    setWeatherChip('wsRain', vals.rain);
+    strip.title = '天气';
+
+    function chip(id, value, title) {
+      setWeatherChip(id, value);
+      var el = document.getElementById(id);
+      if (el) el.title = title || '';
+    }
+
+    chip('wsAir', vals.air, vals.air !== '—' ? ('气温 ' + vals.air) : '气温');
+    chip('wsTrack', vals.track, vals.track !== '—' ? ('赛道温度 ' + vals.track) : '赛道温度');
+    chip('wsHumidity', vals.humidity, vals.humidity !== '—' ? ('湿度 ' + vals.humidity) : '湿度');
+    var windTitle = '风速';
+    if (vals.wind !== '—') {
+      windTitle = '风速 ' + vals.wind;
+      if (vals.windDirDeg) windTitle += '（风向 ' + vals.windDirDeg + '°）';
+    }
+    chip('wsWind', vals.wind, windTitle);
+    chip('wsPressure', vals.pressure, vals.pressure !== '—' ? ('气压 ' + vals.pressure) : '气压');
+    chip('wsRain', vals.rain, vals.rain !== '—' ? ('降雨 ' + vals.rain) : '降雨');
     var rainChip = document.getElementById('wsRain');
     if (rainChip) rainChip.classList.toggle('rain-warn', !!vals.raining);
-    var tip = [];
-    if (vals.air !== '—') tip.push('气温 ' + vals.air);
-    if (vals.track !== '—') tip.push('赛道 ' + vals.track);
-    if (vals.humidity !== '—') tip.push('湿度 ' + vals.humidity);
-    if (vals.wind !== '—') tip.push('风速 ' + vals.wind);
-    tip.push(vals.rain);
-    strip.title = tip.length ? tip.join(' · ') : '天气（来自 Director）';
   }
 
   /** Android ARGB int -> CSS (same as board app.js). */
@@ -3783,10 +3862,6 @@
       var snap = map[applyName];
       closeLayoutMenu();
       if (!snap) return;
-      if (layoutLocked) {
-        flashLayoutMenuBtn('请先解锁');
-        return;
-      }
       applyLayoutSnapshot(snap);
     });
     return layoutPresetMenu;
@@ -3823,7 +3898,7 @@
     }
     html += '<div class="layout-sep" role="separator"></div>';
     html += '<button type="button" class="layout-action danger" role="menuitem" data-action="reset"' +
-      (layoutLocked ? ' title="请先解锁布局"' : '') + '>重置布局</button>';
+      (layoutLocked ? ' disabled title="锁定中不可重置" aria-disabled="true"' : '') + '>重置布局</button>';
     menu.innerHTML = html;
   }
 
@@ -4323,8 +4398,8 @@
     if (btn) {
       btn.setAttribute('aria-pressed', locked ? 'true' : 'false');
       btn.title = locked
-        ? '解锁布局（当前已锁定，无法拖动/缩放/增删面板）'
-        : '锁定布局（防止拖动/缩放/增删）';
+        ? '布局已锁定：可切换预设，不可拖动/缩放/增删/重置'
+        : '锁定布局（禁止拖动/缩放/增删面板）';
       btn.setAttribute('aria-label', locked ? '解锁布局' : '锁定布局');
     }
     var hint = document.querySelector('.hint-bar');
