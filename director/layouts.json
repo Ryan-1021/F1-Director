@@ -18,10 +18,10 @@
                                        "id":  "p1",
                                        "type":  "board",
                                        "x":  6,
-                                       "y":  330,
+                                       "y":  312,
                                        "w":  438,
-                                       "h":  635,
-                                       "z":  107,
+                                       "h":  653,
+                                       "z":  111,
                                        "minimized":  false,
                                        "board":  "timing"
                                    },
@@ -31,7 +31,7 @@
                                        "x":  6,
                                        "y":  8,
                                        "w":  438,
-                                       "h":  316,
+                                       "h":  298,
                                        "z":  104,
                                        "minimized":  false,
                                        "board":  "trackmap"
@@ -51,7 +51,7 @@
                 },
     "presets":  {
                     "正赛":  {
-                               "savedAt":  1792686516542,
+                               "savedAt":  1792778924712,
                                "theme":  "night",
                                "vw":  1920,
                                "vh":  971,
@@ -70,10 +70,10 @@
                                                   "id":  "p1",
                                                   "type":  "board",
                                                   "x":  6,
-                                                  "y":  330,
+                                                  "y":  312,
                                                   "w":  438,
-                                                  "h":  635,
-                                                  "z":  107,
+                                                  "h":  653,
+                                                  "z":  111,
                                                   "minimized":  false,
                                                   "board":  "timing"
                                               },
@@ -83,7 +83,7 @@
                                                   "x":  6,
                                                   "y":  8,
                                                   "w":  438,
-                                                  "h":  316,
+                                                  "h":  298,
                                                   "z":  104,
                                                   "minimized":  false,
                                                   "board":  "trackmap"

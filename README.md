@@ -89,22 +89,25 @@
 ## 主要功能（当前）
 
 - 可拖拽多面板：成绩榜、赛段成绩、赛道图、天气、实时流等；布局可锁定（锁定后仍可切换预设，不可重置/删预设）
+- 切换布局预设时**复用已有直播 DOM**（不重载流，避免黑一下）
+- 日/夜主题：按钮点击处约 **1s** 圆形扩散切换（View Transition）；启动读盘与布局预设仍瞬时切主题；`prefers-reduced-motion` 时跳过动画
+- 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
 - 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta
-- 轮胎扁圆徽章、成绩榜斑马纹、强调色 F1 红 `#e10600`
+- 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
+- 正赛预设种子：成绩榜略增高、赛道图略减矮（`director/layouts.json`）
 - 天气顶栏：气温、赛道温、湿度、风速风向（中文方位）、气压 hPa、降雨文案；悬停分项提示
 - 状态列 SVG：进站 / 出站 / 停止 / 退赛 / 出局等
 - 页面关闭自动停服；心跳 **6s**，告别宽限约 **3s**，失联兜底约 **10s**
-
 ---
 
 ## 开发与发布备注
 
 - 改 `director/web-override/` 或 `director.html` 后跑一次 `director\Publish-Web.cmd`，或直接再开 `启动导播台.exe`（启动流程会发布）。
 - `share/web/` 为生成物，以 `director/` 为源。
+- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
 - 分支命名：`{base}_{content}`（如 `main_timingWeatherCache`）。
 - 带 JRE 的「解压即用」包请走 GitHub Release 单独 zip；仓库保持苗条（不提交 `share/jre`、`share/web`）。
-
 ---
 
 ## 相关链接

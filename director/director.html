@@ -1307,6 +1307,27 @@
     letter-spacing: 0.02em;
     opacity: 0.85;
   }
+/* Day/night: circular reveal from click (View Transitions) */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+  ::view-transition-old(root) {
+    z-index: 1;
+  }
+  ::view-transition-new(root) {
+    z-index: 2;
+  }
+  html.theme-vt-active {
+    view-transition-name: root;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1955,7 +1976,7 @@
     pushThemeToAll();
   }
 
-  function loadTheme() {
+    function loadTheme() {
     var saved = 'night';
     var had = false;
     try {
@@ -1964,6 +1985,71 @@
     } catch (e) {}
     // First visit: persist night so boards/iframes share the same default.
     applyTheme(saved, !had);
+  }
+
+  function themeRevealRadius(x, y) {
+    var w = window.innerWidth || 1;
+    var h = window.innerHeight || 1;
+    var maxX = Math.max(x, w - x);
+    var maxY = Math.max(y, h - y);
+    return Math.ceil(Math.sqrt(maxX * maxX + maxY * maxY));
+  }
+
+  function prefersReducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+
+  /** UI toggle: circular wipe from click; boot/preset/file still call applyTheme directly. */
+  function setThemeFromUi(theme, evt) {
+    theme = (theme === 'day') ? 'day' : 'night';
+    if (currentTheme() === theme) return;
+    var x = window.innerWidth / 2;
+    var y = window.innerHeight / 2;
+    if (evt && typeof evt.clientX === 'number' && typeof evt.clientY === 'number') {
+      x = evt.clientX;
+      y = evt.clientY;
+    } else if (evt && evt.currentTarget && evt.currentTarget.getBoundingClientRect) {
+      var r = evt.currentTarget.getBoundingClientRect();
+      x = r.left + r.width / 2;
+      y = r.top + r.height / 2;
+    }
+    var canVt = typeof document.startViewTransition === 'function' && !prefersReducedMotion();
+    if (!canVt) {
+      applyTheme(theme, true);
+      return;
+    }
+    var radius = themeRevealRadius(x, y);
+    document.documentElement.classList.add('theme-vt-active');
+    var transition;
+    try {
+      transition = document.startViewTransition(function () {
+        applyTheme(theme, true);
+      });
+    } catch (e) {
+      document.documentElement.classList.remove('theme-vt-active');
+      applyTheme(theme, true);
+      return;
+    }
+    transition.ready.then(function () {
+      document.documentElement.animate(
+        {
+          clipPath: [
+            'circle(0px at ' + x + 'px ' + y + 'px)',
+            'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'
+          ]
+        },
+        {
+          duration: 1000,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          pseudoElement: '::view-transition-new(root)'
+        }
+      );
+    }).catch(function () {});
+    transition.finished.finally(function () {
+      document.documentElement.classList.remove('theme-vt-active');
+    });
   }
 
   function connectFeed() {
@@ -4561,11 +4647,11 @@
     setLayoutLocked(!layoutLocked, true);
   });
 
-  document.getElementById('btnThemeDay').addEventListener('click', function () {
-    applyTheme('day', true);
+  document.getElementById('btnThemeDay').addEventListener('click', function (e) {
+    setThemeFromUi('day', e);
   });
-  document.getElementById('btnThemeNight').addEventListener('click', function () {
-    applyTheme('night', true);
+  document.getElementById('btnThemeNight').addEventListener('click', function (e) {
+    setThemeFromUi('night', e);
   });
 
   function applyLayoutsFileData(data) {
