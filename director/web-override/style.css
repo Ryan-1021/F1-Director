@@ -670,14 +670,22 @@ td.who .carno {
 .timing-wrap.compact table.timing td { padding-left: 3px; padding-right: 3px; }
 table.timing tr:hover td { background: var(--hover-row); }
 table.timing tr.retired td { color: var(--muted2); opacity: .72; }
-/* zebra rows: timing + sectors (same table.timing); header is tr:first-child with th */
-table.timing > tr:nth-child(even) > td {
+/* zebra rows: timing + sectors (same table.timing class).
+   Do NOT use table > tr — browsers wrap rows in tbody, so direct-child misses.
+   Header is first tr (th only); even data rows get stripe. */
+table.timing tr:nth-child(even) > td {
   background: var(--stripe-row);
 }
-table.timing > tr:hover > td {
+table.timing tbody tr:nth-child(even) > td {
+  background: var(--stripe-row);
+}
+table.timing tr:hover > td {
   background: var(--hover-row);
 }
-table.timing > tr.retired:nth-child(even) > td {
+table.timing tr.retired:nth-child(even) > td {
+  background: var(--stripe-row);
+}
+table.timing tbody tr.retired:nth-child(even) > td {
   background: var(--stripe-row);
 }
 

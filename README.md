@@ -1,132 +1,117 @@
 # F1 导播台 / F1-Director
 
-在直播画面四周环绕显示 F1 计时看板，像导播台一样操作。
+把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
-**项目名：** F1 导播台 / F1-Director  
-**当前版本：** `0.2.2+20261023`（见根目录 [`VERSION`](VERSION)）
+**项目名称：** F1 导播台 / F1-Director  
+**壳层版本：** 见根目录 [`VERSION`](VERSION)（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
-## 与原版的关系（重要）
+---
 
-本项目是对原版 **F1-RaceControl Desktop** 的**套壳 / 壳层增强**，**不是**从零重写计时服务。  
-**本仓库版本号（`0.2.2+20261023`）只标识导播台壳层**；上游计时 jar 基于 **0.1.15**，本地包名为 `F1-RaceControl-Desktop-0.1.15_modify.jar`，二者不要与壳层版本混用。
+## 和原版的关系
+
+本仓库是对 [F1-RaceControl-Desktop](https://github.com/Xixixiao2007/F1-RaceControl-Desktop) 的**壳层增强**，不是重写整条时序链路。
 
 | 层级 | 来源 | 说明 |
 |------|------|------|
-| 计时核心（jar、F1 SignalR、本地 HTTP/SSE、看板数据） | **原作者项目 + 本地补丁** | `F1-RaceControl-Desktop-0.1.15_modify.jar`（上游 **0.1.15** + `_modify` 补丁） |
-| 导播台壳（`director.html`、布局锁、关页停服、UI 补丁等） | 本仓库实现 | 启动时把壳与补丁发布进 `share/web/`，由原版 jar 同端口托管 |
+| 时序引擎（SignalR → HTTP/SSE、本地 jar） | 上游 + 本地 `_modify` 补丁 | `share/F1-RaceControl-Desktop-0.1.15_modify.jar` |
+| 导播台壳（`director.html`、布局、UI 覆盖） | 本仓库 | 启动时发布到 `share/web/`，与 jar 同端口 |
 
-原版项目（请优先致谢上游作者）：
+上游主仓：[Xixixiao2007/F1-RaceControl](https://github.com/Xixixiao2007/F1-RaceControl)（MIT）。Desktop 发行说明见其 GitHub Releases。
 
-- **GitHub：** https://github.com/Xixixiao2007/F1-RaceControl-Desktop  
-- 包名 / 入口：`com.haf1.racecontrol` · `DesktopMain`  
-- 壳层控制台窗口标题为 `F1-Director-Server`；上游 jar 本地文件名为 `F1-RaceControl-Desktop-0.1.15_modify.jar`
+---
 
-本仓库在上游 **0.1.15** 上打了与导播需求相关的补丁（Position / 赛道图、赛段 TimingData→cars、结构化天气等），产物命名为 `*_0.1.15_modify.jar`；**计时协议与服务主体仍是上游实现**，版本号不另起 0.1.16 / 0.1.17。
-### 上游 jar 命名约定
-
-- 上游 GitHub Release 当前正式版：**0.1.15**（见 [F1-RaceControl-Desktop releases](https://github.com/Xixixiao2007/F1-RaceControl-Desktop/releases)）
-- 本仓库运行包文件名：`F1-RaceControl-Desktop-0.1.15_modify.jar`
-- MANIFEST `Implementation-Version`：`0.1.15_modify`
-- `_modify` 表示基于该上游版本的本地补丁，**不是**上游又发了一个 0.1.16 / 0.1.17
-
-
-## 致谢与分工
+## 致谢
 
 | 角色 | 谁 | 做什么 |
 |------|-----|--------|
-| **思路 / 产品方向** | **Ryan** | 提出导播台形态、布局与交互需求，并验收效果 |
-| **代码实现** | **Lumi**（本助手 / Grok Bot） | 导播台壳、启动脚本、布局持久化、UI 补丁与联调 |
-| **原版 Race Control** | [Xixixiao2007](https://github.com/Xixixiao2007/F1-RaceControl-Desktop) | 官方/公开的桌面计时看板与本地服务 |
+| 思路 / 产品方向 | **Ryan** | 导播台形态、交互与效果目标 |
+| 壳层实现 | **Lumi**（助手 / Grok Bot） | 导播台页、启动脚本、布局持久化、UI 与补丁整合 |
+| 启动器图标 | **Lumi** | 透明底赛车剪影 + 描边（`director/assets/F1-Director.ico`，并嵌入 `启动导播台.exe` / 浏览器标签图标） |
+| 原版 Race Control | [Xixixiao2007](https://github.com/Xixixiao2007/F1-RaceControl-Desktop) | 官方/社区赛时数据管线与本地方案 |
 
-请勿把上游计时核心说成是本壳层原创；也请勿把本壳层代码写成Ryan手写——**思路归Ryan，实现归 Lumi，底座归原作者**。
+对外介绍时请写清：**想法归 Ryan，壳层实现归 Lumi，时序底座归上游。**
+
+---
 
 ## 开源协议
 
-本仓库（**F1 导播台 / F1-Director** 壳层：`director/` 下的启动脚本、导播台页面与 UI 补丁等）采用 **MIT** 协议，见根目录 [`LICENSE`](LICENSE)。版权声明：`Copyright (c) 2026 Ryan / F1 导播台`。
-
-上游计时底座：
+本仓库壳层（`director/` 下脚本、导播台页、UI 覆盖等）为 **MIT**，见 [`LICENSE`](LICENSE)，版权声明：`Copyright (c) 2026 Ryan / F1 导播台`。
 
 | 项目 | 协议 | 链接 |
 |------|------|------|
-| **F1-RaceControl**（安卓 / 共享源码） | **MIT**（`Copyright (c) 2026 Xixixiao2007`） | https://github.com/Xixixiao2007/F1-RaceControl |
-| **F1-RaceControl-Desktop**（桌面仓库） | 仓库内**暂无独立 `LICENSE` 文件**；README 写明复用上述安卓侧共享源码（MIT） | https://github.com/Xixixiao2007/F1-RaceControl-Desktop |
+| F1-RaceControl（时序源码） | MIT · Copyright (c) 2026 Xixixiao2007 | https://github.com/Xixixiao2007/F1-RaceControl |
+| F1-RaceControl-Desktop | 以该仓说明为准；时序底座与上表同源 | https://github.com/Xixixiao2007/F1-RaceControl-Desktop |
 
-再分发或上传本项目时请：
+再分发时请保留本仓 `LICENSE`，并致谢上游 MIT；`share/` 内 jar / JRE 按上游与本仓约定使用，勿单独当成「纯本仓 MIT 二进制」对外宣称。
 
-- 保留本仓库 `LICENSE` 中的版权与许可声明
-- 保留并对上游致谢（安卓 MIT 版权声明与上述两个链接）
-- **`share/F1-RaceControl-Desktop-0.1.15_modify.jar`（及便携 JRE）仍属上游产物**，不因本壳层 MIT 而改其归属；使用与再分发须同时遵守上游许可与致谢要求
+---
+
+## 怎么运行
+
+1. **推荐：** 双击项目根目录 **`启动导播台.exe`**  
+   - 资源管理器里直接显示赛车图标（图标已嵌进 exe，无需再生成 `.lnk`）  
+   - 浏览器导播台标签 / Edge 应用窗也会用同一套 favicon（`director/assets/`）
+2. 也可以双击 `director\Start.cmd`（无自定义图标）。
+3. 脚本会：停掉旧实例 → 把 `director/` UI 发布到 `share/web/` → 用 `share/jre` 拉起 jar（端口 **8720**）→ 用 Edge/Chrome `--app=` 打开导播台。
+4. **关掉导播台标签/窗口后约 3 秒**会停 jar（`pagehide` → `/goodbye`）。F5 刷新不会误杀。若标签异常消失，约 **10 秒**无心跳也会停服（心跳间隔 **6 秒**）。也可随时 `director\Stop.cmd`。
+
+端口：
+
+- 导播台页 / API：`8720`
+- 生命周期心跳：`8721`（仅本机）
+
+不要直接双击 `director.html`（`file://` 下 SSE/心跳不可用）。
+
+若要把快捷方式放到桌面：对 `启动导播台.exe` 选「发送到 → 桌面」，图标会跟着 exe 走。
+
+---
 
 ## 目录结构
 
 | 路径 | 说明 |
 |------|------|
-| `director/` | 导播台启动与源 UI |
-| `director/Start.cmd` | **日常入口**：清旧进程 → 发布 UI → 起 jar → Edge/Chrome 打开导播台 |
-| `director/Stop.cmd` | 强制停 jar（释放 `:8720`；调用 `Stop-Director.ps1`） |
-| `director/director.html` | 导播台页面（可拖拽面板） |
-| `director/web-override/` | 看板 UI 补丁（`app.js` / `style.css` / 赛道 SVG 等）；每次启动拷到 `share/web/` |
-| `director/layouts.json` | 首次启动时的布局种子（仅当 `share/web/layouts.json` 不存在时才拷贝） |
-| `director/TRACKMAP.md` | 赛道图（trackmap）说明 |
-| `share/` | 运行时：jar + JRE + 已发布的 `web/` |
-| `share/F1-RaceControl-Desktop-0.1.15_modify.jar` | 上游正式版 **0.1.15** + 本地补丁（勿与上游未发的 0.1.16/0.1.17 混淆） |
-| `share/jre/` | 便携 JRE，无需安装系统 Java |
-| `share/web/layouts.json` | **当前布局与命名预设的持久化文件**（打包可带走） |
-| `share/Start.cmd` | 仅裸计时看板 UI（不用导播台壳；窗口标题为 F1 Director） |
-| `VERSION` | 壳层版本号（如 `0.2.2+20261023`） |
-| `.gitignore` | 忽略 `share/jre/`、`share/web/` 发布产物、日志与系统垃圾文件 |
+| `启动导播台.exe` | 根目录启动器（内嵌图标 → 调 `director\Start.cmd`） |
+| `director/` | 导播台源：页面、脚本、UI 覆盖 |
+| `director/Start.cmd` | 实际启动入口 |
+| `director/Stop.cmd` | 强制停 jar、释放 `:8720` |
+| `director/director.html` | 导播台主页面 |
+| `director/web-override/` | 覆盖 UI（`app.js` / `style.css` / 状态 SVG 等） |
+| `director/layouts.json` | 首次布局种子（写入 `share/web/layouts.json` 后以运行时为准） |
+| `director/assets/` | 图标源与 favicon（`F1-Director.ico`、浏览器图标） |
+| `director/Publish-Web.cmd` | 把 UI（含 assets）拷到 `share/web/` |
+| `share/` | 运行时：jar + JRE + 已发布 `web/`（JRE/web 默认不进 Git） |
+| `share/F1-RaceControl-Desktop-0.1.15_modify.jar` | 带本地补丁的时序包 |
+| `VERSION` | 壳层版本号 |
+| `.gitignore` | 忽略 `share/jre/`、`share/web/`、本地 `*.lnk` 等 |
 
-## 怎么启动
+---
 
-1. 双击 `director\Start.cmd`（或同目录中文快捷 `导播台.cmd` / `Start-Director.cmd`）
-2. 脚本会：
-   - 清理上次残留的 Director 实例（同 jar / 占用 `8720` 的进程）
-   - 把 `director/web-override/` + `director.html` 发布到 `share/web/`
-   - 用 `share/jre` 启动 `F1-RaceControl-Desktop-0.1.15_modify.jar`（端口 **8720**，UTF-8 控制台）
-   - 用 Edge / Chrome 打开 `http://127.0.0.1:8720/director.html`（可用普通窗口；应用模式 `--app=` 亦可）
-3. **关掉导播台标签/窗口后约 3 秒内自动停 jar**（关页发 `/goodbye`；F5 刷新会重连取消，不会误停）；异常杀进程时约 15 秒心跳兜底。也可 `director\Stop.cmd` 或在启动控制台按 Enter
+## 主要功能（当前）
 
-端口：
+- 可拖拽多面板：成绩榜、赛段成绩、赛道图、天气、实时流等；布局可锁定（锁定后仍可切换预设，不可重置/删预设）
+- 切换布局预设时**复用已有直播 DOM**（不重载流，避免黑一下）
+- 日/夜主题：按钮点击处约 **1s** 圆形扩散切换（View Transition）；启动读盘与布局预设仍瞬时切主题；`prefers-reduced-motion` 时跳过动画
+- 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
+- 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta
+- 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
+- 轮胎 `Compound`：官方 Stints 增量常只推圈数、不带胎种；jar `deepMerge` 不再用空 Compound 盖掉旧值，读胎种自新到旧扫 stint 并 sticky 最近一次非空，避免成绩榜灰色 `—`
+- 正赛预设种子：成绩榜略增高、赛道图略减矮（`director/layouts.json`）
+- 天气顶栏：气温、赛道温、湿度、风速风向（中文方位）、气压 hPa、降雨文案；悬停分项提示
+- 状态列 SVG：进站 / 出站 / 停止 / 退赛 / 出局等
+- 页面关闭自动停服；心跳 **6s**，告别宽限约 **3s**，失联兜底约 **10s**
+---
 
-- Director / 导播台页面：`8720`
-- 导播台生命周期心跳：`8721`（仅本机）
+## 开发与发布备注
 
-不要直接双击 `director.html`（`file://` 会误报未连接，且多看板 SSE 会撞连接上限）。
+- 改 `director/web-override/` 或 `director.html` 后跑一次 `director\Publish-Web.cmd`，或直接再开 `启动导播台.exe`（启动流程会发布）。
+- `share/web/` 为生成物，以 `director/` 为源。
+- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
+- 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
+- 分支命名：`{base}_{content}`（如 `main_timingWeatherCache`）。
+- 带 JRE 的「解压即用」包请走 GitHub Release 单独 zip；仓库保持苗条（不提交 `share/jre`、`share/web`）。
+---
 
-## 主要功能（当前实现）
+## 相关链接
 
-- **可拖拽布局**：成绩榜、赛段成绩、赛道图、旗语、天气、轮胎、通报、最快圈、场次等面板；拖标题交换、拖空白避让、拖边缩放时挤压邻块、互不重叠
-- **布局预设**：顶栏「布局」菜单；命名预设写入 `share/web/layouts.json`（有文件就用，没有则回默认）；仓库种子含「正赛」「练习/排位赛」，`streamUrl` 默认为空（不含私人直播链接）
-- **布局锁定**：顶栏锁图标；锁上后不能拖、改大小、加减面板、重置布局或删除命名预设，**仍可切换命名预设**；窗口缩放只做画面适配、不写回文件；切板子类型与成绩榜「列」仍可用
-- **等比布局缩放**：按保存时的宽高比统一缩放，避免全屏后横竖间距被拉歪；多出来的边留白
-- **成绩榜列选择**：收在面板标题栏圆形按钮里弹出；列偏好写入 `layouts.json`；默认含「状态」列（进站/出站/停车/退赛/淘汰，统一 SVG 图标）
-- **赛段成绩板**：面板类型 `sectors`（下拉「赛段成绩」）；按车显示最快圈 / 本圈 / S1–S3（紫/绿/黄）、迷你赛段条（块间细描边）；数据来自 `_modify` jar 把 TimingData 赛段映射进 `cars`
-- **赛道图工具**：状态说明、ℹ、旋转收在赛道图面板标题栏，不另占底行
-- **轮胎列**：合并为「轮胎」列（扁圆字母徽章 + 圈数）；对齐仿「车手」列（字母左、圈数右固定宽）；列宽与「进站」更均匀；成绩榜 / 赛段成绩可同步显示
-- **顶栏信息条**：旗语 / 天气 / 赛道状态等条带
-- **赛道图（trackmap）**：官方 Position.z 优先，否则 OpenF1；圆环「赛段状态」仍是 `ring`
-- **直播面板**：粘贴链接载入；可藏 URL/工具条；延迟同步滑条对齐直播画面
-- **深色导播台风**：强调色 F1 红 `#e10600`（顶栏点、选中态、弹出按钮等）；字体统一 Noto Sans SC；成绩榜 / 赛段成绩斑马纹行底；迷你赛段块细描边
-- **共用一条 SSE**：iframe 看板用 `?once=1`，由导播台推状态，多块同类型也能亮
-- **局域网主机**：用局域网 IP 打开时，SSE/接口跟同一主机，不再死盯 `127.0.0.1`
-
-## 布局文件说明
-
-- 权威路径：`share/web/layouts.json`
-- 含：`current`、`presets`、`theme`、`streamUrl`（种子为空，自行粘贴直播链接）、`liveToolbarHidden`、`layoutLocked`、`timingColumns` 等
-- `Start.cmd` **不会**用种子覆盖已有的 `share/web/layouts.json`
-- 浏览器 `localStorage` 仍作缓存；以项目内该文件为准，便于备份与带走
-
-## 注意
-
-- 不要删本地的 `share/jre` 或 `share/F1-RaceControl-Desktop-0.1.15_modify.jar`（JRE 体积大，默认不进 git；见 `.gitignore`）
-- `share/web/` 是启动时发布产物，以 `director/` 为源；日常改 UI 请改 `director/web-override/` 与 `director/director.html`，再跑一次 `Start.cmd`
-- 个人布局写在 `share/web/layouts.json`（被 gitignore）；仓库种子是 `director/layouts.json`（不含私人直播链接）
-- 若只要裸计时看板、不要导播台壳：用 `share\Start.cmd` / `share\Start-LAN.cmd`
-- 原版说明与更新请看上游仓库：https://github.com/Xixixiao2007/F1-RaceControl-Desktop
-
-## 克隆后怎么跑
-
-1. 准备 `share/F1-RaceControl-Desktop-0.1.15_modify.jar`（本仓库补丁包）与 `share/jre/`（可从上游桌面分享包拷入 JRE；jar 请用本仓库的 `_modify` 产物）
-2. 双击 `director\Start.cmd`
-3. 首次启动会把 `director/layouts.json` 种子拷到 `share/web/layouts.json`；之后以 `share/web/` 里那份为准
+- 本仓：https://github.com/Ryan-1021/F1-Director  
+- 上游 Desktop：https://github.com/Xixixiao2007/F1-RaceControl-Desktop  

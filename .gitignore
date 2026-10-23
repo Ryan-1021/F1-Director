@@ -31,3 +31,6 @@ __pycache__/
 # Local jar backups from sector-timing rebuilds (do not commit)
 share/*.jar.bak*
 share/F1-RaceControl-Desktop.jar.bak*
+
+# Local Windows shortcuts (absolute paths)
+*.lnk

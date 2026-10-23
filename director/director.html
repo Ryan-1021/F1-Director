@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="zh-CN" data-theme="night">
 <head>
+  <link rel="icon" href="assets/favicon.ico" type="image/x-icon" />
+  <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180" />
   <meta http-equiv="Cache-Control" content="no-store, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
 <meta charset="utf-8">
@@ -1304,6 +1307,27 @@
     letter-spacing: 0.02em;
     opacity: 0.85;
   }
+/* Day/night: circular reveal from click (View Transitions) */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+  ::view-transition-old(root) {
+    z-index: 1;
+  }
+  ::view-transition-new(root) {
+    z-index: 2;
+  }
+  html.theme-vt-active {
+    view-transition-name: root;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1952,7 +1976,7 @@
     pushThemeToAll();
   }
 
-  function loadTheme() {
+    function loadTheme() {
     var saved = 'night';
     var had = false;
     try {
@@ -1961,6 +1985,71 @@
     } catch (e) {}
     // First visit: persist night so boards/iframes share the same default.
     applyTheme(saved, !had);
+  }
+
+  function themeRevealRadius(x, y) {
+    var w = window.innerWidth || 1;
+    var h = window.innerHeight || 1;
+    var maxX = Math.max(x, w - x);
+    var maxY = Math.max(y, h - y);
+    return Math.ceil(Math.sqrt(maxX * maxX + maxY * maxY));
+  }
+
+  function prefersReducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+
+  /** UI toggle: circular wipe from click; boot/preset/file still call applyTheme directly. */
+  function setThemeFromUi(theme, evt) {
+    theme = (theme === 'day') ? 'day' : 'night';
+    if (currentTheme() === theme) return;
+    var x = window.innerWidth / 2;
+    var y = window.innerHeight / 2;
+    if (evt && typeof evt.clientX === 'number' && typeof evt.clientY === 'number') {
+      x = evt.clientX;
+      y = evt.clientY;
+    } else if (evt && evt.currentTarget && evt.currentTarget.getBoundingClientRect) {
+      var r = evt.currentTarget.getBoundingClientRect();
+      x = r.left + r.width / 2;
+      y = r.top + r.height / 2;
+    }
+    var canVt = typeof document.startViewTransition === 'function' && !prefersReducedMotion();
+    if (!canVt) {
+      applyTheme(theme, true);
+      return;
+    }
+    var radius = themeRevealRadius(x, y);
+    document.documentElement.classList.add('theme-vt-active');
+    var transition;
+    try {
+      transition = document.startViewTransition(function () {
+        applyTheme(theme, true);
+      });
+    } catch (e) {
+      document.documentElement.classList.remove('theme-vt-active');
+      applyTheme(theme, true);
+      return;
+    }
+    transition.ready.then(function () {
+      document.documentElement.animate(
+        {
+          clipPath: [
+            'circle(0px at ' + x + 'px ' + y + 'px)',
+            'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'
+          ]
+        },
+        {
+          duration: 1000,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          pseudoElement: '::view-transition-new(root)'
+        }
+      );
+    }).catch(function () {});
+    transition.finished.finally(function () {
+      document.documentElement.classList.remove('theme-vt-active');
+    });
   }
 
   function connectFeed() {
@@ -3601,6 +3690,105 @@
     }
   }
 
+  function captureLivePlayback() {
+    var iframe = document.getElementById('liveIframe');
+    var video = document.getElementById('liveVideo');
+    var input = document.getElementById('streamUrl');
+    var panel = document.querySelector('.fpanel.live-panel');
+    var root = document.getElementById('liveFsRoot');
+    var url = '';
+    try { url = ((input && input.value) || localStorage.getItem(STORAGE_URL) || '').trim(); } catch (e) {}
+    var stash = {
+      url: url,
+      mode: null,
+      iframe: null,
+      video: null,
+      toolbarHidden: !!(panel && panel.classList.contains('live-toolbar-hidden')),
+      mediaFill: !!(panel && panel.classList.contains('live-media-fill')),
+      cropScale: '',
+      cropX: '',
+      cropY: ''
+    };
+    if (root) {
+      try {
+        stash.cropScale = root.style.getPropertyValue('--live-crop-scale') || '';
+        stash.cropX = root.style.getPropertyValue('--live-crop-x') || '';
+        stash.cropY = root.style.getPropertyValue('--live-crop-y') || '';
+      } catch (e) {}
+    }
+    if (iframe && iframe.getAttribute('src') && !iframe.classList.contains('hidden')) {
+      stash.mode = 'iframe';
+      stash.iframe = iframe;
+      iframe.remove();
+    } else if (video && video.getAttribute('src') && !video.classList.contains('hidden')) {
+      stash.mode = 'video';
+      stash.video = video;
+      video.remove();
+    }
+    return stash;
+  }
+
+  function restoreLivePlayback(stash) {
+    if (!stash) return false;
+    var input = document.getElementById('streamUrl');
+    if (input && stash.url) input.value = stash.url;
+    var panel = document.querySelector('.fpanel.live-panel');
+    var root = document.getElementById('liveFsRoot');
+    var placeholder = document.getElementById('livePlaceholder');
+    var liveTag = document.getElementById('liveTag');
+    var newIframe = document.getElementById('liveIframe');
+    var newVideo = document.getElementById('liveVideo');
+    if (panel) {
+      if (stash.toolbarHidden) panel.classList.add('live-toolbar-hidden');
+      else panel.classList.remove('live-toolbar-hidden');
+      if (stash.mediaFill) panel.classList.add('live-media-fill');
+      else panel.classList.remove('live-media-fill');
+      var tog = document.getElementById('btnLiveUrlTog');
+      if (tog) {
+        tog.setAttribute('aria-pressed', stash.toolbarHidden ? 'true' : 'false');
+        tog.classList.toggle('on', !!stash.toolbarHidden);
+      }
+      var fsBtn = document.getElementById('btnLiveFs');
+      if (fsBtn) {
+        fsBtn.setAttribute('aria-pressed', stash.mediaFill ? 'true' : 'false');
+        fsBtn.classList.toggle('on', !!stash.mediaFill);
+      }
+    }
+    if (root) {
+      if (stash.cropScale) root.style.setProperty('--live-crop-scale', stash.cropScale);
+      if (stash.cropX) root.style.setProperty('--live-crop-x', stash.cropX);
+      if (stash.cropY) root.style.setProperty('--live-crop-y', stash.cropY);
+    }
+    if (stash.mode === 'iframe' && stash.iframe && newIframe && newIframe.parentNode) {
+      newIframe.parentNode.replaceChild(stash.iframe, newIframe);
+      stash.iframe.id = 'liveIframe';
+      stash.iframe.classList.remove('hidden');
+      if (placeholder) placeholder.classList.add('hidden');
+      if (newVideo) {
+        newVideo.classList.add('hidden');
+        newVideo.removeAttribute('src');
+        if (newVideo.pause) newVideo.pause();
+      }
+      if (liveTag) liveTag.textContent = 'iframe';
+      try { hardenLiveIframe(stash.iframe); } catch (e) {}
+      try { syncLiveFsRootClass(); } catch (e) {}
+      return true;
+    }
+    if (stash.mode === 'video' && stash.video && newVideo && newVideo.parentNode) {
+      newVideo.parentNode.replaceChild(stash.video, newVideo);
+      stash.video.id = 'liveVideo';
+      stash.video.classList.remove('hidden');
+      if (placeholder) placeholder.classList.add('hidden');
+      if (newIframe) {
+        newIframe.classList.add('hidden');
+        newIframe.removeAttribute('src');
+      }
+      if (liveTag) liveTag.textContent = 'video';
+      try { syncLiveFsRootClass(); } catch (e) {}
+      return true;
+    }
+    return false;
+  }
   function clearPanels() {
     Object.keys(panels).forEach(function (id) {
       if (panels[id].el) panels[id].el.remove();
@@ -3609,6 +3797,7 @@
   }
 
   function mountLayout(list, opts) {
+    var liveStash = captureLivePlayback();
     clearLiveMediaFill();
     clearPanels();
     var maxZ = 10;
@@ -3629,6 +3818,9 @@
     zCounter = maxZ;
     // re-wire live stream refs after remount
     wireLiveControls();
+    if (!restoreLivePlayback(liveStash) && liveStash && liveStash.url) {
+      applyStream(liveStash.url);
+    }
   }
 
   function normalizeSaved(parsed) {
@@ -3981,7 +4173,7 @@
     return /\.(mp4|webm|ogg|m3u8)(\?|#|$)/i.test(url);
   }
 
-  function applyStream(url) {
+    function applyStream(url) {
     url = (url || '').trim();
     var liveIframe = document.getElementById('liveIframe');
     var liveVideo = document.getElementById('liveVideo');
@@ -3991,6 +4183,12 @@
     if (!url) { hideLive(); return; }
     if (placeholder) placeholder.classList.add('hidden');
     if (isDirectVideo(url)) {
+      var sameVideo = liveVideo && liveVideo.getAttribute('src') === url && !liveVideo.classList.contains('hidden');
+      if (sameVideo) {
+        syncLiveFsRootClass();
+        try { localStorage.setItem(STORAGE_URL, url); } catch (e) {}
+        return;
+      }
       liveIframe.classList.add('hidden');
       liveIframe.removeAttribute('src');
       liveVideo.classList.remove('hidden');
@@ -3998,6 +4196,19 @@
       if (liveVideo.play) liveVideo.play().catch(function () {});
       if (liveTag) liveTag.textContent = 'video';
     } else {
+      var sameFrame = liveIframe.getAttribute('src') === url && !liveIframe.classList.contains('hidden');
+      if (sameFrame) {
+        if (liveVideo) {
+          liveVideo.classList.add('hidden');
+          liveVideo.removeAttribute('src');
+          if (liveVideo.pause) liveVideo.pause();
+        }
+        hardenLiveIframe(liveIframe);
+        if (liveTag) liveTag.textContent = 'iframe';
+        syncLiveFsRootClass();
+        try { localStorage.setItem(STORAGE_URL, url); } catch (e) {}
+        return;
+      }
       liveVideo.classList.add('hidden');
       liveVideo.removeAttribute('src');
       hardenLiveIframe(liveIframe);
@@ -4436,11 +4647,11 @@
     setLayoutLocked(!layoutLocked, true);
   });
 
-  document.getElementById('btnThemeDay').addEventListener('click', function () {
-    applyTheme('day', true);
+  document.getElementById('btnThemeDay').addEventListener('click', function (e) {
+    setThemeFromUi('day', e);
   });
-  document.getElementById('btnThemeNight').addEventListener('click', function () {
-    applyTheme('night', true);
+  document.getElementById('btnThemeNight').addEventListener('click', function (e) {
+    setThemeFromUi('night', e);
   });
 
   function applyLayoutsFileData(data) {
@@ -4541,7 +4752,7 @@
 
   // ---- lifecycle heartbeat (Run-Director.ps1 listens on :8721) ----
   // Close tab → pagehide sends /goodbye; PS waits ~3s then kills Java unless a
-  // fresh heartbeat arrives (F5 reload cancels). MissGraceSec (~15s) is backup
+  // fresh heartbeat arrives (F5 reload cancels). MissGraceSec (~10s) is backup
   // if the tab dies without a beacon. Enter / Stop.cmd still work.
   // Prefer a Worker timer: main-thread setInterval is heavily throttled in
   // background tabs and used to miss a short grace → false "server died".
@@ -4580,17 +4791,17 @@
   var hbIntervalId = null;
   try {
     var hbBlob = new Blob(
-      ['setInterval(function () { postMessage(1); }, 2000);'],
+      ['setInterval(function () { postMessage(1); }, 6000);'],
       { type: 'application/javascript' }
     );
     var hbWorker = new Worker(URL.createObjectURL(hbBlob));
     hbWorker.onmessage = function () { sendDirectorHeartbeat(); };
   } catch (e) {
-    hbIntervalId = setInterval(sendDirectorHeartbeat, 2000);
+    hbIntervalId = setInterval(sendDirectorHeartbeat, 6000);
   }
   // Fallback / belt-and-suspenders if Worker is also throttled.
   if (!hbIntervalId) {
-    hbIntervalId = setInterval(sendDirectorHeartbeat, 2000);
+    hbIntervalId = setInterval(sendDirectorHeartbeat, 6000);
   }
   window.addEventListener('pagehide', function (ev) {
     // bfcache freeze (persisted): keep the server; page may come back.
