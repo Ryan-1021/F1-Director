@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="zh-CN" data-theme="night">
 <head>
+  <link rel="icon" href="assets/favicon.ico" type="image/x-icon" />
+  <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180" />
   <meta http-equiv="Cache-Control" content="no-store, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
 <meta charset="utf-8">
@@ -4541,7 +4544,7 @@
 
   // ---- lifecycle heartbeat (Run-Director.ps1 listens on :8721) ----
   // Close tab → pagehide sends /goodbye; PS waits ~3s then kills Java unless a
-  // fresh heartbeat arrives (F5 reload cancels). MissGraceSec (~15s) is backup
+  // fresh heartbeat arrives (F5 reload cancels). MissGraceSec (~20s) is backup
   // if the tab dies without a beacon. Enter / Stop.cmd still work.
   // Prefer a Worker timer: main-thread setInterval is heavily throttled in
   // background tabs and used to miss a short grace → false "server died".
@@ -4580,17 +4583,17 @@
   var hbIntervalId = null;
   try {
     var hbBlob = new Blob(
-      ['setInterval(function () { postMessage(1); }, 2000);'],
+      ['setInterval(function () { postMessage(1); }, 6000);'],
       { type: 'application/javascript' }
     );
     var hbWorker = new Worker(URL.createObjectURL(hbBlob));
     hbWorker.onmessage = function () { sendDirectorHeartbeat(); };
   } catch (e) {
-    hbIntervalId = setInterval(sendDirectorHeartbeat, 2000);
+    hbIntervalId = setInterval(sendDirectorHeartbeat, 6000);
   }
   // Fallback / belt-and-suspenders if Worker is also throttled.
   if (!hbIntervalId) {
-    hbIntervalId = setInterval(sendDirectorHeartbeat, 2000);
+    hbIntervalId = setInterval(sendDirectorHeartbeat, 6000);
   }
   window.addEventListener('pagehide', function (ev) {
     // bfcache freeze (persisted): keep the server; page may come back.

@@ -21,8 +21,8 @@ $LaunchCmd = Join-Path $env:TEMP 'F1-Director-Server-Launch.cmd'
 # can reconnect and cancel the pending stop.
 $GoodbyeGraceSec = 3
 # Safety net if the tab dies without a goodbye beacon (crash / force-kill).
-# Worker + setInterval keep pings alive in background tabs; 15s is enough.
-$MissGraceSec = 15
+# Worker + setInterval keep pings alive in background tabs; 20s (~3 x 6s beats) is enough.
+$MissGraceSec = 20
 # How long to wait for the first heartbeat after opening the browser.
 $FirstBeatWaitSec = 90
 
