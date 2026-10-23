@@ -73,7 +73,7 @@
       var box = document.createElement('div');
       box.id = 'jserr';
       box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;'
-        + 'color:#fff;padding:6px 10px;font-size:12px;z-index:99;font-family:monospace';
+        + 'color:#fff;padding:6px 10px;font-size:12px;z-index:99;font-family:"Noto Sans SC",sans-serif';
       box.textContent = '界面脚本出错：' + msg;
       (document.body || document.documentElement).appendChild(box);
     } catch (e) { /* 连报错都失败了，只能算了 */ }
@@ -193,6 +193,14 @@
       return { letter: '—', key: 'unk', color: '' };
     }
     return { letter: letter, key: letter, color: COMPOUND_COLOR[letter] || '' };
+  }
+
+  /** Pad tyre lap counts so single digits align under the ones place. */
+  function formatTyreLaps(v) {
+    if (v == null || v === '') return '\u2014';
+    var s = String(v).trim();
+    if (!/^\d+$/.test(s)) return s;
+    return s.length < 2 ? ('\u2007' + s) : s;
   }
 
   /** Build a <span class="ttyre comp-S">S</span> badge. */
@@ -500,7 +508,7 @@
       if ((2 * Math.PI * rIn) / n >= 16) {
         // Labels sit on colored sectors (dark/yellow/red); keep light ink.
         g.fillStyle = '#eceff1';
-        g.font = '600 11px "Noto Sans SC", Segoe UI, system-ui, sans-serif';
+        g.font = '600 11px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.fillText(String(sec), lx, ly);
@@ -512,11 +520,11 @@
     g.arc(cx, cy, rIn * 0.92, 0, Math.PI * 2);
     g.fill();
     g.fillStyle = argb(track.textColor);
-    g.font = '700 15px Segoe UI, Microsoft YaHei, system-ui, sans-serif';
+    g.font = '700 15px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillText(track.label || '', cx, cy - 8);
-    g.font = '11px Segoe UI, Microsoft YaHei, system-ui, sans-serif';
+    g.font = '11px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
     g.fillText(ago(track.updatedAt), cx, cy + 12);
   }
 
@@ -591,7 +599,7 @@
   var TIMING_COLS_DEFAULT = TIMING_COLS.map(function (c) { return c.id; });
   // Content-ish weights; visible columns are re-normalized to 100% panel width.
   var TIMING_COL_WEIGHTS = {
-    pos: 7, who: 20, status: 8, gap: 16, int: 16, tyre: 17, pit: 12
+    pos: 7, who: 20, status: 8, gap: 16, int: 16, tyre: 15, pit: 14
   };
   var TIMING_COLS_VER_KEY = 'f1-timing-columns-v';
   var TIMING_COLS_VER = '3'; // v2: dedicated 状态 (track status) column
@@ -1084,7 +1092,7 @@
     var tyreTd = el('td', 'col-tyre');
     var tyreCell = el('span', 'tyre-stint');
     tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
-    var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
+    var lapsTxt = formatTyreLaps(c.tyreLaps);
     tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
     tyreTd.appendChild(tyreCell);
     tr.appendChild(tyreTd);
@@ -1139,7 +1147,7 @@
     if (tds[4]) tds[4].textContent = c.interval || '';
         if (tds[5]) {
       var badge = tds[5].querySelector('.tyre-stint');
-      var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
+      var lapsTxt = formatTyreLaps(c.tyreLaps);
       if (badge) {
         var tlaps = badge.querySelector('.tlaps');
         if (tlaps) tlaps.textContent = lapsTxt;
@@ -1650,7 +1658,7 @@
       var tyreTd = el('td', 'col-tyre');
       var tyreCell = el('span', 'tyre-stint');
       tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
-      var lapsTxt = (c.tyreLaps != null && c.tyreLaps !== '') ? String(c.tyreLaps) : '—';
+      var lapsTxt = formatTyreLaps(c.tyreLaps);
       tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
       tyreTd.appendChild(tyreCell);
       tr.appendChild(tyreTd);
@@ -2823,7 +2831,7 @@
       g.lineWidth = 1.5;
       g.strokeStyle = day ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.8)';
       g.stroke();
-      g.font = '700 10px "Noto Sans SC", Segoe UI, system-ui, sans-serif';
+      g.font = '700 10px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillStyle = day ? '#102027' : '#fff';

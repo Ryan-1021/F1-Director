@@ -23,13 +23,13 @@
     --border-hi: rgba(255, 255, 255, 0.12);
     --accent: #e10600;
     --accent-dim: rgba(225, 6, 0, 0.18);
-    --teal: #00d2be;
-    --teal-dim: rgba(0, 210, 190, 0.14);
+    --teal: #e10600;
+    --teal-dim: rgba(225, 6, 0, 0.18);
     --text: #eef3f8;
     --muted: #7d8b9c;
     --muted2: #5a6778;
     --live: #ff3b5c;
-    --ok: #3dd6c3;
+    --ok: #ff5a5a;
     --bad: #ff6b7a;
     --warn: #f0b429;
     --bar-h: 46px;
@@ -56,14 +56,14 @@
     --dd-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.35);
     --inset-line: rgba(255, 255, 255, 0.03);
     --live-ph-bg: radial-gradient(ellipse at center, #1a0c10 0%, #050607 68%);
-    --theme-active-bg: rgba(0, 210, 190, 0.18);
-    --theme-active-fg: #00d2be;
-    --status-ok-border: rgba(61, 214, 195, 0.28);
-    --status-ok-bg: rgba(61, 214, 195, 0.08);
+    --theme-active-bg: rgba(225, 6, 0, 0.18);
+    --theme-active-fg: #e10600;
+    --status-ok-border: rgba(225, 6, 0, 0.35);
+    --status-ok-bg: rgba(225, 6, 0, 0.10);
   }
   html[data-theme="day"] {
     color-scheme: light;
-    --teal: #0a8f82;
+    --teal: #c40500;
     --bg: #eef2f7;
     --bg-stage: #e4eaf2;
     --bg-elev: #f5f7fb;
@@ -73,7 +73,7 @@
     --border: rgba(15, 23, 42, 0.10);
     --border-hi: rgba(15, 23, 42, 0.16);
     --accent-dim: rgba(225, 6, 0, 0.10);
-    --teal-dim: rgba(0, 160, 145, 0.12);
+    --teal-dim: rgba(225, 6, 0, 0.10);
     --text: #0f172a;
     --muted: #5b6b7c;
     --muted2: #8494a7;
@@ -95,11 +95,11 @@
     --dd-shadow: 0 16px 40px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.06);
     --inset-line: rgba(15, 23, 42, 0.04);
     --live-ph-bg: radial-gradient(ellipse at center, #ffe8ec 0%, #f4eef0 68%);
-    --theme-active-bg: rgba(0, 120, 110, 0.16);
-    --theme-active-fg: #06665c;
-    --ok: #06665c;
-    --status-ok-border: rgba(6, 102, 92, 0.38);
-    --status-ok-bg: rgba(6, 102, 92, 0.12);
+    --theme-active-bg: rgba(225, 6, 0, 0.10);
+    --theme-active-fg: #c40500;
+    --ok: #b91c1c;
+    --status-ok-border: rgba(196, 5, 0, 0.38);
+    --status-ok-bg: rgba(196, 5, 0, 0.10);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -326,7 +326,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #43a047;
+    background: var(--accent);
     box-shadow: 0 0 0 1px rgba(0,0,0,0.18);
   }
   .track-strip .ts-label {
@@ -376,7 +376,7 @@
   }
   .live-toolbar .stream-url::placeholder { color: var(--muted2); }
   .live-toolbar .stream-url:focus {
-    border-color: rgba(0, 210, 190, 0.45);
+    border-color: rgba(225, 6, 0, 0.45);
     box-shadow: 0 0 0 3px var(--teal-dim);
   }
   .live-toolbar > button {
@@ -418,7 +418,7 @@
     text-align: center;
   }
   .live-toolbar input[type="number"]:focus {
-    border-color: rgba(0, 210, 190, 0.45);
+    border-color: rgba(225, 6, 0, 0.45);
     box-shadow: 0 0 0 3px var(--teal-dim);
   }
   .live-toolbar .delay-unit {
@@ -435,7 +435,7 @@
     padding: 2px 7px;
     border-radius: 999px;
     background: var(--teal-dim);
-    border: 1px solid rgba(0, 210, 190, 0.28);
+    border: 1px solid rgba(225, 6, 0, 0.28);
     white-space: nowrap;
   }
   .live-toolbar .delay-status.warming {
@@ -465,7 +465,7 @@
   .p-head .win-btns button.live-url-tog.on {
     color: var(--teal);
     background: var(--teal-dim);
-    border-color: rgba(0, 210, 190, 0.28);
+    border-color: rgba(225, 6, 0, 0.28);
   }
   @media (max-width: 900px) {
     .live-toolbar { flex-wrap: wrap; }
@@ -553,24 +553,24 @@
     content: "";
     position: absolute; left: 0; top: 0; bottom: 0;
     width: 2px;
-    background: linear-gradient(180deg, rgba(0,210,190,0.55), rgba(0,210,190,0.08));
+    background: linear-gradient(180deg, rgba(225,6,0,0.55), rgba(225,6,0,0.08));
     z-index: 6;
     pointer-events: none;
     opacity: 0.7;
   }
   .fpanel.active {
-    border-color: rgba(0, 210, 190, 0.35);
-    box-shadow: var(--shadow), 0 0 0 1px rgba(0, 210, 190, 0.12);
+    border-color: rgba(225, 6, 0, 0.35);
+    box-shadow: var(--shadow), 0 0 0 1px rgba(225, 6, 0, 0.12);
   }
   .fpanel.active::before { opacity: 1; background: var(--teal); }
   .fpanel.dragging {
     opacity: 0.92;
-    border-color: rgba(0, 210, 190, 0.45);
+    border-color: rgba(225, 6, 0, 0.45);
     box-shadow: var(--shadow);
   }
   .fpanel.drop-target {
-    border-color: rgba(0, 210, 190, 0.65) !important;
-    box-shadow: 0 0 0 2px rgba(0, 210, 190, 0.35), var(--shadow);
+    border-color: rgba(225, 6, 0, 0.65) !important;
+    box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.35), var(--shadow);
   }
   .fpanel.drop-target::after {
     content: "交换位置";
@@ -579,7 +579,7 @@
     transform: translate(-50%, -50%);
     z-index: 20;
     pointer-events: none;
-    background: rgba(0, 210, 190, 0.95);
+    background: rgba(225, 6, 0, 0.95);
     color: #041016;
     font-weight: 700;
     font-size: 12px;
@@ -650,7 +650,7 @@
     overflow: hidden; text-overflow: ellipsis;
     max-width: 72px;
     opacity: 0.75;
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   }
   /* Custom board-type dropdown (native <option> contrast is unreliable on Windows) */
   .board-dd {
@@ -677,15 +677,15 @@
     box-shadow: 0 0 6px rgba(255, 107, 122, 0.55);
   }
   .board-dd-status.ok {
-    background: #00d2be;
-    box-shadow: 0 0 6px rgba(0, 210, 190, 0.7);
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(225, 6, 0, 0.7);
   }
   .board-dd-btn:hover,
   .board-dd.open .board-dd-btn,
   .board-dd-btn:focus-visible {
-    border-color: rgba(0, 210, 190, 0.5);
+    border-color: rgba(225, 6, 0, 0.5);
     background: var(--dd-hover);
-    box-shadow: 0 0 0 2px rgba(0, 210, 190, 0.12);
+    box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.12);
   }
   .board-dd-label {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -695,7 +695,7 @@
     flex-shrink: 0; font-size: 9px; color: var(--muted);
     line-height: 1;
   }
-  .board-dd.open .board-dd-caret { color: #00d2be; }
+  .board-dd.open .board-dd-caret { color: var(--accent); }
   /* Portal menu — fixed so panel overflow:hidden cannot clip it */
   #board-dd-menu {
     position: fixed;
@@ -1097,7 +1097,7 @@
     width: calc(50% - 2px);
     border-radius: 999px;
     background: var(--theme-active-bg);
-    box-shadow: inset 0 0 0 1px rgba(0, 210, 190, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(225, 6, 0, 0.18);
     transform: translateX(0);
     transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
     pointer-events: none;
@@ -1152,7 +1152,7 @@
     transform: scale(0.92) rotate(14deg);
   }
   html[data-theme="day"] .theme-toggle-pill {
-    box-shadow: inset 0 0 0 1px rgba(6, 102, 92, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(196, 5, 0, 0.16);
   }
 
   /* Layout menu (save / restore / reset) */
@@ -1273,7 +1273,7 @@
   #btnLayoutLock[aria-pressed="true"] {
     color: var(--teal);
     background: var(--teal-dim);
-    border-color: rgba(0, 210, 190, 0.35);
+    border-color: rgba(225, 6, 0, 0.35);
   }
   #btnLayoutLock[aria-pressed="true"] .lock-icon-open { display: none; }
   #btnLayoutLock[aria-pressed="true"] .lock-icon-locked { display: block; }
@@ -3862,10 +3862,6 @@
       var snap = map[applyName];
       closeLayoutMenu();
       if (!snap) return;
-      if (layoutLocked) {
-        flashLayoutMenuBtn('请先解锁');
-        return;
-      }
       applyLayoutSnapshot(snap);
     });
     return layoutPresetMenu;
@@ -3902,7 +3898,7 @@
     }
     html += '<div class="layout-sep" role="separator"></div>';
     html += '<button type="button" class="layout-action danger" role="menuitem" data-action="reset"' +
-      (layoutLocked ? ' title="请先解锁布局"' : '') + '>重置布局</button>';
+      (layoutLocked ? ' disabled title="锁定中不可重置" aria-disabled="true"' : '') + '>重置布局</button>';
     menu.innerHTML = html;
   }
 
@@ -4402,8 +4398,8 @@
     if (btn) {
       btn.setAttribute('aria-pressed', locked ? 'true' : 'false');
       btn.title = locked
-        ? '解锁布局（当前已锁定，无法拖动/缩放/增删面板）'
-        : '锁定布局（防止拖动/缩放/增删）';
+        ? '布局已锁定：可切换预设，不可拖动/缩放/增删/重置'
+        : '锁定布局（禁止拖动/缩放/增删面板）';
       btn.setAttribute('aria-label', locked ? '解锁布局' : '锁定布局');
     }
     var hint = document.querySelector('.hint-bar');
