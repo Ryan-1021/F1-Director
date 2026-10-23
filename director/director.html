@@ -3604,6 +3604,105 @@
     }
   }
 
+  function captureLivePlayback() {
+    var iframe = document.getElementById('liveIframe');
+    var video = document.getElementById('liveVideo');
+    var input = document.getElementById('streamUrl');
+    var panel = document.querySelector('.fpanel.live-panel');
+    var root = document.getElementById('liveFsRoot');
+    var url = '';
+    try { url = ((input && input.value) || localStorage.getItem(STORAGE_URL) || '').trim(); } catch (e) {}
+    var stash = {
+      url: url,
+      mode: null,
+      iframe: null,
+      video: null,
+      toolbarHidden: !!(panel && panel.classList.contains('live-toolbar-hidden')),
+      mediaFill: !!(panel && panel.classList.contains('live-media-fill')),
+      cropScale: '',
+      cropX: '',
+      cropY: ''
+    };
+    if (root) {
+      try {
+        stash.cropScale = root.style.getPropertyValue('--live-crop-scale') || '';
+        stash.cropX = root.style.getPropertyValue('--live-crop-x') || '';
+        stash.cropY = root.style.getPropertyValue('--live-crop-y') || '';
+      } catch (e) {}
+    }
+    if (iframe && iframe.getAttribute('src') && !iframe.classList.contains('hidden')) {
+      stash.mode = 'iframe';
+      stash.iframe = iframe;
+      iframe.remove();
+    } else if (video && video.getAttribute('src') && !video.classList.contains('hidden')) {
+      stash.mode = 'video';
+      stash.video = video;
+      video.remove();
+    }
+    return stash;
+  }
+
+  function restoreLivePlayback(stash) {
+    if (!stash) return false;
+    var input = document.getElementById('streamUrl');
+    if (input && stash.url) input.value = stash.url;
+    var panel = document.querySelector('.fpanel.live-panel');
+    var root = document.getElementById('liveFsRoot');
+    var placeholder = document.getElementById('livePlaceholder');
+    var liveTag = document.getElementById('liveTag');
+    var newIframe = document.getElementById('liveIframe');
+    var newVideo = document.getElementById('liveVideo');
+    if (panel) {
+      if (stash.toolbarHidden) panel.classList.add('live-toolbar-hidden');
+      else panel.classList.remove('live-toolbar-hidden');
+      if (stash.mediaFill) panel.classList.add('live-media-fill');
+      else panel.classList.remove('live-media-fill');
+      var tog = document.getElementById('btnLiveUrlTog');
+      if (tog) {
+        tog.setAttribute('aria-pressed', stash.toolbarHidden ? 'true' : 'false');
+        tog.classList.toggle('on', !!stash.toolbarHidden);
+      }
+      var fsBtn = document.getElementById('btnLiveFs');
+      if (fsBtn) {
+        fsBtn.setAttribute('aria-pressed', stash.mediaFill ? 'true' : 'false');
+        fsBtn.classList.toggle('on', !!stash.mediaFill);
+      }
+    }
+    if (root) {
+      if (stash.cropScale) root.style.setProperty('--live-crop-scale', stash.cropScale);
+      if (stash.cropX) root.style.setProperty('--live-crop-x', stash.cropX);
+      if (stash.cropY) root.style.setProperty('--live-crop-y', stash.cropY);
+    }
+    if (stash.mode === 'iframe' && stash.iframe && newIframe && newIframe.parentNode) {
+      newIframe.parentNode.replaceChild(stash.iframe, newIframe);
+      stash.iframe.id = 'liveIframe';
+      stash.iframe.classList.remove('hidden');
+      if (placeholder) placeholder.classList.add('hidden');
+      if (newVideo) {
+        newVideo.classList.add('hidden');
+        newVideo.removeAttribute('src');
+        if (newVideo.pause) newVideo.pause();
+      }
+      if (liveTag) liveTag.textContent = 'iframe';
+      try { hardenLiveIframe(stash.iframe); } catch (e) {}
+      try { syncLiveFsRootClass(); } catch (e) {}
+      return true;
+    }
+    if (stash.mode === 'video' && stash.video && newVideo && newVideo.parentNode) {
+      newVideo.parentNode.replaceChild(stash.video, newVideo);
+      stash.video.id = 'liveVideo';
+      stash.video.classList.remove('hidden');
+      if (placeholder) placeholder.classList.add('hidden');
+      if (newIframe) {
+        newIframe.classList.add('hidden');
+        newIframe.removeAttribute('src');
+      }
+      if (liveTag) liveTag.textContent = 'video';
+      try { syncLiveFsRootClass(); } catch (e) {}
+      return true;
+    }
+    return false;
+  }
   function clearPanels() {
     Object.keys(panels).forEach(function (id) {
       if (panels[id].el) panels[id].el.remove();
@@ -3612,6 +3711,7 @@
   }
 
   function mountLayout(list, opts) {
+    var liveStash = captureLivePlayback();
     clearLiveMediaFill();
     clearPanels();
     var maxZ = 10;
@@ -3632,6 +3732,9 @@
     zCounter = maxZ;
     // re-wire live stream refs after remount
     wireLiveControls();
+    if (!restoreLivePlayback(liveStash) && liveStash && liveStash.url) {
+      applyStream(liveStash.url);
+    }
   }
 
   function normalizeSaved(parsed) {
@@ -3984,7 +4087,7 @@
     return /\.(mp4|webm|ogg|m3u8)(\?|#|$)/i.test(url);
   }
 
-  function applyStream(url) {
+    function applyStream(url) {
     url = (url || '').trim();
     var liveIframe = document.getElementById('liveIframe');
     var liveVideo = document.getElementById('liveVideo');
@@ -3994,6 +4097,12 @@
     if (!url) { hideLive(); return; }
     if (placeholder) placeholder.classList.add('hidden');
     if (isDirectVideo(url)) {
+      var sameVideo = liveVideo && liveVideo.getAttribute('src') === url && !liveVideo.classList.contains('hidden');
+      if (sameVideo) {
+        syncLiveFsRootClass();
+        try { localStorage.setItem(STORAGE_URL, url); } catch (e) {}
+        return;
+      }
       liveIframe.classList.add('hidden');
       liveIframe.removeAttribute('src');
       liveVideo.classList.remove('hidden');
@@ -4001,6 +4110,19 @@
       if (liveVideo.play) liveVideo.play().catch(function () {});
       if (liveTag) liveTag.textContent = 'video';
     } else {
+      var sameFrame = liveIframe.getAttribute('src') === url && !liveIframe.classList.contains('hidden');
+      if (sameFrame) {
+        if (liveVideo) {
+          liveVideo.classList.add('hidden');
+          liveVideo.removeAttribute('src');
+          if (liveVideo.pause) liveVideo.pause();
+        }
+        hardenLiveIframe(liveIframe);
+        if (liveTag) liveTag.textContent = 'iframe';
+        syncLiveFsRootClass();
+        try { localStorage.setItem(STORAGE_URL, url); } catch (e) {}
+        return;
+      }
       liveVideo.classList.add('hidden');
       liveVideo.removeAttribute('src');
       hardenLiveIframe(liveIframe);
