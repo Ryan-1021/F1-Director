@@ -74,15 +74,15 @@
 | `share/web/layouts.json` | **当前布局与命名预设的持久化文件**（打包可带走） |
 | `share/Start.cmd` | 仅裸计时看板 UI（不用导播台壳；窗口标题为 F1 Director） |
 | `VERSION` | 壳层版本号（如 `0.2.2+20261023`） |
-| `F1-Director.ico` | Windows 快捷方式图标（透明赛车剪影） |
-| `Start-Director.cmd` / `启动导播台.cmd` | 项目根启动入口（转调 `director\Start.cmd`，无 UTF-8 BOM） |
-| `Create-Shortcut.cmd` | 在本机生成带图标的 `启动导播台.lnk` 与桌面「F1 导播台」 |
+| `F1-Director.ico` / `启动导播台.exe` | 根目录启动器（exe 自带赛车图标，双击即可；ico 供嵌入） |
+| `启动导播台.cmd` | 无图标的备用启动入口（转调 `director\Start.cmd`） |
+
 | `.gitignore` | 忽略 `share/jre/`、`share/web/` 发布产物、日志与系统垃圾文件 |
 
 ## 怎么启动
 
-1. **日常启动**：双击项目根目录 `Start-Director.cmd` / `启动导播台.cmd`，或 `director\Start.cmd`
-2. **带图标的快捷方式（可选）**：双击根目录 `Create-Shortcut.cmd`，会在项目内生成 `启动导播台.lnk`、并在桌面生成「F1 导播台」。图标来自仓库内的 `F1-Director.ico`。`.lnk` 含本机绝对路径，故 **不进 Git**；别人克隆后各自运行一次即可。
+| `启动导播台.cmd` | 无图标的备用启动入口（转调 `director\Start.cmd`） |
+| `F1-Director.ico` / `启动导播台.exe` | 根目录启动器（exe 自带赛车图标，双击即可；ico 供嵌入） |
    - 清理上次残留的 Director 实例（同 jar / 占用 `8720` 的进程）
    - 把 `director/web-override/` + `director.html` 发布到 `share/web/`
    - 用 `share/jre` 启动 `F1-RaceControl-Desktop-0.1.15_modify.jar`（端口 **8720**，UTF-8 控制台）
