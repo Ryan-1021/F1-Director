@@ -62,6 +62,7 @@
 | 路径 | 说明 |
 |------|------|
 | `director/` | 导播台启动与源 UI |
+| `director/assets/F1-Director.ico` | 启动器图标源（嵌入 `启动导播台.exe`，一般不必单独打开） |
 | `director/Start.cmd` | **日常入口**：清旧进程 → 发布 UI → 起 jar → Edge/Chrome 打开导播台 |
 | `director/Stop.cmd` | 强制停 jar（释放 `:8720`；调用 `Stop-Director.ps1`） |
 | `director/director.html` | 导播台页面（可拖拽面板） |
@@ -74,15 +75,15 @@
 | `share/web/layouts.json` | **当前布局与命名预设的持久化文件**（打包可带走） |
 | `share/Start.cmd` | 仅裸计时看板 UI（不用导播台壳；窗口标题为 F1 Director） |
 | `VERSION` | 壳层版本号（如 `0.2.2+20261023`） |
-| `F1-Director.ico` / `启动导播台.exe` | 根目录启动器（exe 自带赛车图标，双击即可；ico 供嵌入） |
-| `启动导播台.cmd` | 无图标的备用启动入口（转调 `director\Start.cmd`） |
+| `启动导播台.exe` | 根目录启动器（内嵌赛车图标，双击即可） |
+
 
 | `.gitignore` | 忽略 `share/jre/`、`share/web/` 发布产物、日志与系统垃圾文件 |
 
 ## 怎么启动
 
-| `启动导播台.cmd` | 无图标的备用启动入口（转调 `director\Start.cmd`） |
-| `F1-Director.ico` / `启动导播台.exe` | 根目录启动器（exe 自带赛车图标，双击即可；ico 供嵌入） |
+
+| `启动导播台.exe` | 根目录启动器（内嵌赛车图标，双击即可） |
    - 清理上次残留的 Director 实例（同 jar / 占用 `8720` 的进程）
    - 把 `director/web-override/` + `director.html` 发布到 `share/web/`
    - 用 `share/jre` 启动 `F1-RaceControl-Desktop-0.1.15_modify.jar`（端口 **8720**，UTF-8 控制台）
