@@ -94,6 +94,7 @@
 - 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
 - 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta
 - 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
+- 轮胎 `Compound`：官方 Stints 增量常只推圈数、不带胎种；jar `deepMerge` 不再用空 Compound 盖掉旧值，读胎种自新到旧扫 stint 并 sticky 最近一次非空，避免成绩榜灰色 `—`
 - 正赛预设种子：成绩榜略增高、赛道图略减矮（`director/layouts.json`）
 - 天气顶栏：气温、赛道温、湿度、风速风向（中文方位）、气压 hPa、降雨文案；悬停分项提示
 - 状态列 SVG：进站 / 出站 / 停止 / 退赛 / 出局等
@@ -104,7 +105,7 @@
 
 - 改 `director/web-override/` 或 `director.html` 后跑一次 `director\Publish-Web.cmd`，或直接再开 `启动导播台.exe`（启动流程会发布）。
 - `share/web/` 为生成物，以 `director/` 为源。
-- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送等；壳层版本见 `VERSION`，勿与 jar 标号混读。
+- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
 - 分支命名：`{base}_{content}`（如 `main_timingWeatherCache`）。
 - 带 JRE 的「解压即用」包请走 GitHub Release 单独 zip；仓库保持苗条（不提交 `share/jre`、`share/web`）。
