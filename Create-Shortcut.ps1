@@ -7,8 +7,13 @@ $cmd = Join-Path $root "Start-Director.cmd"
 if (-not (Test-Path $ico)) { throw "Missing F1-Director.ico in $root" }
 if (-not (Test-Path $cmd)) { throw "Missing Start-Director.cmd in $root" }
 
+# 启动导播台.lnk / F1 导播台.lnk via codepoints (script stays ASCII-safe)
+$rootLnkName = ([string]::Concat([char]0x542F, [char]0x52A8, [char]0x5BFC, [char]0x64AD, [char]0x53F0, ".lnk"))
+$deskLnkName = ([string]::Concat("F1 ", [char]0x5BFC, [char]0x64AD, [char]0x53F0, ".lnk"))
+
 $wsh = New-Object -ComObject WScript.Shell
 function New-DirectorShortcut([string]$path) {
+  if (-not $path.EndsWith(".lnk")) { throw "Shortcut path must end with .lnk: $path" }
   $lnk = $wsh.CreateShortcut($path)
   $lnk.TargetPath = $env:ComSpec
   $lnk.Arguments = "/c `"`"$cmd`"`""
@@ -20,8 +25,6 @@ function New-DirectorShortcut([string]$path) {
   Write-Host "Created $path"
 }
 
-$rootLnk = Join-Path $root "启动导播台.lnk"
-$deskLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "F1 导播台.lnk"
-New-DirectorShortcut $rootLnk
-New-DirectorShortcut $deskLnk
+New-DirectorShortcut (Join-Path $root $rootLnkName)
+New-DirectorShortcut (Join-Path ([Environment]::GetFolderPath("Desktop")) $deskLnkName)
 Write-Host "Done. Double-click the shortcut to launch with the race-car icon."
