@@ -1408,7 +1408,7 @@ html[data-theme="day"] .b-trackmap .tm-wrap {
 html[data-theme="day"] .tm-line-bg { stroke: rgba(55, 71, 79, 0.45); }
 html[data-theme="day"] .tm-line-fg { stroke: rgba(255, 255, 255, 0.94); }
 .tm-finish { pointer-events: none; }
-.tm-finish-sq { stroke-width: 0.7; stroke-linejoin: miter; }
+.tm-finish-sq { stroke-width: 0.4; stroke-linejoin: miter; }
 .tm-finish-sq.light { fill: #f4f4f4; stroke: #141414; }
 .tm-finish-sq.dark { fill: #141414; stroke: #f7f7f7; }
 .tm-empty {

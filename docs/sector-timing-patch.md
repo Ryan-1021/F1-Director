@@ -10,6 +10,7 @@ No upstream PR against Xixixiao2007/F1-RaceControl-Desktop.
 Verified against live `/api/full` TimingData / TimingStats (2026-10-22 Asia/Shanghai):
 
 - `lastLap`: string, e.g. `"1:37.840"`
+- `bestLap`: string personal-best lap, e.g. `"1:35.127"`. From `TimingData.Lines[n].BestLapTime.Value` (the subscribed stream). `TimingStats.Lines[n].PersonalBestLapTime.Value` still wins when that stream is present.
 - `sectors`: array of 3 objects:
   - `value`: sector time string (empty if not yet set), e.g. `"28.631"`
   - `personalBest` / `overallBest`: booleans from PersonalFastest / OverallFastest or Status 2049 / 2051

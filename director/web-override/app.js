@@ -1584,6 +1584,24 @@
   }
 
   /**
+   * Personal best lap for the sectors board.
+   * cars[].bestLap is TimingData.BestLapTime.Value (also TimingStats.PersonalBestLapTime
+   * when that stream is present). Accept the string or a {Value} object.
+   */
+  function carBestLap(c) {
+    if (!c) return '';
+    var keys = ['bestLap', 'BestLapTime', 'personalBestLap', 'PersonalBestLapTime', 'bestLapTime'];
+    for (var i = 0; i < keys.length; i++) {
+      var v = c[keys[i]];
+      if (v == null || v === '') continue;
+      if (typeof v === 'object') v = v.Value || v.value || v.time || v.Time || '';
+      v = String(v).trim();
+      if (v && v.toLowerCase() !== 'null' && v !== '—') return v;
+    }
+    return '';
+  }
+
+  /**
    * Sector / current-lap detail board.
    * Upstream F1Feed currently ships bestLap/gap/… on cars, but not per-driver
    * S1-S3 from patched F1Feed (lastLap + sectors[] with PB/overall flags).
@@ -1632,7 +1650,7 @@
     var fieldBestLapMs = Infinity;
     var fieldLastLapMs = Infinity;
     for (var fi = 0; fi < cars.length; fi++) {
-      var fBest = cars[fi].bestLap;
+      var fBest = carBestLap(cars[fi]);
       if (fBest) {
         var fbm = lapMs(fBest);
         if (isFinite(fbm) && fbm < fieldBestLapMs) fieldBestLapMs = fbm;
@@ -1662,7 +1680,7 @@
       tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
       tyreTd.appendChild(tyreCell);
       tr.appendChild(tyreTd);
-      var bestLap = c.bestLap || '';
+      var bestLap = carBestLap(c);
       var bestCls = 'mono col-best';
       if (bestLap) {
         var bestMs = lapMs(bestLap);
@@ -1765,12 +1783,12 @@
     clear(box);
     if (!ONCE) panelTitle(box, '最快圈');
     var cars = ((state && state.cars) || []).slice();
-    var withBest = cars.filter(function (c) { return c.bestLap; });
+    var withBest = cars.filter(function (c) { return carBestLap(c); });
     if (!withBest.length) {
       box.appendChild(el('div', 'sub', '还没有最快圈数据'));
       return;
     }
-    withBest.sort(function (a, b) { return lapMs(a.bestLap) - lapMs(b.bestLap); });
+    withBest.sort(function (a, b) { return lapMs(carBestLap(a)) - lapMs(carBestLap(b)); });
     var wrap = el('div', 'fastest');
     for (var i = 0; i < withBest.length && i < 22; i++) {
       var c = withBest[i];
@@ -1783,7 +1801,7 @@
       who.appendChild(bar);
       who.appendChild(el('span', 'ftla', c.tla || ''));
       d.appendChild(who);
-      d.appendChild(el('span', 'ftime', c.bestLap || '—'));
+      d.appendChild(el('span', 'ftime', carBestLap(c) || '—'));
       wrap.appendChild(d);
     }
     box.appendChild(wrap);
@@ -1933,14 +1951,16 @@
   // 没写的赛道仍从文件起点起、赛段三等分。
   //
   // 奥斯汀 austin-1.svg 逆时针，和比赛方向一致。文件从 T20 接到大直道的那个弯起笔，
-  // 不是起终点。T1 弯心约在原始弧长 0.218。计时线在这段直道上、大约从 T20 走向 T1 的
-  // 三分之一处（直道约 780 m，计时线在 T1 前约 520 m），所以 offset = 0.073。
-  // S1 收到图上 T6 附近（原始 0.36），S2 收到大直线尽头 T12（原始 0.63）。
+  // 不是起终点。T1 弯心约在原始弧长 0.218，直道本身大约收到 0.175。
+  // MultiViewer 的方格旗在这条直道上、靠近 T20 的一侧（大约直道的四分之一，
+  // 不是弯心，也不是 0.073 那个更靠近 T1 的点）。大直道约 780 m，计时线在
+  // 起跑线再往 T20 方向约 300 m，所以进度 0 取原始弧长 0.055。
+  // S1 仍收到图上 T6 附近（原始 0.360），S2 仍收到大直线尽头 T12（原始 0.630）。
   var CIRCUIT_PHASE = {
     'circuits/austin-1.svg': {
-      offset: 0.073,
+      offset: 0.055,
       reverse: false,
-      sectors: [0.287, 0.557]
+      sectors: [0.305, 0.575]
     }
   };
 
@@ -2847,9 +2867,9 @@
     var ahead = TRACKMAP.mapper(p.x + p.tx, p.y + p.ty);
     if (!sc || !ahead || !isFinite(sc.x) || !isFinite(sc.y) || !isFinite(ahead.x) || !isFinite(ahead.y)) return;
     var lw = strokeW > 0 ? strokeW : 6;
-    // 横跨赛道约一整条描边的好几倍，沿行进方向三排，白天黑格、夜间白格都看得清。
-    var cell = Math.max(5, Math.min(9, lw * 1.05));
-    var squares = E.finishGrid(sc, ahead.x - sc.x, ahead.y - sc.y, cell, 8, 3);
+    // 大约一条描边那么宽、沿行进方向两排。格子跟着线宽走，但比线本身细，白天黑格、夜间白格仍分得开。
+    var cell = Math.max(2.2, Math.min(3.4, lw * 0.42));
+    var squares = E.finishGrid(sc, ahead.x - sc.x, ahead.y - sc.y, cell, 4, 2);
     for (var i = 0; i < squares.length; i++) {
       var sq = squares[i];
       var poly = svgEl('polygon', 'tm-finish-sq ' + (sq.light ? 'light' : 'dark'));
@@ -2863,7 +2883,7 @@
       poly.setAttribute('points', pts);
       poly.setAttribute('fill', sq.light ? '#f4f6f8' : '#141414');
       poly.setAttribute('stroke', sq.light ? '#141414' : '#f7f7f7');
-      poly.setAttribute('stroke-width', '1');
+      poly.setAttribute('stroke-width', '0.4');
       g.appendChild(poly);
     }
   }
