@@ -161,6 +161,51 @@ files.forEach(function (f) {
   assert(isFinite(minX) && isFinite(maxY), f + ' finite');
 });
 
+var square = E.buildArc([
+  { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 0, y: 0 }
+]);
+var q2 = E.sliceArc(square, 0.25, 0.5);
+assert(q2.length >= 2, 'slice has ends');
+near(q2[0].x, 100, 0.2, 'slice start x');
+near(q2[0].y, 0, 0.2, 'slice start y');
+near(q2[q2.length - 1].x, 100, 0.2, 'slice end x');
+near(q2[q2.length - 1].y, 100, 0.2, 'slice end y');
+var qlen = 0;
+for (var qi = 1; qi < q2.length; qi++) {
+  var qdx = q2[qi].x - q2[qi - 1].x;
+  var qdy = q2[qi].y - q2[qi - 1].y;
+  qlen += Math.sqrt(qdx * qdx + qdy * qdy);
+}
+near(qlen, 100, 1, 'slice is one side');
+var whole = E.sliceArc(square, 0, 1);
+near(whole[0].x, 0, 0.1, 'whole start');
+near(whole[whole.length - 1].x, 0, 0.1, 'whole end x');
+near(whole[whole.length - 1].y, 0, 0.1, 'whole end does not wrap early');
+
+var localY = E.marshalFlagPlan({
+  level: 2, globalLevel: 2, yellowSectors: [10, '3'], doubleYellowSectors: [3]
+}, 19);
+assert(localY.full === '', 'local yellow is not full course');
+assert(localY.sectors.length === 2, 'two flagged sectors');
+assert(localY.sectors[0].sec === 3 && localY.sectors[0].kind === 'doubleYellow', 'double yellow wins');
+assert(localY.sectors[1].sec === 10 && localY.sectors[1].kind === 'yellow', 'sector 10 yellow');
+
+var scLocal = E.marshalFlagPlan({
+  level: 5, globalLevel: 5, yellowSectors: [10], doubleYellowSectors: []
+}, 19);
+assert(scLocal.full === 'sc' && scLocal.sectors.length === 1, 'SC plus local yellow');
+
+var red = E.marshalFlagPlan({
+  level: 6, globalLevel: 6, yellowSectors: [10], doubleYellowSectors: [2]
+}, 19);
+assert(red.full === 'red' && red.sectors.length === 0, 'red flag clears stretches');
+
+var vsc = E.marshalFlagPlan({ level: 4, globalLevel: 4, yellowSectors: [] }, 19);
+assert(vsc.full === 'vsc' && vsc.sectors.length === 0, 'vsc full lap');
+
+var bareYellow = E.marshalFlagPlan({ level: 2, globalLevel: 2, yellowSectors: [] }, 19);
+assert(bareYellow.full === 'yellow' && bareYellow.sectors.length === 0, 'yellow with no sector list');
+
 if (failed) {
   console.error(failed + ' failed');
   process.exit(1);

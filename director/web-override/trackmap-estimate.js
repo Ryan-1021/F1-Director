@@ -474,6 +474,76 @@
     return { pts: src, cum: cum, total: total };
   }
 
+  /**
+   * 裁判区段旗语 → 沿轮廓的涂色计划。
+   * 数据是 TrackState：yellowSectors / doubleYellowSectors 是 1 起的区段号，
+   * globalLevel 4/5/6 是虚拟安全车 / 安全车 / 红旗（整圈）。
+   * 没有弯道实测桩，调用方按 count 把圈程等分。
+   */
+  function marshalFlagPlan(track, ringCount) {
+    var t = track || {};
+    var n = parseInt(ringCount, 10);
+    if (!isFinite(n) || n < 0) n = 0;
+    if (n > 64) n = 64;
+    var level = Number(t.level);
+    if (!isFinite(level)) level = 0;
+    var global = (t.globalLevel == null || t.globalLevel === '') ? level : Number(t.globalLevel);
+    if (!isFinite(global)) global = level;
+    var dy = {};
+    var ye = {};
+    var listed = 0;
+    function take(list, bag) {
+      var arr = list || [];
+      for (var i = 0; i < arr.length; i++) {
+        var s = parseInt(arr[i], 10);
+        if (s > 0) { bag[s] = 1; listed++; }
+      }
+    }
+    take(t.doubleYellowSectors, dy);
+    take(t.yellowSectors, ye);
+    var full = '';
+    if (global >= 6 || level >= 6) full = 'red';
+    else if (global >= 5 || level >= 5) full = 'sc';
+    else if (global >= 4 || level >= 4) full = 'vsc';
+    else if ((global >= 2 || level >= 2) && !listed) full = 'yellow';
+    var sectors = [];
+    if (full !== 'red' && n > 0) {
+      for (var sec = 1; sec <= n; sec++) {
+        if (dy[sec]) sectors.push({ sec: sec, kind: 'doubleYellow' });
+        else if (ye[sec]) sectors.push({ sec: sec, kind: 'yellow' });
+      }
+    }
+    return { full: full, sectors: sectors, count: n };
+  }
+
+  /** 弧长区间 [frac0, frac1] 上的折线点。frac1 = 1 取路径终点，不绕回起点。 */
+  function sliceArc(arc, frac0, frac1) {
+    var pts = arc && arc.pts;
+    var cum = arc && arc.cum;
+    var total = (arc && arc.total) || 0;
+    if (!pts || pts.length < 2 || total <= 0) return [];
+    if (!isFinite(frac0) || frac0 < 0) frac0 = 0;
+    if (!isFinite(frac1) || frac1 > 1) frac1 = 1;
+    if (frac1 <= frac0) return [];
+    var a = frac0 * total;
+    var b = frac1 * total;
+    var out = [];
+    function push(p) {
+      if (!p || !isFinite(p.x) || !isFinite(p.y)) return;
+      var last = out[out.length - 1];
+      if (last && Math.abs(last.x - p.x) < 1e-4 && Math.abs(last.y - p.y) < 1e-4) return;
+      out.push({ x: p.x, y: p.y });
+    }
+    if (frac0 <= 0) push(pts[0]);
+    else push(pointOnArc(arc, frac0));
+    for (var i = 1; i < pts.length - 1; i++) {
+      if (cum[i] > a + 1e-4 && cum[i] < b - 1e-4) push(pts[i]);
+    }
+    if (frac1 >= 1) push(pts[pts.length - 1]);
+    else push(pointOnArc(arc, frac1));
+    return out;
+  }
+
   function pointOnArc(arc, frac) {
     var pts = arc.pts;
     var cum = arc.cum;
@@ -736,6 +806,8 @@
     stepMotion: stepMotion,
     buildArc: buildArc,
     pointOnArc: pointOnArc,
+    sliceArc: sliceArc,
+    marshalFlagPlan: marshalFlagPlan,
     sampleSvgPath: sampleSvgPath,
     longestPathD: longestPathD,
     outlineFromSvg: outlineFromSvg

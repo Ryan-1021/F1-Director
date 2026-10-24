@@ -1388,6 +1388,8 @@ html[data-theme="day"] .b-trackmap .tm-wrap {
 }
 .tm-line-bg { stroke: rgba(176, 190, 197, 0.40); }
 .tm-line-fg { stroke: rgba(236, 239, 241, 0.90); }
+.tm-flag-full,
+.tm-flag-sec { stroke-linecap: round; stroke-linejoin: round; }
 html[data-theme="day"] .tm-line-bg { stroke: rgba(55, 71, 79, 0.45); }
 html[data-theme="day"] .tm-line-fg { stroke: rgba(255, 255, 255, 0.94); }
 .tm-empty {
