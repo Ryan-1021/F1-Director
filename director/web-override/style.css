@@ -1344,7 +1344,7 @@ html[data-theme="day"] .svalue.hero {
 .tm-svg {
   position: absolute;
   inset: 8%;
-  display: none; /* 未校准 SVG 不叠 OpenF1 坐标；轮廓由 canvas 同系采样绘制 */
+  display: none; /* 旧的底图叠层。轮廓由采样后的路径绘制 */
   align-items: center;
   justify-content: center;
   pointer-events: none;

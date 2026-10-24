@@ -2100,7 +2100,7 @@
     syncTrackmapHead(el, boardId);
   }
 
-  /** Prefer in-place board switch (keeps JS/OpenF1 cache). Fall back to iframe recreate. */
+  /** Prefer in-place board switch (keeps the iframe and its trackmap cache). Fall back to iframe recreate. */
   function applyBoardToPanel(el, boardId) {
     var body = el.querySelector('.p-body');
     if (!body) return;
