@@ -1887,6 +1887,7 @@
   // ---------------------------------------------------------------
   // 轮廓只来自当前赛道的本地 SVG（f1db）。对不上的赛道在本地报「未识别」，不请求外部接口。
   // 车位沿轮廓弧长，用赛段 / 迷你赛段，正赛再加相对领先者的时间差。
+  // 旗语用 TrackState 的裁判区段号，沿同一条轮廓等分上色。
   // 车标节点只建一次，之后只改 transform。圆环板 ring 不动。
 
   var TRACKMAP = {
@@ -1917,7 +1918,9 @@
     estLapMs: 90000,
     estFrozen: false,
     livePlan: null,
-    planMeta: null
+    planMeta: null,
+    flagGeomKey: '',
+    flagPaintKey: ''
   };
 
   var TM_EST_TITLE = '估计位置：沿赛道轮廓按赛段/迷你赛段（练习、排位）或正赛与领先者的时间差推算，不是官方 GPS。维修区只是向赛道内侧偏一点；安全车、起跑线对齐都不精确。';
@@ -2589,12 +2592,18 @@
     svg.setAttribute('aria-label', '估计赛道图');
     var bg = svgEl('path', 'tm-line tm-line-bg');
     var fg = svgEl('path', 'tm-line tm-line-fg');
+    var flags = svgEl('g', 'tm-flags');
+    var fullFlag = svgEl('path', 'tm-line tm-flag-full');
+    fullFlag.setAttribute('fill', 'none');
+    fullFlag.style.display = 'none';
+    flags.appendChild(fullFlag);
     var cars = svgEl('g', 'tm-cars');
     var empty = svgEl('text', 'tm-empty');
     empty.setAttribute('text-anchor', 'middle');
     empty.setAttribute('dominant-baseline', 'middle');
     svg.appendChild(bg);
     svg.appendChild(fg);
+    svg.appendChild(flags);
     svg.appendChild(cars);
     svg.appendChild(empty);
     wrap.appendChild(svg);
@@ -2651,6 +2660,7 @@
       TRACKMAP.screenCentroid = null;
       if (bg) bg.setAttribute('d', '');
       if (fg) fg.setAttribute('d', '');
+      clearTrackmapFlagGeometry(svg);
       if (empty) {
         empty.textContent = TRACKMAP.status || '估计 · 正在载入赛道轮廓';
         empty.setAttribute('x', String(Math.round(w / 2)));
@@ -2706,6 +2716,155 @@
     var lw = Math.max(4, Math.min(12, 5 + Math.sqrt(zoom) * 3));
     if (bg) bg.setAttribute('stroke-width', lw.toFixed(1));
     if (fg) fg.setAttribute('stroke-width', Math.max(1.4, lw * 0.28).toFixed(1));
+    paintTrackmapFlags(svg);
+  }
+
+  var TM_FLAG_NIGHT = {
+    yellow: '#fdd835',
+    doubleYellow: '#ff9800',
+    vsc: '#ffe082',
+    sc: '#ffb300',
+    red: '#e10600'
+  };
+  var TM_FLAG_DAY = {
+    yellow: '#f9a825',
+    doubleYellow: '#ef6c00',
+    vsc: '#f9a825',
+    sc: '#e65100',
+    red: '#d32f2f'
+  };
+
+  function ensureFlagLayer(svg) {
+    var g = svg.querySelector('.tm-flags');
+    if (!g) {
+      g = svgEl('g', 'tm-flags');
+      var full = svgEl('path', 'tm-line tm-flag-full');
+      full.setAttribute('fill', 'none');
+      full.style.display = 'none';
+      g.appendChild(full);
+      var cars = svg.querySelector('.tm-cars');
+      if (cars) svg.insertBefore(g, cars);
+      else svg.appendChild(g);
+    } else if (!g.querySelector('.tm-flag-full')) {
+      var fullPath = svgEl('path', 'tm-line tm-flag-full');
+      fullPath.setAttribute('fill', 'none');
+      fullPath.style.display = 'none';
+      g.insertBefore(fullPath, g.firstChild);
+    }
+    return g;
+  }
+
+  function clearTrackmapFlagGeometry(svg) {
+    TRACKMAP.flagGeomKey = '';
+    TRACKMAP.flagPaintKey = '';
+    if (!svg) return;
+    var g = svg.querySelector('.tm-flags');
+    if (!g) return;
+    var nodes = g.querySelectorAll('path');
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].setAttribute('d', '');
+      nodes[i].style.display = 'none';
+    }
+  }
+
+  function layoutTrackmapFlags(svg) {
+    if (!svg) return;
+    var ring = (state && state.ring) || {};
+    var n = parseInt(ring.count, 10) || 0;
+    if (n < 0) n = 0;
+    if (n > 64) n = 64;
+    var geom = [
+      TRACKMAP.viewKey || '',
+      n,
+      TRACKMAP.outline.length,
+      TRACKMAP.mapper ? 1 : 0
+    ].join('|');
+    if (geom === TRACKMAP.flagGeomKey) return;
+    TRACKMAP.flagGeomKey = geom;
+    TRACKMAP.flagPaintKey = '';
+    var g = ensureFlagLayer(svg);
+    var full = g.querySelector('.tm-flag-full');
+    var fg = svg.querySelector('.tm-line-fg');
+    var baseD = (fg && fg.getAttribute('d')) || '';
+    if (full && full.getAttribute('d') !== baseD) full.setAttribute('d', baseD);
+    var E = window.TrackmapEstimate;
+    var canSlice = !!(E && E.sliceArc && TRACKMAP.mapper && TRACKMAP.arc &&
+      TRACKMAP.arc.total > 0 && n > 0 && baseD);
+    var keep = {};
+    if (canSlice) {
+      for (var i = 1; i <= n; i++) {
+        var node = g.querySelector('.tm-flag-sec[data-sec="' + i + '"]');
+        if (!node) {
+          node = svgEl('path', 'tm-line tm-flag-sec');
+          node.setAttribute('data-sec', String(i));
+          node.setAttribute('fill', 'none');
+          node.style.display = 'none';
+          g.appendChild(node);
+        }
+        var pts = E.sliceArc(TRACKMAP.arc, (i - 1) / n, i / n);
+        var d = '';
+        for (var p = 0; p < pts.length; p++) {
+          var mp = TRACKMAP.mapper(pts[p].x, pts[p].y);
+          d += (p ? 'L' : 'M') + mp.x.toFixed(1) + ' ' + mp.y.toFixed(1);
+        }
+        if (node.getAttribute('d') !== d) node.setAttribute('d', d);
+        keep[i] = 1;
+      }
+    }
+    var olds = g.querySelectorAll('.tm-flag-sec');
+    for (var k = olds.length - 1; k >= 0; k--) {
+      var sec = parseInt(olds[k].getAttribute('data-sec'), 10);
+      if (!keep[sec]) olds[k].parentNode.removeChild(olds[k]);
+    }
+  }
+
+  function paintTrackmapFlags(svg) {
+    if (!svg) return;
+    layoutTrackmapFlags(svg);
+    var E = window.TrackmapEstimate;
+    var ring = (state && state.ring) || {};
+    var track = (state && state.track) || {};
+    var n = parseInt(ring.count, 10) || 0;
+    var plan = (E && E.marshalFlagPlan) ? E.marshalFlagPlan(track, n) : { full: '', sectors: [] };
+    var day = document.documentElement.getAttribute('data-theme') === 'day';
+    var pal = day ? TM_FLAG_DAY : TM_FLAG_NIGHT;
+    var zoom = TRACKMAP.viewZoom || 1;
+    var lw = Math.max(4, Math.min(12, 5 + Math.sqrt(zoom) * 3));
+    var fullW = Math.max(2.4, lw * 0.7).toFixed(1);
+    var secW = Math.max(3.2, lw * 0.86).toFixed(1);
+    var sig = (day ? 'd' : 'n') + '|' + (plan.full || '') + '|' + fullW + '|' + secW + '|';
+    var sectors = plan.sectors || [];
+    for (var s = 0; s < sectors.length; s++) sig += sectors[s].sec + sectors[s].kind + ',';
+    if (sig === TRACKMAP.flagPaintKey) return;
+    TRACKMAP.flagPaintKey = sig;
+    var g = svg.querySelector('.tm-flags');
+    if (!g) return;
+    var full = g.querySelector('.tm-flag-full');
+    if (full) {
+      var fullCol = plan.full && pal[plan.full];
+      if (fullCol && full.getAttribute('d')) {
+        full.style.display = '';
+        if (full.getAttribute('stroke') !== fullCol) full.setAttribute('stroke', fullCol);
+        if (full.getAttribute('stroke-width') !== fullW) full.setAttribute('stroke-width', fullW);
+      } else if (full.style.display !== 'none') {
+        full.style.display = 'none';
+      }
+    }
+    var want = {};
+    for (var i = 0; i < sectors.length; i++) want[sectors[i].sec] = sectors[i].kind;
+    var nodes = g.querySelectorAll('.tm-flag-sec');
+    for (var j = 0; j < nodes.length; j++) {
+      var secNo = parseInt(nodes[j].getAttribute('data-sec'), 10);
+      var kind = want[secNo];
+      var col = kind && pal[kind];
+      if (col && nodes[j].getAttribute('d')) {
+        nodes[j].style.display = '';
+        if (nodes[j].getAttribute('stroke') !== col) nodes[j].setAttribute('stroke', col);
+        if (nodes[j].getAttribute('stroke-width') !== secW) nodes[j].setAttribute('stroke-width', secW);
+      } else if (nodes[j].style.display !== 'none') {
+        nodes[j].style.display = 'none';
+      }
+    }
   }
 
   function ensureMarker(num) {
@@ -2861,6 +3020,8 @@
       TRACKMAP.status = '估计 · 等待计时';
       TRACKMAP.viewDirty = true;
       TRACKMAP.viewKey = '';
+      TRACKMAP.flagGeomKey = '';
+      TRACKMAP.flagPaintKey = '';
       resetTrackmapView();
       stopTrackmapPoll();
       restoreTrackmapCache(rk);
@@ -2874,6 +3035,7 @@
     startTrackmapMotion();
     if (TRACKMAP.viewDirty || !TRACKMAP.mapper) drawTrackmap(box);
     else updateMarkerTransforms(Date.now());
+    paintTrackmapFlags(box.querySelector('svg.tm-map'));
   }
 
   var RENDER = {
