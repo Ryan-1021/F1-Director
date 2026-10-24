@@ -251,32 +251,112 @@ var miniCar = {
     { value: '', segments: [] }
   ]
 };
+var austinPhase = (function () {
+  var src = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  var block = src.split("'circuits/austin-1.svg'")[1].split('}')[0];
+  var sectors = /sectors:\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]/.exec(block);
+  return {
+    offset: +/offset:\s*([0-9.]+)/.exec(block)[1],
+    reverse: /reverse:\s*true/.test(block),
+    sectors: [+sectors[1], +sectors[2]]
+  };
+})();
 var evenMini = E.progressFromTiming(miniCar);
-var austinMini = E.progressFromTiming(miniCar, [0.305, 0.575]);
+var austinMini = E.progressFromTiming(miniCar, austinPhase.sectors);
 near(evenMini.frac, 0.5 / 3, 0.001, 'default S1 is still a third');
-near(austinMini.frac, 0.305 * 0.5, 0.001, 'Austin S1 uses the shorter sector');
+near(austinMini.frac, austinPhase.sectors[0] * 0.5, 0.001, 'Austin S1 uses the sector end');
+assert(austinPhase.sectors[0] > 0.2 && austinPhase.sectors[0] < 0.45, 'Austin S1 ends before the back straight');
+assert(austinPhase.sectors[1] > 0.6 && austinPhase.sectors[1] < 0.85, 'Austin S2 ends after Turn 12');
 
 var austinSvg = fs.readFileSync(path.join(__dirname, 'circuits', 'austin-1.svg'), 'utf8');
 var austinRaw = E.outlineFromSvg(austinSvg, 4);
+function austinResample(pts, n) {
+  var work = pts.slice();
+  if (Math.hypot(work[0].x - work[work.length - 1].x, work[0].y - work[work.length - 1].y) < 1) work.pop();
+  var cum = [0];
+  var total = 0;
+  var i;
+  for (i = 1; i < work.length; i++) {
+    total += Math.hypot(work[i].x - work[i - 1].x, work[i].y - work[i - 1].y);
+    cum.push(total);
+  }
+  var close = Math.hypot(work[work.length - 1].x - work[0].x, work[work.length - 1].y - work[0].y);
+  var per = total + close;
+  var samples = [];
+  for (var k = 0; k < n; k++) {
+    var d = (k / n) * per;
+    var a, b, segStart, segLen;
+    if (d <= total) {
+      var j = 1;
+      while (j < cum.length && cum[j] < d) j++;
+      if (j >= work.length) j = work.length - 1;
+      a = work[j - 1];
+      b = work[j];
+      segStart = cum[j - 1];
+      segLen = cum[j] - cum[j - 1];
+    } else {
+      a = work[work.length - 1];
+      b = work[0];
+      segStart = total;
+      segLen = close;
+    }
+    var u = segLen > 1e-9 ? (d - segStart) / segLen : 0;
+    samples.push({
+      f: k / n,
+      x: a.x + (b.x - a.x) * u,
+      y: a.y + (b.y - a.y) * u,
+      h: Math.atan2(b.y - a.y, b.x - a.x)
+    });
+  }
+  return samples;
+}
+function austinAngDiff(a, b) {
+  var d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+function austinStraights(samples) {
+  var runs = [];
+  var run = null;
+  for (var k = 1; k < samples.length; k++) {
+    var straight = Math.abs(austinAngDiff(samples[k - 1].h, samples[k].h)) < 0.07;
+    if (straight) {
+      if (!run) run = { f0: samples[k - 1].f, f1: samples[k].f };
+      run.f1 = samples[k].f;
+    } else if (run) {
+      runs.push(run);
+      run = null;
+    }
+  }
+  if (run) runs.push(run);
+  return runs.filter(function (r) { return r.f1 - r.f0 > 0.08; })
+    .sort(function (a, b) { return (b.f1 - b.f0) - (a.f1 - a.f0); });
+}
+var austinSamples = austinResample(austinRaw, 200);
+var austinRuns = austinStraights(austinSamples);
+assert(austinRuns.length >= 2, 'Austin has a back straight and a pit straight ' + JSON.stringify(austinRuns));
+var austinBack = austinRuns[0];
+var austinPit = austinRuns[1];
+assert(austinBack.f0 < 0.03, 'longest straight is the T11–T12 straight off the file start ' + austinBack.f0);
+assert(austinPhase.reverse === false, 'Austin racing direction matches the SVG, reverse stays false');
+assert(austinPhase.offset > austinBack.f1 + 0.15, 'timing line is not on the T11 back straight ' + austinPhase.offset);
+var pitSpan = austinPit.f1 - austinPit.f0;
+var alongPit = (austinPhase.offset - austinPit.f0) / pitSpan;
+assert(alongPit > -0.05 && alongPit < 0.4,
+  'timing line is on the T20 side of the pit straight ' + alongPit + ' ' + JSON.stringify(austinPit));
 var austinArc = E.buildArc(austinRaw);
-var austinTip = E.pointOnArc(austinArc, 0);
-var austinSf = E.pointOnArc(austinArc, 0.055);
-var austinT1 = E.pointOnArc(austinArc, 0.218);
+var austinSf = E.pointOnArc(austinArc, austinPhase.offset);
+var austinT11 = E.pointOnArc(austinArc, 0);
 function hyp(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
-assert(hyp(austinSf, austinTip) > 20, 'Austin timing line is not the SVG start');
-assert(hyp(austinSf, austinT1) > 20, 'Austin timing line is not the T1 apex');
-var toT1x = austinT1.x - austinTip.x;
-var toT1y = austinT1.y - austinTip.y;
-var alongT1 = ((austinSf.x - austinTip.x) * toT1x + (austinSf.y - austinTip.y) * toT1y) /
-  (toT1x * toT1x + toT1y * toT1y);
-assert(alongT1 > 0.20 && alongT1 < 0.32, 'Austin timing line stays on the T20 side of the straight ' + alongT1);
-var austinOriented = E.orientClosedOutline(austinRaw, 0.055, false);
+assert(hyp(austinSf, austinT11) > 80, 'Austin timing line is not Turn 11');
+var austinOriented = E.orientClosedOutline(austinRaw, austinPhase.offset, austinPhase.reverse);
 var austinZero = E.pointOnArc(E.buildArc(austinOriented), 0);
 near(austinZero.x, austinSf.x, 1.5, 'progress 0 sits on the Austin timing line');
 near(austinZero.y, austinSf.y, 1.5, 'progress 0 y');
-var austinT1b = E.pointOnArc(E.buildArc(austinOriented), 0.163);
-near(austinT1b.x, austinT1.x, 4, 'T1 stays on the hairpin after the shift');
-near(austinT1b.y, austinT1.y, 4, 'T1 y after the shift');
+var austinAhead = E.pointOnArc(E.buildArc(austinOriented), 0.04);
+var austinT1 = E.pointOnArc(austinArc, austinPit.f1);
+assert(hyp(austinAhead, austinT1) < hyp(austinZero, austinT1), 'racing direction leaves the line toward Turn 1');
 
 // 弧长：中点大致在线段中间。
 var arc = E.buildArc([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
