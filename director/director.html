@@ -787,6 +787,18 @@
     margin-right: 2px;
   }
   .p-head .tm-head.show { display: inline-flex; }
+  .p-head .tm-est {
+    flex: 0 0 auto;
+    font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.45;
+    color: #fff;
+    background: #e10600;
+    border-radius: 999px;
+    padding: 0 6px;
+  }
   .p-head .tm-head-status {
     flex: 0 0 auto;
     white-space: nowrap;
@@ -3071,6 +3083,7 @@
         boardDdHtml(st.board) +
         '<span class="spacer"></span>' +
         '<span class="tm-head" data-tm-head>' +
+          '<span class="tm-est" title="位置按计时估计，不是官方 GPS。赛段或正赛时间差沿轮廓推算；维修区只是向内侧偏一点。">估计</span>' +
           '<span class="tm-head-status" title=""></span>' +
           '<span class="tm-hint" role="img" aria-label="赛道图操作说明" title="滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位">ℹ</span>' +
           '<span class="tm-head-tools">' +

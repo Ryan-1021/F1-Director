@@ -878,7 +878,7 @@ table.sectors th.num {
 .trk-status.trk-stopped .trk-status-icon {
   width: 2.55em;
   height: 1.35em;
-}
+}
 .trk-status.trk-empty {
   min-width: 0;
   width: 0;
@@ -1364,6 +1364,69 @@ html[data-theme="day"] .svalue.hero {
   height: 100%;
   z-index: 1;
   display: block;
+}
+.b-trackmap .tm-wrap {
+  background: #080b10;
+}
+html[data-theme="day"] .b-trackmap .tm-wrap {
+  background: #d5dee9;
+}
+.tm-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+.tm-line {
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.tm-line-bg { stroke: rgba(176, 190, 197, 0.40); }
+.tm-line-fg { stroke: rgba(236, 239, 241, 0.90); }
+html[data-theme="day"] .tm-line-bg { stroke: rgba(55, 71, 79, 0.45); }
+html[data-theme="day"] .tm-line-fg { stroke: rgba(255, 255, 255, 0.94); }
+.tm-empty {
+  font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  fill: rgba(176, 190, 197, 0.92);
+}
+html[data-theme="day"] .tm-empty { fill: rgba(69, 90, 100, 0.95); }
+.tm-tla {
+  font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  fill: #fff;
+  stroke: none;
+}
+html[data-theme="day"] .tm-tla { fill: #102027; }
+.tm-dot {
+  stroke: rgba(255, 255, 255, 0.88);
+  stroke-width: 1.5;
+}
+html[data-theme="day"] .tm-dot { stroke: rgba(0, 0, 0, 0.55); }
+.tm-car.tm-pit .tm-dot,
+.tm-car.tm-out .tm-dot {
+  stroke: #e10600;
+  stroke-width: 2.25;
+}
+.tm-car.tm-out .tm-dot { stroke-dasharray: 2.2 1.5; }
+.tm-est {
+  flex: 0 0 auto;
+  font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.45;
+  color: #fff;
+  background: #e10600;
+  border-radius: 999px;
+  padding: 0 6px;
 }
 /* Legacy map-corner overlays: never reclaim space if an old build left them. */
 .tm-wrap > .tm-status,

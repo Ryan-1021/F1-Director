@@ -1883,43 +1883,67 @@
 
 
   // ---------------------------------------------------------------
-  // 赛道图（真实赛道轮廓 + 车位点）
+  // 赛道图（赛道轮廓 + 计时估计车位）
   // ---------------------------------------------------------------
-  // 数据优先 state.carPositions（Java 解析的官方 Position.z）；
-  // 没有则用 OpenF1 /v1/location（与 Position.z 同坐标系）。
-  // 圆环板 ring 不动。
+  // 轮廓：当前赛道的本地 SVG（f1db），没有再退回 OpenF1 单车历史轨迹。
+  // 车位：不用官方 Position.z，也不拉 OpenF1 实时 location。
+  // 沿轮廓弧长，用赛段 / 迷你赛段，正赛再加相对领先者的时间差。
+  // 车标节点只建一次，之后只改 transform。圆环板 ring 不动。
 
   var TRACKMAP = {
     sessionKey: null,
     sessionMeta: null,
-    positions: [],       // [{number,x,y,z,status,tla,teamColour}]
-    outline: [],         // [{x,y}] 赛道轮廓采样
-    source: '',          // official | openf1 | ''
-    status: '等待位置数据',
+    positions: [],
+    outline: [],
+    outlineSource: '',   // svg | openf1 | ''
+    arc: null,
+    source: '',
+    status: '估计 · 等待计时',
     timer: null,
     resolving: false,
     lastRaceKey: '',
     svgPath: '',
     svgOk: false,
+    svgRequested: '',
+    outlineToken: 0,
+    outlineError: false,
     pollBusy: false,
     outlineBusy: false,
     viewZoom: 1.05,
     viewPanX: 0,
     viewPanY: 0,
-    viewRotDeg: 0
+    viewRotDeg: 0,
+    motion: {},
+    nodes: {},
+    carsG: null,
+    viewDirty: true,
+    viewKey: '',
+    viewW: 0,
+    viewH: 0,
+    mapper: null,
+    screenCentroid: null,
+    raf: 0,
+    estLapMs: 90000,
+    estFrozen: false,
+    livePlan: null,
+    planMeta: null
   };
+
+  var TM_EST_TITLE = '估计位置：沿赛道轮廓按赛段/迷你赛段（练习、排位）或正赛与领先者的时间差推算，不是官方 GPS。维修区只是向赛道内侧偏一点；安全车、起跑线对齐都不精确。';
 
   var TM_CACHE_KEY = 'f1-trackmap-cache-v1';
 
   function saveTrackmapCache() {
     try {
-      if (!TRACKMAP.lastRaceKey || !TRACKMAP.sessionKey) return;
+      if (!TRACKMAP.lastRaceKey) return;
       if (!TRACKMAP.outline || TRACKMAP.outline.length < 30) return;
+      if (!TRACKMAP.sessionKey && TRACKMAP.outlineSource !== 'svg') return;
       sessionStorage.setItem(TM_CACHE_KEY, JSON.stringify({
         raceKey: TRACKMAP.lastRaceKey,
         sessionKey: TRACKMAP.sessionKey,
         sessionMeta: TRACKMAP.sessionMeta,
         outline: TRACKMAP.outline,
+        outlineSource: TRACKMAP.outlineSource || '',
         status: TRACKMAP.status,
         savedAt: Date.now()
       }));
@@ -1937,7 +1961,11 @@
       TRACKMAP.sessionKey = c.sessionKey || null;
       TRACKMAP.sessionMeta = c.sessionMeta || null;
       TRACKMAP.outline = c.outline;
-      if (c.status) TRACKMAP.status = c.status;
+      TRACKMAP.outlineSource = c.outlineSource || 'openf1';
+      TRACKMAP.arc = window.TrackmapEstimate ? window.TrackmapEstimate.buildArc(c.outline) : null;
+      TRACKMAP.viewDirty = true;
+      TRACKMAP.viewKey = '';
+      if (c.status && String(c.status).indexOf('估计') === 0) TRACKMAP.status = c.status;
       return true;
     } catch (e) { return false; }
   }
@@ -2009,13 +2037,13 @@
         badge.appendChild(hintEl);
       }
       textEl.textContent = status;
-      textEl.title = status;
+      textEl.title = TM_EST_TITLE;
       hintEl.title = TM_VIEW_HINT;
     }
     var heads = document.querySelectorAll('.tm-head-status');
     for (var i = 0; i < heads.length; i++) {
       heads[i].textContent = status;
-      heads[i].title = status;
+      heads[i].title = TM_EST_TITLE;
     }
     var hints = document.querySelectorAll('.tm-hint');
     for (var h = 0; h < hints.length; h++) hints[h].title = TM_VIEW_HINT;
@@ -2053,9 +2081,12 @@
 
   function buildTrackmapHeadChrome(box) {
     var bar = el('div', 'tm-head-bar');
+    var est = el('span', 'tm-est');
+    est.textContent = '估计';
+    est.title = TM_EST_TITLE;
     var st = el('span', 'tm-head-status');
     st.textContent = trackmapStatusText();
-    st.title = trackmapStatusText();
+    st.title = TM_EST_TITLE;
     var hint = el('span', 'tm-hint');
     hint.setAttribute('role', 'img');
     hint.setAttribute('aria-label', '赛道图操作说明');
@@ -2063,6 +2094,7 @@
     hint.title = TM_VIEW_HINT;
     var tools = el('span', 'tm-head-tools');
     tools.innerHTML = trackmapRotMarkup();
+    bar.appendChild(est);
     bar.appendChild(st);
     bar.appendChild(hint);
     bar.appendChild(tools);
@@ -2426,15 +2458,8 @@
   }
 
   function applyOfficialPositions() {
-    var cp = state && state.carPositions;
-    if (!cp || !cp.cars || !cp.cars.length) return false;
-    // Ignore stale empty / never-updated
-    if (!cp.updatedAt) return false;
-    TRACKMAP.positions = enrichPositions(cp.cars);
-    TRACKMAP.source = 'official';
-    TRACKMAP.status = '官方 Position.z · ' + TRACKMAP.positions.length + ' 车';
-    // 轮廓仍用 OpenF1 同系采样（若有）；切勿把多车瞬时点连成折线
-    return true;
+    // 这版车位不读官方 Position.z。轮廓仍可来自历史轨迹，但标记不跟 GPS。
+    return false;
   }
 
   // 不要用「同一时刻多台车」拼轮廓：连线顺序不是圈上顺序，会画出乱麻。
@@ -2484,25 +2509,83 @@
   }
 
   function tickTrackmapData() {
-    if (applyOfficialPositions()) {
-      TRACKMAP.frozen = false;
-      if (document.querySelector('.b-trackmap')) {
-        var box = document.querySelector('.b-trackmap');
-        if (box) drawTrackmap(box);
-      }
-      // Official cars paint immediately; outline still needs OpenF1 (same coords).
-      if (TRACKMAP.outline.length < 30) {
+    loadTrackOutline();
+    if (TRACKMAP.outlineSource && TRACKMAP.outline.length >= 30) stopTrackmapPoll();
+  }
+
+  function adoptOutline(pts, source) {
+    if (!pts || pts.length < 30) return false;
+    if (source !== 'svg' && TRACKMAP.outlineSource === 'svg' && TRACKMAP.outline.length >= 30) return false;
+    TRACKMAP.outline = pts;
+    TRACKMAP.outlineSource = source;
+    TRACKMAP.outlineError = false;
+    TRACKMAP.arc = window.TrackmapEstimate ? window.TrackmapEstimate.buildArc(pts) : null;
+    TRACKMAP.viewDirty = true;
+    TRACKMAP.viewKey = '';
+    saveTrackmapCache();
+    var box = document.querySelector('.b-trackmap');
+    if (box) drawTrackmap(box);
+    return true;
+  }
+
+  function loadTrackOutline() {
+    if (TRACKMAP.outlineSource === 'svg' && TRACKMAP.outline.length >= 30) return;
+    var r = (state && state.race) || {};
+    var svgRel = circuitSvgFor(r.circuit, r.meeting);
+    if (svgRel) {
+      loadSvgOutline(svgRel);
+      return;
+    }
+    if (TRACKMAP.outline.length >= 30) return;
+    if (!r.circuit && !r.meeting) {
+      TRACKMAP.status = '等待场次信息';
+      return;
+    }
+    if (!TRACKMAP.sessionKey) resolveOpenF1Session();
+    else loadOpenF1Outline();
+  }
+
+  function loadSvgOutline(rel) {
+    var url = '/' + String(rel || '').replace(/^\//, '');
+    if (!url || url === '/') return;
+    if (TRACKMAP.svgRequested === url) return;
+    TRACKMAP.svgRequested = url;
+    if (!window.TrackmapEstimate) {
+      TRACKMAP.status = '估计模块未加载';
+      TRACKMAP.outlineError = true;
+      return;
+    }
+    var token = ++TRACKMAP.outlineToken;
+    fetch(url, { cache: 'force-cache' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('svg ' + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        if (token !== TRACKMAP.outlineToken) return;
+        var pts = window.TrackmapEstimate.outlineFromSvg(text, 4);
+        if (!pts || pts.length < 40) throw new Error('short outline');
+        // SVG y 向下；mapPoint 按 y 向上翻回屏幕，所以这里先取负。
+        for (var i = 0; i < pts.length; i++) pts[i] = { x: pts[i].x, y: -pts[i].y };
+        adoptOutline(pts, 'svg');
+        refreshEstimateStatus();
+      })
+      .catch(function () {
+        if (token !== TRACKMAP.outlineToken) return;
+        TRACKMAP.svgRequested = '';
+        if (!(racesHaveCircuit())) {
+          TRACKMAP.outlineError = true;
+          refreshEstimateStatus();
+          return;
+        }
         if (!TRACKMAP.sessionKey) resolveOpenF1Session();
         else loadOpenF1Outline();
-      }
-      return;
-    }
-    if (TRACKMAP.frozen && TRACKMAP.positions.length) return;
-    if (!TRACKMAP.sessionKey) {
-      resolveOpenF1Session();
-      return;
-    }
-    pollOpenF1Locations();
+      });
+  }
+
+  function racesHaveCircuit() {
+    var r = (state && state.race) || {};
+    return !!(r.circuit || r.meeting);
   }
 
   function resolveOpenF1Session() {
@@ -2520,9 +2603,11 @@
       ofCircuit = lookupMap(OPENF1_CIRCUIT, meeting);
     }
     if (!ofCircuit) {
+      TRACKMAP.unknownCircuit = true;
       TRACKMAP.status = '未识别赛道：' + (circuit || meeting || '?');
       return;
     }
+    TRACKMAP.unknownCircuit = false;
     TRACKMAP.resolving = true;
     TRACKMAP.status = '匹配 OpenF1 场次…';
     var year = new Date().getFullYear();
@@ -2539,7 +2624,9 @@
       .then(function (list) {
         TRACKMAP.resolving = false;
         if (!Array.isArray(list) || !list.length) {
-          TRACKMAP.status = 'OpenF1 无此赛道场次';
+          TRACKMAP.outlineError = true;
+          TRACKMAP.status = '估计 · 没有赛道轮廓';
+          refreshEstimateStatus();
           return;
         }
         var want = String(session || '').toLowerCase();
@@ -2568,11 +2655,12 @@
         TRACKMAP.status = 'OpenF1 · ' + (best.session_name || '') + ' #' + best.session_key;
         saveTrackmapCache();
         loadOpenF1Outline();
-        pollOpenF1Locations();
       })
       .catch(function () {
         TRACKMAP.resolving = false;
-        TRACKMAP.status = 'OpenF1 场次查询失败';
+        TRACKMAP.outlineError = true;
+        TRACKMAP.status = '估计 · 轮廓加载失败';
+        refreshEstimateStatus();
       });
   }
 
@@ -2594,6 +2682,8 @@
     function tryDriver() {
       if (di >= drivers.length) {
         TRACKMAP.outlineBusy = false;
+        if (TRACKMAP.outline.length < 30) TRACKMAP.outlineError = true;
+        refreshEstimateStatus();
         return;
       }
       var dn = drivers[di++];
@@ -2614,12 +2704,11 @@
           // ~8–12m 抽稀，避免过密；单位同 OpenF1（约 0.1m）
           var pts = thinTrail(rows, 10000);
           pts = closeTrailIfNear(pts, 500 * 500);
-          if (pts.length > 30) {
-            TRACKMAP.outline = pts;
-            saveTrackmapCache();
+          if (pts.length > 30 && adoptOutline(pts, 'openf1')) {
             TRACKMAP.outlineBusy = false;
-            var box = document.querySelector('.b-trackmap');
-            if (box) drawTrackmap(box);
+            refreshEstimateStatus();
+          } else if (pts.length > 30) {
+            TRACKMAP.outlineBusy = false;
           } else {
             tryDriver();
           }
@@ -2630,65 +2719,7 @@
   }
 
   function pollOpenF1Locations() {
-    if (TRACKMAP.pollBusy || !TRACKMAP.sessionKey || !TRACKMAP.sessionMeta) return;
-    TRACKMAP.pollBusy = true;
-    var meta = TRACKMAP.sessionMeta;
-    var start = parseOpenF1Date(meta.date_start);
-    var end = parseOpenF1Date(meta.date_end);
-    var now = Date.now();
-    var live = now >= (start - 30 * 60 * 1000) && now <= (end + 30 * 60 * 1000);
-    // 历史场次：取开赛后约 30% 处，终点附近经常 404 无点
-    var winEnd = live ? now : (start + Math.floor((end - start) * 0.35));
-    var winStart = winEnd - 2500;
-    if (winStart < start) winStart = start;
-    if (winEnd > end) winEnd = end;
-    var url = 'https://api.openf1.org/v1/location?session_key=' + TRACKMAP.sessionKey
-      + '&date%3E=' + encodeURIComponent(isoUtc(new Date(winStart)))
-      + '&date%3C=' + encodeURIComponent(isoUtc(new Date(winEnd)));
-    fetch(url, { cache: 'no-store' })
-      .then(function (res) {
-        if (!res.ok) return [];
-        return res.json();
-      })
-      .then(function (rows) {
-        TRACKMAP.pollBusy = false;
-        if (!Array.isArray(rows) || !rows.length) {
-          if (!TRACKMAP.positions.length) {
-            TRACKMAP.status = '等待位置数据';
-          }
-          var box0 = document.querySelector('.b-trackmap');
-          if (box0) drawTrackmap(box0);
-          return;
-        }
-        // latest per driver
-        var latest = {};
-        for (var i = 0; i < rows.length; i++) {
-          var row = rows[i];
-          var dn = String(row.driver_number);
-          var prev = latest[dn];
-          if (!prev || String(row.date) > String(prev.date)) latest[dn] = row;
-        }
-        var list = [];
-        Object.keys(latest).forEach(function (dn) {
-          var r = latest[dn];
-          list.push({ number: dn, x: r.x, y: r.y, z: r.z, status: 'OnTrack' });
-        });
-        TRACKMAP.positions = enrichPositions(list);
-        TRACKMAP.source = 'openf1';
-        TRACKMAP.status = (live ? 'OpenF1 实时' : 'OpenF1 历史快照')
-          + ' · ' + TRACKMAP.positions.length + ' 车';
-        TRACKMAP.frozen = !live;
-        var box = document.querySelector('.b-trackmap');
-        if (box) drawTrackmap(box);
-        if (!live) {
-          // 历史快照不用每 1.5s 打一次 OpenF1
-          stopTrackmapPoll();
-        }
-      })
-      .catch(function () {
-        TRACKMAP.pollBusy = false;
-        TRACKMAP.status = 'OpenF1 位置拉取失败';
-      });
+    // 车位由计时估计，不请求 OpenF1 实时 location。
   }
 
   function circuitSvgFor(circuit, meeting) {
@@ -2710,134 +2741,377 @@
     return { minX: minX - padX, minY: minY - padY, maxX: maxX + padX, maxY: maxY + padY };
   }
 
-  function drawTrackmap(box) {
-    var wrap = box.querySelector('.tm-wrap');
-    if (!wrap) return;
-    var cv = wrap.querySelector('canvas.tm-canvas');
-    var badge = box.querySelector('.tm-status');
-    var svgHost = wrap.querySelector('.tm-svg');
-    applyTrackmapStatusBadge(badge);
+  var SVGNS = 'http://www.w3.org/2000/svg';
 
-    // f1db SVG 与 OpenF1/Position.z 不是同一投影，叠上去必错位。
-    // 有坐标时一律隐藏装饰 SVG，轮廓改用同坐标系的密采样折线。
-    if (svgHost) {
-      svgHost.innerHTML = '';
-      svgHost.style.opacity = '0';
-      TRACKMAP.svgPath = '';
-      TRACKMAP.svgOk = false;
+  function svgEl(name, cls) {
+    var node = document.createElementNS(SVGNS, name);
+    if (cls) node.setAttribute('class', cls);
+    return node;
+  }
+
+  function refreshEstimateStatus() {
+    var next;
+    if (!window.TrackmapEstimate) {
+      next = '估计模块未加载';
+    } else if (TRACKMAP.unknownCircuit && TRACKMAP.outline.length < 30) {
+      next = (TRACKMAP.status && String(TRACKMAP.status).indexOf('未识别') === 0)
+        ? TRACKMAP.status
+        : '未识别赛道';
+    } else if (!TRACKMAP.outlineSource || TRACKMAP.outline.length < 30) {
+      next = TRACKMAP.outlineError ? '估计 · 没有赛道轮廓' : '估计 · 正在载入赛道轮廓';
+    } else if (!TRACKMAP.planMeta || !TRACKMAP.planMeta.cars) {
+      next = '估计 · 等待计时';
+    } else {
+      var plan = TRACKMAP.planMeta;
+      var n = 0;
+      var pits = 0;
+      for (var i = 0; i < plan.cars.length; i++) {
+        if (!plan.cars[i].hide) n++;
+        if (plan.cars[i].pit) pits++;
+      }
+      if (!n) {
+        next = '估计 · 等待计时';
+      } else {
+        next = '估计 · ' + (plan.raceGaps ? '差距' : '赛段') + ' · ' + n + '车';
+        if (pits) next += ' · 进站' + pits;
+        if (plan.pace === 0) next += ' · 红旗';
+        else if (plan.pace < 0.5) next += ' · 安全车';
+        else if (plan.pace < 0.9) next += ' · VSC';
+      }
     }
+    if (next === TRACKMAP.status) return;
+    TRACKMAP.status = next;
+    var box = document.querySelector('.b-trackmap');
+    applyTrackmapStatusBadge(box ? box.querySelector('.tm-status') : null);
+  }
 
+  function syncEstimatedField() {
+    if (!window.TrackmapEstimate) {
+      refreshEstimateStatus();
+      return;
+    }
+    var E = window.TrackmapEstimate;
+    var cars = (state && state.cars) || [];
+    var race = (state && state.race) || {};
+    var track = (state && state.track) || {};
+    var statusText = [race.status, race.session, track.label, track.detail, track.message]
+      .filter(function (x) { return x != null && x !== ''; }).join(' ');
+    var plan = E.planField(cars, race.session, statusText);
+    TRACKMAP.planMeta = plan;
+    var frozen = plan.pace === 0;
+    var lapMs = plan.pace > 0 ? (plan.lapSeconds / plan.pace) * 1000 : (TRACKMAP.estLapMs || 90000);
+    var now = Date.now();
+    var prevMs = TRACKMAP.estLapMs || lapMs;
+    var clockChanged = !!TRACKMAP.estLapMs &&
+      (frozen !== !!TRACKMAP.estFrozen || Math.abs(lapMs - TRACKMAP.estLapMs) / TRACKMAP.estLapMs > 0.08);
+    if (!TRACKMAP.motion) TRACKMAP.motion = {};
+    if (clockChanged) {
+      Object.keys(TRACKMAP.motion).forEach(function (num) {
+        var prev = TRACKMAP.motion[num];
+        if (!prev) return;
+        var shown = E.sampleMotion(prev, now, prevMs, !!TRACKMAP.estFrozen);
+        E.rebaseMotion(prev, shown, now);
+      });
+    }
+    TRACKMAP.estFrozen = frozen;
+    if (!frozen) TRACKMAP.estLapMs = lapMs;
+    var live = {};
+    for (var i = 0; i < plan.cars.length; i++) {
+      var p = plan.cars[i];
+      if (!p.number) continue;
+      live[p.number] = p;
+      var st = E.stepMotion(
+        TRACKMAP.motion[p.number],
+        p.frac,
+        p.cap,
+        now,
+        TRACKMAP.estLapMs || lapMs,
+        frozen,
+        { exact: p.exact, pit: p.pit, hold: p.hold, hide: p.hide, outlap: p.outlap }
+      );
+      st.tla = p.tla || p.number;
+      st.teamColour = p.teamColour || '';
+      st.outlap = !!p.outlap;
+      st.number = p.number;
+      TRACKMAP.motion[p.number] = st;
+    }
+    Object.keys(TRACKMAP.motion).forEach(function (num) {
+      if (!live[num]) TRACKMAP.motion[num].hide = true;
+    });
+    TRACKMAP.livePlan = live;
+    refreshEstimateStatus();
+  }
+
+  function ensureTrackmapSvg(box) {
+    var existing = box.querySelector('svg.tm-map');
+    if (existing) {
+      TRACKMAP.carsG = existing.querySelector('.tm-cars');
+      return box.querySelector('.tm-wrap');
+    }
+    clear(box);
+    box.setAttribute('data-tm', '1');
+    if (!ONCE) panelTitle(box, '赛道图');
+    var wrap = el('div', 'tm-wrap');
+    var svg = svgEl('svg', 'tm-map');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', '估计赛道图');
+    var bg = svgEl('path', 'tm-line tm-line-bg');
+    var fg = svgEl('path', 'tm-line tm-line-fg');
+    var cars = svgEl('g', 'tm-cars');
+    var empty = svgEl('text', 'tm-empty');
+    empty.setAttribute('text-anchor', 'middle');
+    empty.setAttribute('dominant-baseline', 'middle');
+    svg.appendChild(bg);
+    svg.appendChild(fg);
+    svg.appendChild(cars);
+    svg.appendChild(empty);
+    wrap.appendChild(svg);
+    box.appendChild(wrap);
+    TRACKMAP.carsG = cars;
+    TRACKMAP.nodes = {};
+    TRACKMAP.viewDirty = true;
+    placeTrackmapChrome(box);
+    wireTrackmapZoom(wrap, box);
+    return wrap;
+  }
+
+  function rebuildTrackmapView(box) {
+    var wrap = box.querySelector('.tm-wrap');
+    var svg = wrap && wrap.querySelector('svg.tm-map');
+    if (!wrap || !svg) return;
     var w = wrap.clientWidth || box.clientWidth || 320;
-    var h = wrap.clientHeight || Math.max(180, (box.clientHeight || 240) - 28);
+    var h = wrap.clientHeight || Math.max(180, (box.clientHeight || 240) - 8);
     if (w < 40 || h < 40) {
+      TRACKMAP.viewDirty = true;
       if (refitLeft > 0) {
         refitLeft--;
         if (window.requestAnimationFrame) {
-          window.requestAnimationFrame(function () { repaint(); });
+          window.requestAnimationFrame(function () { drawTrackmap(box); });
         }
       }
       return;
     }
-    var dpr = window.devicePixelRatio || 1;
-    cv.style.width = w + 'px';
-    cv.style.height = h + 'px';
-    cv.width = Math.max(1, Math.round(w * dpr));
-    cv.height = Math.max(1, Math.round(h * dpr));
-    var g = cv.getContext('2d');
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.clearRect(0, 0, w, h);
-
-    var day = document.documentElement.getAttribute('data-theme') === 'day';
-    // Opaque backdrop so theme flips never leave the previous theme's "holes".
-    g.fillStyle = day ? '#d5dee9' : '#080b10';
-    g.fillRect(0, 0, w, h);
-    var fitPts = TRACKMAP.outline.concat(TRACKMAP.positions);
-    var bounds = computeBounds(fitPts);
-
-    if (!bounds || (!TRACKMAP.positions.length && TRACKMAP.outline.length < 3)) {
-      g.fillStyle = day ? 'rgba(91,107,124,0.95)' : 'rgba(176,190,197,0.9)';
-      g.font = '600 13px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
-      g.textAlign = 'center';
-      g.fillText(TRACKMAP.status || '等待位置数据', w / 2, h / 2);
+    refitLeft = 3;
+    var zoom = clampTrackmapZoom(TRACKMAP.viewZoom);
+    TRACKMAP.viewZoom = zoom;
+    TRACKMAP.viewRotDeg = wrapTrackmapRot(TRACKMAP.viewRotDeg);
+    var key = [
+      w, h, zoom, TRACKMAP.viewPanX || 0, TRACKMAP.viewPanY || 0, TRACKMAP.viewRotDeg,
+      TRACKMAP.outline.length, TRACKMAP.outlineSource
+    ].join('|');
+    svg.setAttribute('width', String(w));
+    svg.setAttribute('height', String(h));
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    TRACKMAP.viewW = w;
+    TRACKMAP.viewH = h;
+    if (key === TRACKMAP.viewKey && TRACKMAP.mapper) {
+      TRACKMAP.viewDirty = false;
       return;
     }
-
+    TRACKMAP.viewKey = key;
+    TRACKMAP.viewDirty = false;
+    var empty = svg.querySelector('.tm-empty');
+    var bg = svg.querySelector('.tm-line-bg');
+    var fg = svg.querySelector('.tm-line-fg');
+    var bounds = computeBounds(TRACKMAP.outline || []);
+    if (!bounds || TRACKMAP.outline.length < 3) {
+      TRACKMAP.mapper = null;
+      TRACKMAP.screenCentroid = null;
+      if (bg) bg.setAttribute('d', '');
+      if (fg) fg.setAttribute('d', '');
+      if (empty) {
+        empty.textContent = TRACKMAP.status || '估计 · 正在载入赛道轮廓';
+        empty.setAttribute('x', String(Math.round(w / 2)));
+        empty.setAttribute('y', String(Math.round(h / 2)));
+        empty.style.display = '';
+      }
+      return;
+    }
+    if (empty) empty.style.display = 'none';
     var bw = bounds.maxX - bounds.minX;
     var bh = bounds.maxY - bounds.minY;
     if (bw < 1) bw = 1;
     if (bh < 1) bh = 1;
     var pad = 0.04;
     var baseScale = Math.min(w / bw, h / bh) * (1 - pad * 2);
-    var zoom = clampTrackmapZoom(TRACKMAP.viewZoom);
-    TRACKMAP.viewZoom = zoom;
-    TRACKMAP.viewRotDeg = wrapTrackmapRot(TRACKMAP.viewRotDeg);
     var scale = baseScale * zoom;
-    var usedW = bw * scale, usedH = bh * scale;
+    var usedW = bw * scale;
+    var usedH = bh * scale;
     var ox = (w - usedW) / 2 + (TRACKMAP.viewPanX || 0);
     var oy = (h - usedH) / 2 + (TRACKMAP.viewPanY || 0);
     var rot = TRACKMAP.viewRotDeg * Math.PI / 180;
-    var cosR = Math.cos(rot), sinR = Math.sin(rot);
-    var viewCx = w / 2, viewCy = h / 2;
+    var cosR = Math.cos(rot);
+    var sinR = Math.sin(rot);
+    var viewCx = w / 2;
+    var viewCy = h / 2;
     function mapPoint(x, y) {
       var sx = ox + (x - bounds.minX) * scale;
       var sy = oy + (bounds.maxY - y) * scale;
       if (!rot) return { x: sx, y: sy };
-      var dx = sx - viewCx, dy = sy - viewCy;
+      var dx = sx - viewCx;
+      var dy = sy - viewCy;
       return {
         x: viewCx + dx * cosR - dy * sinR,
         y: viewCy + dx * sinR + dy * cosR
       };
     }
-
-    // 同坐标系赛道线（单车时间序列），不是装饰 SVG
-    if (TRACKMAP.outline.length > 2) {
-      g.beginPath();
-      g.strokeStyle = day ? 'rgba(55,71,79,0.5)' : 'rgba(176,190,197,0.4)';
-      g.lineWidth = Math.max(4, Math.min(10, Math.sqrt(scale) * 18));
-      g.lineJoin = 'round';
-      g.lineCap = 'round';
-      for (var i = 0; i < TRACKMAP.outline.length; i++) {
-        var o = TRACKMAP.outline[i];
-        var mp = mapPoint(o.x, o.y);
-        if (i === 0) g.moveTo(mp.x, mp.y); else g.lineTo(mp.x, mp.y);
-      }
-      g.stroke();
-      g.beginPath();
-      g.strokeStyle = day ? 'rgba(255,255,255,0.92)' : 'rgba(236,239,241,0.88)';
-      g.lineWidth = Math.max(1.5, Math.min(4, Math.sqrt(scale) * 8));
-      for (var j = 0; j < TRACKMAP.outline.length; j++) {
-        var o2 = TRACKMAP.outline[j];
-        var mp2 = mapPoint(o2.x, o2.y);
-        if (j === 0) g.moveTo(mp2.x, mp2.y); else g.lineTo(mp2.x, mp2.y);
-      }
-      g.stroke();
+    TRACKMAP.mapper = mapPoint;
+    var sx = 0;
+    var sy = 0;
+    var outline = TRACKMAP.outline;
+    for (var c = 0; c < outline.length; c++) {
+      sx += outline[c].x;
+      sy += outline[c].y;
     }
+    TRACKMAP.screenCentroid = mapPoint(sx / outline.length, sy / outline.length);
+    var d = '';
+    for (var i = 0; i < outline.length; i++) {
+      var mp = mapPoint(outline[i].x, outline[i].y);
+      d += (i ? 'L' : 'M') + mp.x.toFixed(1) + ' ' + mp.y.toFixed(1);
+    }
+    if (bg) bg.setAttribute('d', d);
+    if (fg) fg.setAttribute('d', d);
+    var lw = Math.max(4, Math.min(12, 5 + Math.sqrt(zoom) * 3));
+    if (bg) bg.setAttribute('stroke-width', lw.toFixed(1));
+    if (fg) fg.setAttribute('stroke-width', Math.max(1.4, lw * 0.28).toFixed(1));
+  }
 
-    var pos = TRACKMAP.positions.slice();
-    pos.sort(function (a, b) {
-      return String(a.number).localeCompare(String(b.number), undefined, { numeric: true });
+  function ensureMarker(num) {
+    var g = TRACKMAP.nodes[num];
+    if (g && g.parentNode) return g;
+    g = svgEl('g', 'tm-car');
+    g.setAttribute('data-num', num);
+    var dot = svgEl('circle', 'tm-dot');
+    dot.setAttribute('r', '6.5');
+    dot.setAttribute('cx', '0');
+    dot.setAttribute('cy', '0');
+    var label = svgEl('text', 'tm-tla');
+    label.setAttribute('y', '-11');
+    label.setAttribute('text-anchor', 'middle');
+    g.appendChild(dot);
+    g.appendChild(label);
+    g.__dot = dot;
+    g.__label = label;
+    if (TRACKMAP.carsG) TRACKMAP.carsG.appendChild(g);
+    TRACKMAP.nodes[num] = g;
+    return g;
+  }
+
+  function screenAlong(frac, pit, slot) {
+    var E = window.TrackmapEstimate;
+    var p = E.pointOnArc(TRACKMAP.arc, frac);
+    var sc = TRACKMAP.mapper(p.x, p.y);
+    var ahead = TRACKMAP.mapper(p.x + p.tx, p.y + p.ty);
+    var dx = ahead.x - sc.x;
+    var dy = ahead.y - sc.y;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var tx = dx / len;
+    var ty = dy / len;
+    var nx = -ty;
+    var ny = tx;
+    var c = TRACKMAP.screenCentroid;
+    if (c && (c.x - sc.x) * nx + (c.y - sc.y) * ny < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    var offN = pit ? 16 : (slot * 12);
+    var offT = pit ? (slot * 15) : 0;
+    return {
+      x: sc.x + nx * offN + tx * offT,
+      y: sc.y + ny * offN + ty * offT
+    };
+  }
+
+  function updateMarkerTransforms(now) {
+    if (!TRACKMAP.mapper || !TRACKMAP.arc || !window.TrackmapEstimate || !TRACKMAP.carsG) return;
+    var E = window.TrackmapEstimate;
+    var lapMs = TRACKMAP.estLapMs || 90000;
+    var frozen = !!TRACKMAP.estFrozen;
+    var placed = [];
+    var seen = {};
+    Object.keys(TRACKMAP.motion).forEach(function (num) {
+      var st = TRACKMAP.motion[num];
+      if (!st || st.hide) return;
+      var frac = E.sampleMotion(st, now, lapMs, frozen);
+      placed.push({ num: num, st: st, frac: frac, pit: !!st.pit });
     });
-    for (var k = 0; k < pos.length; k++) {
-      var p = pos[k];
-      if (p.retired) continue;
-      if (p.x == null || p.y == null) continue;
-      var pt = mapPoint(p.x, p.y);
-      var cx = pt.x, cy = pt.y;
-      var rDot = Math.max(5, Math.min(10, 6 + scale * 80));
-      g.beginPath();
-      g.fillStyle = p.teamColour || '#90caf9';
-      g.arc(cx, cy, rDot, 0, Math.PI * 2);
-      g.fill();
-      g.lineWidth = 1.5;
-      g.strokeStyle = day ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.8)';
-      g.stroke();
-      g.font = '700 10px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillStyle = day ? '#102027' : '#fff';
-      g.fillText(p.tla || p.number, cx, cy - rDot - 8);
+    placed.sort(function (a, b) { return a.frac - b.frac; });
+    var run = 0;
+    var pitSlot = 0;
+    for (var i = 0; i < placed.length; i++) {
+      var item = placed[i];
+      if (item.pit) {
+        item.slot = pitSlot++;
+      } else if (i > 0 && !placed[i - 1].pit && Math.abs(E.wrapDelta(item.frac - placed[i - 1].frac)) < 0.006) {
+        run++;
+        item.slot = run;
+      } else {
+        run = 0;
+        item.slot = 0;
+      }
+      var xy = screenAlong(item.frac, item.pit, item.slot);
+      var g = ensureMarker(item.num);
+      seen[item.num] = 1;
+      var key = xy.x.toFixed(1) + ' ' + xy.y.toFixed(1);
+      if (g.__xy !== key) {
+        g.setAttribute('transform', 'translate(' + key + ')');
+        g.__xy = key;
+      }
+      var col = teamColourCss(item.st.teamColour);
+      if (g.__fill !== col) {
+        g.__dot.setAttribute('fill', col);
+        g.__fill = col;
+      }
+      var tla = item.st.tla || item.num;
+      if (g.__tla !== tla) {
+        g.__label.textContent = tla;
+        g.__tla = tla;
+      }
+      var cls = 'tm-car' + (item.pit ? ' tm-pit' : '') + (item.st.outlap && !item.pit ? ' tm-out' : '');
+      if (g.__cls !== cls) {
+        g.setAttribute('class', cls);
+        g.__cls = cls;
+      }
+      if (g.style.display === 'none') g.style.display = '';
     }
+    Object.keys(TRACKMAP.nodes).forEach(function (num) {
+      if (!seen[num]) TRACKMAP.nodes[num].style.display = 'none';
+    });
+  }
+
+  function drawTrackmap(box) {
+    if (!box) return;
+    ensureTrackmapSvg(box);
+    TRACKMAP.viewDirty = true;
+    TRACKMAP.viewKey = '';
+    rebuildTrackmapView(box);
+    updateMarkerTransforms(Date.now());
     syncTrackmapRotUi(box);
+  }
+
+  function startTrackmapMotion() {
+    if (TRACKMAP.raf) return;
+    var loop = function (now) {
+      TRACKMAP.raf = window.requestAnimationFrame(loop);
+      if (document.hidden) return;
+      var box = document.querySelector('.b-trackmap');
+      if (!box) return;
+      var wrap = box.querySelector('.tm-wrap');
+      var w = wrap ? wrap.clientWidth : 0;
+      var h = wrap ? wrap.clientHeight : 0;
+      if (TRACKMAP.viewDirty || !TRACKMAP.mapper || w !== TRACKMAP.viewW || h !== TRACKMAP.viewH) {
+        rebuildTrackmapView(box);
+      }
+      updateMarkerTransforms(now);
+    };
+    TRACKMAP.raf = window.requestAnimationFrame(loop);
+  }
+
+  function stopTrackmapMotion() {
+    if (TRACKMAP.raf) {
+      window.cancelAnimationFrame(TRACKMAP.raf);
+      TRACKMAP.raf = 0;
+    }
   }
 
   function renderTrackmap(box) {
@@ -2847,38 +3121,34 @@
       TRACKMAP.sessionKey = null;
       TRACKMAP.sessionMeta = null;
       TRACKMAP.outline = [];
+      TRACKMAP.outlineSource = '';
+      TRACKMAP.arc = null;
       TRACKMAP.positions = [];
       TRACKMAP.source = '';
       TRACKMAP.svgPath = '';
-      TRACKMAP.status = '等待位置数据';
+      TRACKMAP.svgRequested = '';
+      TRACKMAP.outlineToken++;
+      TRACKMAP.outlineError = false;
+      TRACKMAP.unknownCircuit = false;
+      TRACKMAP.motion = {};
+      TRACKMAP.status = '估计 · 等待计时';
       TRACKMAP.frozen = false;
+      TRACKMAP.viewDirty = true;
+      TRACKMAP.viewKey = '';
       resetTrackmapView();
       stopTrackmapPoll();
       restoreTrackmapCache(rk);
     }
 
-    if (!box.getAttribute('data-tm')) {
-      clear(box);
-      box.setAttribute('data-tm', '1');
-      if (!ONCE) panelTitle(box, '赛道图');
-      var wrap = el('div', 'tm-wrap');
-      wrap.appendChild(el('div', 'tm-svg'));
-      wrap.appendChild(el('canvas', 'tm-canvas'));
-      box.appendChild(wrap);
-      placeTrackmapChrome(box);
-      wireTrackmapZoom(wrap, box);
-    } else {
-      ensureTrackmapChrome(box);
-      wireTrackmapZoom(box.querySelector('.tm-wrap'), box);
-    }
-
-    if (applyOfficialPositions()) {
-      // official path still start poller only if needed for outline? skip
-    }
+    ensureTrackmapSvg(box);
+    ensureTrackmapChrome(box);
+    wireTrackmapZoom(box.querySelector('.tm-wrap'), box);
+    syncEstimatedField();
     ensureTrackmapPoll();
-    drawTrackmap(box);
+    startTrackmapMotion();
+    if (TRACKMAP.viewDirty || !TRACKMAP.mapper) drawTrackmap(box);
+    else updateMarkerTransforms(Date.now());
   }
-
 
   var RENDER = {
     flags: renderFlags, ring: renderRing, trackmap: renderTrackmap, track: renderTrack,
@@ -3486,6 +3756,7 @@
     } catch (e) { /* ignore */ }
     if (id !== 'trackmap') {
       try { stopTrackmapPoll(); } catch (e2) { /* ignore */ }
+      try { stopTrackmapMotion(); } catch (e3) { /* ignore */ }
     }
     var board = document.getElementById('board');
     if (!board) return false;
