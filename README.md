@@ -95,6 +95,10 @@
 - 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta
 - 赛道图车位是**估计**：轮廓只用本地 f1db SVG。沿轮廓用赛段/迷你赛段（练习、排位）或正赛相对领先者的时间差推算，不是官方 GPS。面板上有红色「估计」标记。维修区、安全车和起跑线对齐都不精确。对不上的赛道只在本地显示「未识别赛道」
 - 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位
+
+估计赛道图旗语上色预览（银石，示意） / Estimated trackmap flag coloring preview (Silverstone, illustrative).
+
+![估计赛道图旗语上色预览（银石，示意）](docs/trackmap-flags-silverstone.png)
 - 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
 - 轮胎 `Compound`：官方 Stints 增量常只推圈数、不带胎种；jar `deepMerge` 不再用空 Compound 盖掉旧值，读胎种自新到旧扫 stint 并 sticky 最近一次非空，避免成绩榜灰色 `—`
 - 正赛预设种子：成绩榜略增高、赛道图略减矮（`director/layouts.json`）
