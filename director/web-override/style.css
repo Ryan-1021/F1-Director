@@ -62,6 +62,7 @@
   --sec-mini-green: #1db954;
   --sec-mini-purple: #b24bff;
   --sec-mini-dim: rgba(255, 255, 255, 0.28);
+  --sec-mini-edge: rgba(0, 0, 0, 0.45);
 }
 html[data-theme="day"] {
   color-scheme: light;
@@ -105,12 +106,14 @@ html[data-theme="day"] {
   --flags-shadow: 0 4px 14px rgba(15, 23, 42, 0.10);
   --chip-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
   --teal: #c40500;
-  /* Same roles as night, darkened so they stay visible on the white sector cell. */
+  /* Same yellow / green / purple as night. Darkening these plus the night
+     inset shadow read as a muddy mask on the white cell. Empty/dim stay pale. */
   --sec-mini-empty: rgba(15, 23, 42, 0.12);
-  --sec-mini-yellow: #c48a00;
-  --sec-mini-green: #0d8a42;
-  --sec-mini-purple: #7b2fe0;
+  --sec-mini-yellow: #e6c200;
+  --sec-mini-green: #1db954;
+  --sec-mini-purple: #b24bff;
   --sec-mini-dim: rgba(15, 23, 42, 0.22);
+  --sec-mini-edge: rgba(15, 23, 42, 0.16);
 }
 
 * { box-sizing: border-box; }
@@ -1588,7 +1591,9 @@ table.sectors .sec-mini-bit {
   min-width: 2px;
   border-radius: 1px;
   background: var(--sec-mini-empty);
-  box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.45);
+  /* Night keeps a dark inset edge. Day overrides --sec-mini-edge with a
+     light hairline so the same stroke does not mask yellow/green/purple. */
+  box-shadow: inset 0 0 0 0.5px var(--sec-mini-edge, rgba(0, 0, 0, 0.45));
 }
 table.sectors .sec-mini-yellow { background: var(--sec-mini-yellow); }
 table.sectors .sec-mini-green { background: var(--sec-mini-green); }

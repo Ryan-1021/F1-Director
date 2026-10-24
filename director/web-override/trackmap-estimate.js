@@ -6,7 +6,8 @@
  * 正赛 / 冲刺赛：领先者仍用赛段；其余车用相对领先者的时间差 ÷ 参考圈速。
  * 被套圈（"1 LAP"）不用时间差，改回各车自己的赛段。
  * 进站不沿赛道飞到某个假维修区，只在当前进度上由绘图层向内侧偏一点。
- * 轮廓起点不一定是起跑线，所以绝对相位是相对的；车与车的间距才是这版要看的东西。
+ * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
+ * 其它赛道仍相对 SVG 起点。车与车的间距不受这条相位影响。
  *
  * 浏览器：window.TrackmapEstimate
  * Node：module.exports，`node trackmap-estimate.js` 会自检。
@@ -120,7 +121,31 @@
    * exact=false 表示只知道「至少已经到这个赛段起点」，绘图不该把车拉回去
    * （迷你赛段状态会褪成 0）。
    */
-  function progressFromTiming(car) {
+  /**
+   * 赛段在一圈上的弧长比例。不传 ends 时三等分。
+   * ends 是 [S1 终点, S2 终点]，相对计时线，0–1。
+   */
+  function sectorEndsOf(ends) {
+    if (!ends || ends.length < 2) return null;
+    var a = Number(ends[0]);
+    var b = Number(ends[1]);
+    if (!(a > 0.02 && a < b && b < 0.98)) return null;
+    return [a, b];
+  }
+
+  function sectorFrac(index, inner, ends) {
+    var e = sectorEndsOf(ends);
+    var marks = e ? [0, e[0], e[1], 1] : [0, 1 / 3, 2 / 3, 1];
+    var i = index | 0;
+    if (i < 0) i = 0;
+    if (i > 2) i = 2;
+    var t = Number(inner);
+    if (!isFinite(t) || t < 0) t = 0;
+    if (t > 1) t = 1;
+    return marks[i] + (marks[i + 1] - marks[i]) * t;
+  }
+
+  function progressFromTiming(car, sectorEnds) {
     var sectors = readSectors(car || {});
     var info = [];
     var i;
@@ -184,8 +209,8 @@
       if (sectorHasTime(sectors[i].value)) anyTime = true;
     }
     return {
-      frac: (current + inner) / 3,
-      cap: (current + Math.min(0.99, capInner)) / 3,
+      frac: sectorFrac(current, inner, sectorEnds),
+      cap: sectorFrac(current, Math.min(0.99, capInner), sectorEnds),
       sector: current,
       confident: current > 0 || done > 0 || anyTime,
       exact: exact,
@@ -361,19 +386,19 @@
     return leader;
   }
 
-  function planField(cars, sessionName, statusText) {
+  function planField(cars, sessionName, statusText, sectorEnds) {
     var list = cars || [];
     var raceGaps = sessionUsesTimeGaps(sessionName);
     var lapSeconds = refLapSeconds(list);
     var pace = paceScale(statusText);
     var leader = findLeader(list);
-    var leaderProg = leader ? progressFromTiming(leader) : null;
+    var leaderProg = leader ? progressFromTiming(leader, sectorEnds) : null;
     var leaderNum = leader ? carNumber(leader) : '';
     var planned = [];
     for (var i = 0; i < list.length; i++) {
       var c = list[i] || {};
       var num = carNumber(c);
-      var prog = progressFromTiming(c);
+      var prog = progressFromTiming(c, sectorEnds);
       var gap = parseGap(c.gap);
       var hide = !!(c.retired || c.knockedOut);
       var pit = !hide && (!!c.inPit || gap.kind === 'pit');
@@ -955,6 +980,88 @@
     return sampleSvgPath(longestPathD(svgText), curveSteps);
   }
 
+  function ptDist(a, b) {
+    var dx = a.x - b.x;
+    var dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function loopClosed(pts) {
+    return !!(pts && pts.length > 2 && ptDist(pts[0], pts[pts.length - 1]) < 1e-3);
+  }
+
+  /** 闭合折线掉头，起点不变。offset 在掉头之后再量。 */
+  function reverseClosed(pts) {
+    var closed = loopClosed(pts);
+    var work = (closed ? pts.slice(0, -1) : pts.slice());
+    if (work.length < 2) return pts.slice();
+    var start = { x: work[0].x, y: work[0].y };
+    var out = [start];
+    for (var i = work.length - 1; i >= 1; i--) out.push({ x: work[i].x, y: work[i].y });
+    if (closed) out.push({ x: start.x, y: start.y });
+    return out;
+  }
+
+  /** 把弧长比例 offset 处变成新的进度 0。闭合环会补上回到新起点的最后一点。 */
+  function rotateClosed(pts, offset) {
+    var closed = loopClosed(pts);
+    var work = closed ? pts.slice(0, -1) : pts.slice();
+    if (work.length < 3) return pts.slice();
+    var cum = [0];
+    var total = 0;
+    for (var i = 1; i < work.length; i++) {
+      total += ptDist(work[i], work[i - 1]);
+      cum.push(total);
+    }
+    var closeLen = closed ? ptDist(work[work.length - 1], work[0]) : 0;
+    var perim = total + closeLen;
+    if (!(perim > 0)) return pts.slice();
+    var target = offset * perim;
+    if (target < 1e-6) return pts.slice();
+    var seg = work.length - 1;
+    var segStart = total;
+    var segLen = closeLen;
+    for (var s = 1; s < cum.length; s++) {
+      if (cum[s] >= target - 1e-8) {
+        seg = s - 1;
+        segStart = cum[s - 1];
+        segLen = cum[s] - cum[s - 1];
+        break;
+      }
+    }
+    var a = seg < work.length - 1 ? work[seg] : work[work.length - 1];
+    var b = seg < work.length - 1 ? work[seg + 1] : work[0];
+    var u = segLen > 1e-9 ? (target - segStart) / segLen : 0;
+    if (u < 0) u = 0;
+    if (u > 1) u = 1;
+    var split = { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+    var out = [split];
+    function push(p) {
+      var last = out[out.length - 1];
+      if (last && ptDist(last, p) < 1e-4) return;
+      out.push({ x: p.x, y: p.y });
+    }
+    if (seg < work.length - 1) {
+      for (var j = seg + 1; j < work.length; j++) push(work[j]);
+      for (var k = 0; k <= seg; k++) push(work[k]);
+    } else {
+      for (var n = 0; n < work.length; n++) push(work[n]);
+    }
+    push(split);
+    return out;
+  }
+
+  function orientClosedOutline(pts, offset, reverse) {
+    if (!pts || pts.length < 4) return pts ? pts.slice() : [];
+    var out = reverse ? reverseClosed(pts) : pts.slice();
+    var off = Number(offset);
+    if (!isFinite(off)) off = 0;
+    off = off % 1;
+    if (off < 0) off += 1;
+    if (off < 1e-6) return out;
+    return rotateClosed(out, off);
+  }
+
   return {
     wrap01: wrap01,
     wrapDelta: wrapDelta,
@@ -977,6 +1084,8 @@
     marshalFlagPlan: marshalFlagPlan,
     sampleSvgPath: sampleSvgPath,
     longestPathD: longestPathD,
-    outlineFromSvg: outlineFromSvg
+    outlineFromSvg: outlineFromSvg,
+    orientClosedOutline: orientClosedOutline,
+    sectorFrac: sectorFrac
   };
 });

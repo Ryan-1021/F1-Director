@@ -232,6 +232,47 @@ near(maxY - minY, 8, 0.01, 'two cells along the tangent');
 near(maxX - minX, 24, 0.01, 'six cells across the track');
 assert(flag[0].light === true && flag[1].light === false, 'checker starts light');
 
+var squarePts = [
+  { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 0, y: 0 }
+];
+var turned = E.orientClosedOutline(squarePts, 0.25, false);
+near(turned[0].x, 10, 0.05, 'quarter turn starts at the next corner x');
+near(turned[0].y, 0, 0.05, 'quarter turn starts at the next corner y');
+var backed = E.orientClosedOutline(squarePts, 0, true);
+near(backed[0].x, 0, 0.01, 'reverse keeps the start x');
+near(backed[0].y, 0, 0.01, 'reverse keeps the start y');
+near(backed[1].x, 0, 0.05, 'reverse walks back along the last edge x');
+near(backed[1].y, 10, 0.05, 'reverse walks back along the last edge y');
+
+var miniCar = {
+  sectors: [
+    { value: '28.1', segments: [2048, 2048, 0, 0] },
+    { value: '', segments: [0, 0, 0, 0] },
+    { value: '', segments: [] }
+  ]
+};
+var evenMini = E.progressFromTiming(miniCar);
+var austinMini = E.progressFromTiming(miniCar, [0.287, 0.557]);
+near(evenMini.frac, 0.5 / 3, 0.001, 'default S1 is still a third');
+near(austinMini.frac, 0.287 * 0.5, 0.001, 'Austin S1 uses the shorter sector');
+
+var austinSvg = fs.readFileSync(path.join(__dirname, 'circuits', 'austin-1.svg'), 'utf8');
+var austinRaw = E.outlineFromSvg(austinSvg, 4);
+var austinArc = E.buildArc(austinRaw);
+var austinTip = E.pointOnArc(austinArc, 0);
+var austinSf = E.pointOnArc(austinArc, 0.073);
+var austinT1 = E.pointOnArc(austinArc, 0.218);
+function hyp(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+assert(hyp(austinSf, austinTip) > 20, 'Austin timing line is not the SVG start');
+assert(hyp(austinSf, austinT1) > 20, 'Austin timing line is not the T1 apex');
+var austinOriented = E.orientClosedOutline(austinRaw, 0.073, false);
+var austinZero = E.pointOnArc(E.buildArc(austinOriented), 0);
+near(austinZero.x, austinSf.x, 1.5, 'progress 0 sits on the Austin timing line');
+near(austinZero.y, austinSf.y, 1.5, 'progress 0 y');
+var austinT1b = E.pointOnArc(E.buildArc(austinOriented), 0.145);
+near(austinT1b.x, austinT1.x, 4, 'T1 stays on the hairpin after the shift');
+near(austinT1b.y, austinT1.y, 4, 'T1 y after the shift');
+
 // 弧长：中点大致在线段中间。
 var arc = E.buildArc([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
 var midPt = E.pointOnArc(arc, 0.5);
