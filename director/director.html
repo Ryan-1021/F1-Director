@@ -941,7 +941,6 @@
   }
   .live-placeholder.hidden { display: none; }
   .live-frame.hidden { display: none !important; }
-
   /* In-panel media fill: crop-zoom iframe player region into LIVE frame */
   .p-head .win-btns button.live-fs {
     width: auto;
@@ -3693,121 +3692,63 @@
     }
   }
 
-  function captureLivePlayback() {
-    var iframe = document.getElementById('liveIframe');
-    var video = document.getElementById('liveVideo');
-    var input = document.getElementById('streamUrl');
-    var panel = document.querySelector('.fpanel.live-panel');
-    var root = document.getElementById('liveFsRoot');
-    var url = '';
-    try { url = ((input && input.value) || localStorage.getItem(STORAGE_URL) || '').trim(); } catch (e) {}
-    var stash = {
-      url: url,
-      mode: null,
-      iframe: null,
-      video: null,
-      toolbarHidden: !!(panel && panel.classList.contains('live-toolbar-hidden')),
-      mediaFill: !!(panel && panel.classList.contains('live-media-fill')),
-      cropScale: '',
-      cropX: '',
-      cropY: ''
-    };
-    if (root) {
-      try {
-        stash.cropScale = root.style.getPropertyValue('--live-crop-scale') || '';
-        stash.cropX = root.style.getPropertyValue('--live-crop-x') || '';
-        stash.cropY = root.style.getPropertyValue('--live-crop-y') || '';
-      } catch (e) {}
-    }
-    if (iframe && iframe.getAttribute('src') && !iframe.classList.contains('hidden')) {
-      stash.mode = 'iframe';
-      stash.iframe = iframe;
-      iframe.remove();
-    } else if (video && video.getAttribute('src') && !video.classList.contains('hidden')) {
-      stash.mode = 'video';
-      stash.video = video;
-      video.remove();
-    }
-    return stash;
+  function panelTypeOf(raw) {
+    return (raw && raw.type) || (raw && raw.id === 'live' ? 'live' : 'board');
   }
 
-  function restoreLivePlayback(stash) {
-    if (!stash) return false;
-    var input = document.getElementById('streamUrl');
-    if (input && stash.url) input.value = stash.url;
-    var panel = document.querySelector('.fpanel.live-panel');
-    var root = document.getElementById('liveFsRoot');
-    var placeholder = document.getElementById('livePlaceholder');
-    var liveTag = document.getElementById('liveTag');
-    var newIframe = document.getElementById('liveIframe');
-    var newVideo = document.getElementById('liveVideo');
-    if (panel) {
-      if (stash.toolbarHidden) panel.classList.add('live-toolbar-hidden');
-      else panel.classList.remove('live-toolbar-hidden');
-      if (stash.mediaFill) panel.classList.add('live-media-fill');
-      else panel.classList.remove('live-media-fill');
-      var tog = document.getElementById('btnLiveUrlTog');
-      if (tog) {
-        tog.setAttribute('aria-pressed', stash.toolbarHidden ? 'true' : 'false');
-        tog.classList.toggle('on', !!stash.toolbarHidden);
-      }
-      var fsBtn = document.getElementById('btnLiveFs');
-      if (fsBtn) {
-        fsBtn.setAttribute('aria-pressed', stash.mediaFill ? 'true' : 'false');
-        fsBtn.classList.toggle('on', !!stash.mediaFill);
-      }
+  function findLivePanel() {
+    var ids = Object.keys(panels);
+    for (var i = 0; i < ids.length; i++) {
+      var p = panels[ids[i]];
+      if (p && p.type === 'live' && p.el && p.el.isConnected) return p;
     }
-    if (root) {
-      if (stash.cropScale) root.style.setProperty('--live-crop-scale', stash.cropScale);
-      if (stash.cropX) root.style.setProperty('--live-crop-x', stash.cropX);
-      if (stash.cropY) root.style.setProperty('--live-crop-y', stash.cropY);
-    }
-    if (stash.mode === 'iframe' && stash.iframe && newIframe && newIframe.parentNode) {
-      newIframe.parentNode.replaceChild(stash.iframe, newIframe);
-      stash.iframe.id = 'liveIframe';
-      stash.iframe.classList.remove('hidden');
-      if (placeholder) placeholder.classList.add('hidden');
-      if (newVideo) {
-        newVideo.classList.add('hidden');
-        newVideo.removeAttribute('src');
-        if (newVideo.pause) newVideo.pause();
-      }
-      if (liveTag) liveTag.textContent = 'iframe';
-      try { hardenLiveIframe(stash.iframe); } catch (e) {}
-      try { syncLiveFsRootClass(); } catch (e) {}
-      return true;
-    }
-    if (stash.mode === 'video' && stash.video && newVideo && newVideo.parentNode) {
-      newVideo.parentNode.replaceChild(stash.video, newVideo);
-      stash.video.id = 'liveVideo';
-      stash.video.classList.remove('hidden');
-      if (placeholder) placeholder.classList.add('hidden');
-      if (newIframe) {
-        newIframe.classList.add('hidden');
-        newIframe.removeAttribute('src');
-      }
-      if (liveTag) liveTag.textContent = 'video';
-      try { syncLiveFsRootClass(); } catch (e) {}
-      return true;
-    }
-    return false;
-  }
-  function clearPanels() {
-    Object.keys(panels).forEach(function (id) {
-      if (panels[id].el) panels[id].el.remove();
-    });
-    panels = {};
+    return null;
   }
 
   function mountLayout(list, opts) {
-    var liveStash = captureLivePlayback();
-    clearLiveMediaFill();
-    clearPanels();
+    // Chrome reloads an iframe when it is reparented. Keep the live panel
+    // element (and the player inside it) and only rebuild the other panels.
+    var oldLive = findLivePanel();
+    var liveRaw = null;
+    for (var i = 0; i < list.length; i++) {
+      if (panelTypeOf(list[i]) === 'live') { liveRaw = list[i]; break; }
+    }
+
+    Object.keys(panels).forEach(function (id) {
+      var p = panels[id];
+      if (!p || p === oldLive) return;
+      if (p.el) p.el.remove();
+      delete panels[id];
+    });
+    if (oldLive) delete panels[oldLive.id];
+
     var maxZ = 10;
+    var reusedLive = false;
+    if (liveRaw && oldLive) {
+      reusedLive = true;
+      oldLive.id = liveRaw.id || oldLive.id;
+      oldLive.type = 'live';
+      oldLive.x = liveRaw.x;
+      oldLive.y = liveRaw.y;
+      oldLive.w = liveRaw.w;
+      oldLive.h = liveRaw.h;
+      oldLive.z = liveRaw.z || oldLive.z || 10;
+      oldLive.minimized = !!liveRaw.minimized;
+      if (liveRaw._prevH) oldLive._prevH = liveRaw._prevH;
+      oldLive.el.dataset.panelId = oldLive.id;
+      panels[oldLive.id] = oldLive;
+      applyGeom(oldLive.el, oldLive, opts);
+      if (oldLive.z > maxZ) maxZ = oldLive.z;
+    } else if (oldLive && oldLive.el) {
+      oldLive.el.remove();
+      oldLive = null;
+    }
+
     list.forEach(function (raw) {
+      if (panelTypeOf(raw) === 'live') return;
       var st = {
         id: raw.id,
-        type: raw.type || (raw.id === 'live' ? 'live' : 'board'),
+        type: 'board',
         board: raw.board || 'timing',
         x: raw.x, y: raw.y, w: raw.w, h: raw.h,
         z: raw.z || 10,
@@ -3815,14 +3756,30 @@
         _prevH: raw._prevH
       };
       if (st.z > maxZ) maxZ = st.z;
-      var el = st.type === 'live' ? createLivePanel(st) : createBoardPanel(st);
-      bindPanel(st, el, opts);
+      bindPanel(st, createBoardPanel(st), opts);
     });
+    if (liveRaw && !reusedLive) {
+      var stLive = {
+        id: liveRaw.id || 'live',
+        type: 'live',
+        board: liveRaw.board || 'timing',
+        x: liveRaw.x, y: liveRaw.y, w: liveRaw.w, h: liveRaw.h,
+        z: liveRaw.z || 10,
+        minimized: !!liveRaw.minimized,
+        _prevH: liveRaw._prevH
+      };
+      if (stLive.z > maxZ) maxZ = stLive.z;
+      bindPanel(stLive, createLivePanel(stLive), opts);
+    }
     zCounter = maxZ;
-    // re-wire live stream refs after remount
     wireLiveControls();
-    if (!restoreLivePlayback(liveStash) && liveStash && liveStash.url) {
-      applyStream(liveStash.url);
+    if (!reusedLive) {
+      var url = '';
+      try {
+        var input = document.getElementById('streamUrl');
+        url = ((input && input.value) || localStorage.getItem(STORAGE_URL) || '').trim();
+      } catch (e) {}
+      if (url && !livePlaybackMatches(url)) applyStream(url);
     }
   }
 
@@ -3948,8 +3905,9 @@
       var savedUrl = localStorage.getItem(STORAGE_URL);
       if (savedUrl) {
         var input = document.getElementById('streamUrl');
-        if (input) input.value = savedUrl;
-        applyStream(savedUrl);
+        if (input && !input.value) input.value = savedUrl;
+        // mountLayout already kept the playing panel in place. Applying again reloads it.
+        if (!livePlaybackMatches(savedUrl)) applyStream(savedUrl);
       }
     } catch (e) {}
     if (snap.theme === 'day' || snap.theme === 'night') {
@@ -3994,8 +3952,8 @@
       var saved = localStorage.getItem(STORAGE_URL);
       if (saved) {
         var input = document.getElementById('streamUrl');
-        if (input) input.value = saved;
-        applyStream(saved);
+        if (input && !input.value) input.value = saved;
+        if (!livePlaybackMatches(saved)) applyStream(saved);
       }
     } catch (e) {}
     saveLayout();
@@ -4174,6 +4132,18 @@
 
   function isDirectVideo(url) {
     return /\.(mp4|webm|ogg|m3u8)(\?|#|$)/i.test(url);
+  }
+
+  function livePlaybackMatches(url) {
+    url = (url || '').trim();
+    if (!url) return false;
+    var iframe = document.getElementById('liveIframe');
+    var video = document.getElementById('liveVideo');
+    if (iframe && iframe.getAttribute('src') === url && !iframe.classList.contains('hidden')) return true;
+    if (video && !video.classList.contains('hidden')) {
+      if (video.getAttribute('src') === url || video.currentSrc === url) return true;
+    }
+    return false;
   }
 
     function applyStream(url) {
@@ -4359,19 +4329,22 @@
     setLiveMediaFill(!isLiveMediaFill());
   }
 
+  var LIVE_IFRAME_ALLOW = 'autoplay; picture-in-picture';
+  var LIVE_IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation';
+
   function hardenLiveIframe(iframe) {
     if (!iframe) return;
-    try { iframe.removeAttribute('allowfullscreen'); } catch (e) {}
-    try { iframe.removeAttribute('webkitallowfullscreen'); } catch (e) {}
-    try { iframe.removeAttribute('mozallowfullscreen'); } catch (e) {}
-    // No fullscreen feature policy; keep playback-related tokens only.
-    try { iframe.setAttribute('allow', 'autoplay; picture-in-picture'); } catch (e) {}
-    // Omit allow-fullscreen so in-iframe Fullscreen API is blocked when sandbox sticks.
+    // Setting sandbox/allow on an iframe that already has them reloads the page.
     try {
-      iframe.setAttribute(
-        'sandbox',
-        'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation'
-      );
+      if (iframe.hasAttribute('allowfullscreen')) iframe.removeAttribute('allowfullscreen');
+      if (iframe.hasAttribute('webkitallowfullscreen')) iframe.removeAttribute('webkitallowfullscreen');
+      if (iframe.hasAttribute('mozallowfullscreen')) iframe.removeAttribute('mozallowfullscreen');
+    } catch (e) {}
+    try {
+      if (iframe.getAttribute('allow') !== LIVE_IFRAME_ALLOW) iframe.setAttribute('allow', LIVE_IFRAME_ALLOW);
+    } catch (e) {}
+    try {
+      if (iframe.getAttribute('sandbox') !== LIVE_IFRAME_SANDBOX) iframe.setAttribute('sandbox', LIVE_IFRAME_SANDBOX);
     } catch (e) {}
   }
 
