@@ -1571,7 +1571,10 @@
     streamDelaySec = clampDelaySec(sec);
     syncDelayInputs(streamDelaySec);
     if (persist !== false) {
-      try { localStorage.setItem(STORAGE_DELAY, String(streamDelaySec)); } catch (e) {}
+      try {
+        if (streamDelaySec <= 0) { sessionStorage.removeItem(STORAGE_DELAY); localStorage.removeItem(STORAGE_DELAY); }
+        else sessionStorage.setItem(STORAGE_DELAY, String(streamDelaySec));
+      } catch (e) {}
     }
     ensureDelayTicker();
     // Re-pick immediately (e.g. user lowered delay → jump closer to live).
@@ -1579,9 +1582,11 @@
   }
 
   function loadStreamDelay() {
+    // Drop legacy localStorage so an old FP1 delay cannot survive reopen.
+    try { localStorage.removeItem(STORAGE_DELAY); } catch (e) {}
     var saved = 0;
     try {
-      var v = localStorage.getItem(STORAGE_DELAY);
+      var v = sessionStorage.getItem(STORAGE_DELAY);
       if (v != null && v !== '') saved = clampDelaySec(v);
     } catch (e) {}
     applyStreamDelay(saved, false);
