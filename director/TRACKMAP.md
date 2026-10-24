@@ -2,31 +2,38 @@
 
 新看板 id：`trackmap`（导播台下拉里叫「赛道图」）。**原来的「赛段状态」圆环 `ring` 未改。**
 
-## 数据
+这一版车位是**估计**，面板标题旁有红色「估计」标记。不读官方 `Position.z`，也不拉 OpenF1 实时 `/v1/location`。
 
-1. **优先** `/api/state` 里的 `carPositions`（Java 解析官方 livetiming `Position.z`）
-2. **否则** 浏览器直连 [OpenF1](https://openf1.org/) `/v1/location`（与 Position.z 同一赛道坐标系）
-3. 仍无点时：显示本地赛道 SVG 底图 +「等待位置数据」
+## 轮廓
 
-## Java Position.z
+1. **优先**当前场次赛道的本地 SVG：`web-override/circuits/*.svg`（[f1db](https://github.com/f1db/f1db)，CC BY 4.0）。采样成折线，作为估计车位的弧长坐标。
+2. **否则**沿用原来的 OpenF1 单车历史轨迹（约 2 分钟），只用来画轮廓，不拿来摆车。
+3. 轮廓起点不一定是起跑线，整圈会一起转一个相位；车和车之间的相对位置仍然可用。
 
-- 当前分享包内的 `share/F1-RaceControl-Desktop-0.1.15_modify.jar`（0.1.15）已含 Position / 赛道图所需接口能力
-- 上游注释：`Position.z` 有时需要 F1TV/会话放开；无权限时订阅仍安全，只是 `carPositions.updatedAt` 为 0
-- 网页在官方无点时自动用 OpenF1，不挡用
+## 车位怎么估
 
-用本仓库自带的 jar 启动即可；若换成未含 Position 的上游原版 jar，赛道图仍可走 OpenF1。
+逻辑在 `web-override/trackmap-estimate.js`。
 
-## 底图
+- **练习 / 排位**：每辆车用自己的 S1–S3。已写出的赛段算走完三分之一圈；当前赛段里已点亮的迷你赛段（2048 / 2049 / 2051）再把这一段细分。迷你赛段状态会褪成 0，这时只把「赛段起点」当成下限，不把车拉回去。
+- **正赛 / 冲刺赛**：领先者仍用赛段。其余车用相对领先者的时间差 ÷ 参考圈速（最快圈，否则三赛段之和，否则 90 秒）。`1 LAP` 这种被套圈不用时间差，改回该车自己的赛段。
+- 两次计时之间按参考圈速沿轮廓往前走，所以点会动，而不是只在赛段刷新时跳。
+- **进站**（`inPit` 或差距文案含 PIT）：停在进站那一刻的估计进度，向赛道内侧偏一点，红圈标出。不是真实维修区几何，也不会滑到轮廓起点。
+- **出站**（`pitOut` 且 S1 还没有迷你赛段）：沿用当前进度慢慢爬，红虚线圈。
+- **停车**冻结。**退赛 / 淘汰**不画。
+- 场次状态文案里若出现安全车 / 虚拟安全车 / 红旗，整圈时钟会变慢或停住。没有单独的安全车坐标。
 
-`web-override/circuits/*.svg` 来自 [f1db](https://github.com/f1db/f1db)（CC BY 4.0），仅作无坐标时的示意；有坐标后以点云/轮廓为准（与 SVG 不做强制对齐，避免错位）。
+车标节点按车号创建一次，之后只改 `transform`（以及颜色、缩写、进站类名）。轮廓路径只在缩放、平移、旋转或尺寸变化时重写 `d`。
 
 ## 自测
 
-1. `director/Start.cmd` 发布后打开导播台，加一块「赛道图」或打开 `http://127.0.0.1:8720/board/trackmap?once=1`
-2. 有场次信息（如 Singapore / Race）时，应看到 OpenF1 历史快照车点；正赛直播时应标「OpenF1 实时」
-3. 若 jar 已含 Position.z 且流里有数据，状态会变成「官方 Position.z」
+1. `director/Start.cmd`（或 `Publish-Web.cmd`）发布后打开导播台，加一块「赛道图」。改完前端请 **硬刷新**（Ctrl+F5），否则 iframe 可能还拿着旧的 `app.js`。
+2. 有场次且赛道能对上本地 SVG 时，应看到闭合轮廓和车位；状态类似「估计 · 差距 · 18车」或「估计 · 赛段 · N车」。
+3. `node director/web-override/trackmap-estimate.test.js`
 4. `node --check director/web-override/app.js`
 
-## 回放
+## 还不准的地方
 
-`.rclog` 若录制时未订 `Position.z`，官方坐标仍空，赛道图会按场次名尝试 OpenF1（需能上网）。
+- 赛段按圈程三等分，不是官方测距桩。
+- 没有 GPS，维修区、进站弯、安全车列车都对不齐真实赛道。
+- 轮廓相位和起跑线可能差一截，看的是相对间隔。
+- 正赛时间差在进站、被套圈、虚拟安全车时会漂；数据一更新会再靠拢。
