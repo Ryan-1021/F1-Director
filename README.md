@@ -3,7 +3,7 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** 见根目录 [`VERSION`](VERSION)（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.7+20261024**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
 ---
 
@@ -16,6 +16,8 @@
 另一套布局：成绩榜收在左侧，直播铺开，地址栏可以收起。
 
 ![导播台效果：窄成绩榜与铺开的直播](docs/director-shot-2.jpg)
+
+图里赛道图还是旧界面的「OpenF1 场次查询失败」。当前版本不再请求 OpenF1，轮廓只用本地 SVG。
 
 ---
 
@@ -88,6 +90,8 @@
 | `director/Stop.cmd` | 强制停 jar、释放 `:8720` |
 | `director/director.html` | 导播台主页面 |
 | `director/web-override/` | 覆盖 UI（`app.js` / `style.css` / 状态 SVG 等） |
+| `director/web-override/circuits/` | 本地赛道轮廓 SVG（f1db，不联网） |
+| `docs/` | 效果图与银石旗语示意 |
 | `director/layouts.json` | 首次布局种子（写入 `share/web/layouts.json` 后以运行时为准） |
 | `director/assets/` | 图标源与 favicon（`F1-Director.ico`、浏览器图标） |
 | `director/Publish-Web.cmd` | 把 UI（含 assets）拷到 `share/web/` |
@@ -101,11 +105,12 @@
 ## 主要功能（当前）
 
 - 可拖拽多面板：成绩榜、赛段成绩、赛道图、天气、实时流等；布局可锁定（锁定后仍可切换预设，不可重置/删预设）
-- 切换布局预设时**沿用正在播的直播面板**（整块面板留在页面里，只改位置和尺寸；iframe / video 不拆走、不重新载入，也不必再点一次播放）
+- 切换布局时**沿用正在播的直播面板**（整块面板留在页面里，只改位置和尺寸；iframe / video 不拆走、不重新载入，也不必再点一次播放）
+- 看板数据延迟只推迟四周看板和左上角场次，**不改变直播画面**。秒数记在本标签的 sessionStorage：关掉标签即丢，同一标签刷新还在。启动时清掉旧的 localStorage 延迟，避免上一场的缓冲留到下次打开
 - 日/夜主题：按钮点击处约 **1s** 圆形扩散切换（View Transition）；启动读盘与布局预设仍瞬时切主题；`prefers-reduced-motion` 时跳过动画
 - 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
 - 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta
-- 赛道图车位是**估计**：轮廓只用本地 f1db SVG。沿轮廓用赛段/迷你赛段（练习、排位）或正赛相对领先者的时间差推算，不是官方 GPS。面板上有红色「估计」标记。维修区、安全车和起跑线对齐都不精确。对不上的赛道只在本地显示「未识别赛道」
+- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。顶栏只有红色「估计」和旋转。对不上的赛道写「未识别赛道」，不联网。维修区、安全车和起跑线对齐都不精确。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
 - 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位
 
 估计赛道图旗语上色预览（银石，示意） / Estimated trackmap flag coloring preview (Silverstone, illustrative).
