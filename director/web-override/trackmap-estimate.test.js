@@ -44,7 +44,9 @@ var s2 = E.progressFromTiming({
   ]
 });
 assert(s2.sector === 1 && s2.exact && s2.doneSegs === 4, 's2 segments ' + JSON.stringify(s2));
-near(s2.frac, (1 + (4 - 0.2) / 8) / 3, 0.02, 's2 frac');
+near(s2.frac, (1 + 4 / 8) / 3, 0.001, 's2 frac matches lit mini-sectors');
+assert(s2.cap > s2.frac, 'cap still lets the dot move');
+assert(s2.cap - s2.frac < (1 / 8) / 3, 'cap does not cross the next mini-sector');
 
 var aged = E.progressFromTiming({
   sectors: [
@@ -64,6 +66,39 @@ var doneLap = E.progressFromTiming({
   ]
 });
 assert(doneLap.freshLap && doneLap.exact && doneLap.frac < 0.05, 'fresh lap near line');
+
+// 上一圈的赛段时间还在，但本圈迷你赛段只点亮了一截：跟格子走，不要拉回起点。
+var stale = E.progressFromTiming({
+  sectors: [
+    { value: '28.100', segments: [2048, 2048, 2048, 2048] },
+    { value: '31.200', segments: [2048, 2064, 0, 0, 0] },
+    { value: '29.400', segments: [2048, 2049, 2051] }
+  ]
+});
+assert(stale.freshLap === false, 'stale times are not a new lap');
+assert(stale.sector === 1 && stale.exact && stale.doneSegs === 2, 'follow partial strip ' + JSON.stringify(stale));
+near(stale.frac, (1 + 2 / 5) / 3, 0.001, 'frac at lit S2 edge');
+
+var newLap = E.progressFromTiming({
+  sectors: [
+    { value: '28.100', segments: [2048, 2049, 0, 0] },
+    { value: '31.200', segments: [2048, 2048, 2048] },
+    { value: '29.400', segments: [2051, 2048] }
+  ]
+});
+assert(newLap.freshLap === false && newLap.sector === 0 && newLap.doneSegs === 2, 'new lap follows S1 strip');
+near(newLap.frac, (2 / 4) / 3, 0.001, 'S1 lit edge');
+
+var enterS3 = E.progressFromTiming({
+  sectors: [
+    { value: '28.1', segments: [2048, 2048] },
+    { value: '30.2', segments: [2048, 2048, 2048] },
+    { value: '29.4', segments: [0, 0, 0, 0] }
+  ]
+});
+assert(enterS3.freshLap === false && enterS3.sector === 2 && enterS3.exact === false,
+  'S3 reset is not the start line ' + JSON.stringify(enterS3));
+near(enterS3.frac, (2 + 0.03) / 3, 0.01, 'S3 entrance floor');
 
 var quali = E.planField([
   { number: 1, tla: 'VER', position: 1, gap: '+0.200', sectors: [{ value: '', segments: [] }, {}, {}] },
@@ -126,6 +161,76 @@ st = E.stepMotion(st, 0.99, 0.99, 1000, 90000, false, { exact: true, pit: true }
 var parked = E.sampleMotion(st, 8000, 90000, false);
 near(parked, 0.42 + 1 / 90, 0.02, 'pit holds entry frac');
 assert(st.pit === true, 'pit flag');
+
+// 迷你赛段向前跳一格时，同一时刻不要瞬移，沿弧线滑过去。
+var glide = E.stepMotion(null, 0.2, 0.28, 5000, 90000, false, { exact: true });
+glide = E.stepMotion(glide, 0.24, 0.32, 5000, 90000, false, { exact: true });
+var atTick = E.sampleMotion(glide, 5000, 90000, false);
+near(atTick, 0.2, 0.005, 'mini-sector tick does not jump');
+var midGlide = E.sampleMotion(glide, 5180, 90000, false);
+assert(midGlide > 0.205 && midGlide < 0.235, 'glides toward new mini-sector ' + midGlide);
+
+var scaled = E.stepMotion(null, 0.4, 0.5, 0, 90000, false, { exact: true, lapScale: 1 });
+var midScale = E.sampleMotion(scaled, 3000, 90000, false);
+scaled = E.stepMotion(scaled, 0.4, 0.5, 3000, 90000, false, { exact: true, lapScale: 1.3 });
+var heldScale = E.sampleMotion(scaled, 3000, 90000, false);
+near(heldScale, midScale, 0.002, 'lap scale change does not jump');
+
+var slow = E.planField([{
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', lastLap: '1:40.000', bestLap: '1:30.000',
+  sectors: [
+    { value: '', segments: [2048, 0, 0] },
+    { value: '', segments: [] },
+    { value: '', segments: [] }
+  ]
+}], 'Practice 3', 'Started');
+near(slow.cars[0].lapScale, 100 / 90, 0.02, 'coast at own last lap');
+near(slow.cars[0].frac, (1 / 3) / 3, 0.001, 'practice frac follows first lit mini-sector');
+
+var onLine = E.packOffset(0, false);
+assert(onLine.n === 0 && onLine.t === 0, 'first car sits on the arc');
+var pit0 = E.packOffset(0, true);
+assert(pit0.n > 0 && pit0.n <= 16 && pit0.t === 0, 'pit car is a small inward offset');
+var midLap = E.stepMotion(null, 0.4, 0.5, 0, 90000, false, { exact: true });
+midLap = E.stepMotion(midLap, 0.01, 0.1, 2000, 90000, false, { exact: true, freshLap: true });
+var stayed = E.sampleMotion(midLap, 2000, 90000, false);
+assert(stayed > 0.35, 'full strips mid-lap do not snap to the line ' + stayed);
+
+var fin = E.stepMotion(null, 0.96, 0.99, 0, 90000, false, { exact: true });
+fin = E.stepMotion(fin, 0.01, 0.1, 1000, 90000, false, { exact: true, freshLap: true });
+var crossing = E.sampleMotion(fin, 1000, 90000, false);
+assert(crossing > 0.9, 'finish stays near the line at the tick ' + crossing);
+var crossed = E.sampleMotion(fin, 1700, 90000, false);
+assert(crossed < 0.08, 'finish eases across the line ' + crossed);
+
+for (var slot = 0; slot < 16; slot++) {
+  var pack = E.packOffset(slot, false);
+  var pitPack = E.packOffset(slot, true);
+  assert(Math.abs(pack.n) <= 14 && Math.abs(pack.t) <= 22, 'on-track pack stays beside the line ' + slot);
+  assert(Math.abs(pitPack.n) <= 28 && Math.abs(pitPack.t) <= 22, 'pit pack stays beside the line ' + slot);
+}
+
+var flag = E.finishGrid({ x: 80, y: 40 }, 0, 2, 4, 6, 2);
+assert(flag.length === 12, 'finish grid count');
+var lightN = 0;
+var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+for (var fi = 0; fi < flag.length; fi++) {
+  if (flag[fi].light) lightN++;
+  assert(flag[fi].light !== flag[(fi + 1) % flag.length].light || fi % 6 === 5, 'row alternates');
+  for (var fk = 0; fk < flag[fi].pts.length; fk++) {
+    var fp = flag[fi].pts[fk];
+    if (fp.x < minX) minX = fp.x;
+    if (fp.x > maxX) maxX = fp.x;
+    if (fp.y < minY) minY = fp.y;
+    if (fp.y > maxY) maxY = fp.y;
+  }
+}
+assert(lightN === 6, 'half the finish squares are light');
+near((minX + maxX) / 2, 80, 0.01, 'finish centered on x');
+near((minY + maxY) / 2, 40, 0.01, 'finish centered on y');
+near(maxY - minY, 8, 0.01, 'two cells along the tangent');
+near(maxX - minX, 24, 0.01, 'six cells across the track');
+assert(flag[0].light === true && flag[1].light === false, 'checker starts light');
 
 // 弧长：中点大致在线段中间。
 var arc = E.buildArc([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);

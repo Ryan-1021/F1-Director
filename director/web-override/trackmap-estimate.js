@@ -1,7 +1,8 @@
 /*
  * 赛道图车位估计（不是 GPS）。
  *
- * 练习 / 排位：用本圈 S1–S3 与迷你赛段（已点亮的 segment）得到圈进度。
+ * 练习 / 排位：用本圈 S1–S3 与迷你赛段得到圈进度。进度对齐赛段成绩条上
+ * 已经点亮的格子（非 0 都算到达），不拿上一圈残留的赛段时间把车拉回起点。
  * 正赛 / 冲刺赛：领先者仍用赛段；其余车用相对领先者的时间差 ÷ 参考圈速。
  * 被套圈（"1 LAP"）不用时间差，改回各车自己的赛段。
  * 进站不沿赛道飞到某个假维修区，只在当前进度上由绘图层向内侧偏一点。
@@ -16,8 +17,6 @@
   if (root) root.TrackmapEstimate = api;
 })(typeof window !== 'undefined' ? window : globalThis, function () {
   'use strict';
-
-  var SEG_DONE = { 2048: 1, 2049: 1, 2051: 1 };
 
   function wrap01(f) {
     if (!isFinite(f)) return 0;
@@ -94,55 +93,190 @@
     return isFinite(t) && t > 0.5;
   }
 
+  /** 和赛段成绩条同一套：非 0 都画出来（2048 黄 / 2049 绿 / 2051 紫，其余暗色）。 */
+  function segmentReached(status) {
+    return ((status | 0) !== 0);
+  }
+
+  function sectorMini(segments) {
+    var segs = segments || [];
+    var done = 0;
+    for (var i = 0; i < segs.length; i++) {
+      if (!segmentReached(segs[i])) break;
+      done++;
+    }
+    var allLit = segs.length > 0 && done === segs.length;
+    return {
+      len: segs.length,
+      done: done,
+      allLit: allLit,
+      partial: done > 0 && !allLit
+    };
+  }
+
   /**
-   * 本车自己的圈进度。
+   * 本车自己的圈进度，和迷你赛段条上「从左点亮到哪一格」对齐。
+   * 正在点亮的那一段优先：上一圈留下的赛段时间不能把车判成已冲线。
    * exact=false 表示只知道「至少已经到这个赛段起点」，绘图不该把车拉回去
    * （迷你赛段状态会褪成 0）。
    */
   function progressFromTiming(car) {
     var sectors = readSectors(car || {});
-    var current = 0;
-    for (var i = 0; i < 3; i++) {
-      if (sectorHasTime(sectors[i].value)) current = i + 1;
-      else break;
+    var info = [];
+    var i;
+    for (i = 0; i < 3; i++) info.push(sectorMini(sectors[i].segments));
+
+    var current = -1;
+    for (i = 0; i < 3; i++) {
+      if (info[i].partial) { current = i; break; }
     }
+
+    if (current < 0) {
+      current = 0;
+      for (i = 0; i < 3; i++) {
+        if (info[i].allLit) {
+          current = i + 1;
+          continue;
+        }
+        if (!sectorHasTime(sectors[i].value)) break;
+        // 有时间但灯是灭的。前一段若还全亮，说明这段刚被清掉，旧时间不能当成已走完。
+        if (i > 0 && info[i - 1].allLit) break;
+        current = i + 1;
+      }
+    }
+
     if (current >= 3) {
-      return { frac: 0.01, cap: 0.1, sector: 0, confident: true, exact: true, doneSegs: 0, freshLap: true };
+      var allFull = info[0].allLit && info[1].allLit && info[2].allLit;
+      var noStrips = (info[0].len + info[1].len + info[2].len) === 0;
+      if (allFull || noStrips) {
+        return { frac: 0.01, cap: 0.1, sector: 0, confident: true, exact: true, doneSegs: 0, freshLap: true };
+      }
+      return {
+        frac: 0.02, cap: 0.12, sector: 0,
+        confident: true, exact: false, doneSegs: 0, freshLap: false
+      };
     }
-    var segs = sectors[current].segments || [];
-    var done = 0;
-    for (var s = 0; s < segs.length; s++) {
-      if (SEG_DONE[segs[s] | 0]) done++;
-      else break;
-    }
+
+    var mini = info[current];
+    var done = mini.done;
     var inner;
     var capInner;
     var exact = false;
-    if (segs.length && done > 0) {
-      inner = (done - 0.2) / segs.length;
-      capInner = Math.min(0.98, (done + 0.9) / segs.length);
+    if (mini.len && done > 0) {
+      // 点亮前缀的右边界：条上亮了几格，车就在这一段的同样比例处。
+      inner = done / mini.len;
+      capInner = Math.min(0.99, inner + (1 / mini.len) * 0.35);
       exact = true;
     } else if (current > 0) {
       inner = 0.03;
-      capInner = segs.length ? Math.max(0.2, 1.15 / segs.length) : 0.92;
+      capInner = mini.len ? Math.max(0.2, 1.15 / mini.len) : 0.92;
       exact = false;
     } else {
       inner = 0.02;
-      capInner = segs.length ? Math.max(0.18, 1 / segs.length) : 0.9;
+      capInner = mini.len ? Math.max(0.18, 1 / mini.len) : 0.9;
       exact = false;
     }
     if (inner < 0) inner = 0;
     if (inner > 0.98) inner = 0.98;
     if (capInner < inner) capInner = Math.min(0.99, inner + 0.04);
+    var anyTime = false;
+    for (i = 0; i < 3; i++) {
+      if (sectorHasTime(sectors[i].value)) anyTime = true;
+    }
     return {
       frac: (current + inner) / 3,
       cap: (current + Math.min(0.99, capInner)) / 3,
       sector: current,
-      confident: current > 0 || done > 0,
+      confident: current > 0 || done > 0 || anyTime,
       exact: exact,
       doneSegs: done,
       freshLap: false
     };
+  }
+
+  /** 用本车上一圈（否则最快圈）相对参考圈速的比例，避免按全场最快圈把点跑到迷你赛段前面。 */
+  function ownLapScale(car, refSeconds) {
+    var c = car || {};
+    var laps = [c.lastLap, c.lastLapTime, c.LastLapTime, c.bestLap];
+    var sec = NaN;
+    for (var i = 0; i < laps.length; i++) {
+      var t = timeSeconds(laps[i]);
+      if (t > 50 && t < 220) { sec = t; break; }
+    }
+    if (!(sec > 50) || !(refSeconds > 40)) return 1;
+    var scale = sec / refSeconds;
+    if (scale < 0.85) scale = 0.85;
+    if (scale > 1.5) scale = 1.5;
+    return scale;
+  }
+
+  /**
+   * 重叠车标相对弧线的屏幕像素偏移。n 是法向（进站向内），t 是切向。
+   * 第一辆贴在线上；多出来的车只在线旁一小格里挤，避免沿法线排成一串飞出轮廓。
+   */
+  /**
+   * 起终点方格。origin 与切向 tx/ty 用和轮廓相同的屏幕坐标（mapper 之后）。
+   * 格子沿法线横跨赛道、沿切线两排，中心压在进度 0 上。
+   */
+  function finishGrid(origin, tx, ty, cell, cols, rows) {
+    var ox = origin && isFinite(origin.x) ? origin.x : 0;
+    var oy = origin && isFinite(origin.y) ? origin.y : 0;
+    var vx = Number(tx) || 0;
+    var vy = Number(ty) || 0;
+    var vlen = Math.sqrt(vx * vx + vy * vy);
+    if (!(vlen > 1e-6)) { vx = 1; vy = 0; vlen = 1; }
+    vx /= vlen;
+    vy /= vlen;
+    var nx = -vy;
+    var ny = vx;
+    cols = cols | 0;
+    rows = rows | 0;
+    if (cols < 2) cols = 2;
+    if (cols > 8) cols = 8;
+    if (rows < 1) rows = 1;
+    if (rows > 3) rows = 3;
+    cell = Number(cell);
+    if (!(cell > 0)) cell = 3;
+    var squares = [];
+    var u0 = -cols * cell / 2;
+    var v0 = -rows * cell / 2;
+    function at(u, v) {
+      return {
+        x: ox + nx * u + vx * v,
+        y: oy + ny * u + vy * v
+      };
+    }
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var uA = u0 + c * cell;
+        var uB = uA + cell;
+        var vA = v0 + r * cell;
+        var vB = vA + cell;
+        squares.push({
+          light: (r + c) % 2 === 0,
+          pts: [at(uA, vA), at(uB, vA), at(uB, vB), at(uA, vB)]
+        });
+      }
+    }
+    return squares;
+  }
+
+  function packOffset(slot, pit) {
+    var n = pit ? 14 : 0;
+    var t = 0;
+    var s = slot | 0;
+    if (s < 0) s = 0;
+    if (s > 12) s = 12;
+    if (s > 0) {
+      var col = s > 2 ? 2 : s;
+      var row = s > 2 ? 1 : 0;
+      t = col * 11;
+      n += row * 11;
+    }
+    if (!pit && n > 14) n = 14;
+    if (pit && n > 28) n = 28;
+    if (t > 22) t = 22;
+    return { n: n, t: t };
   }
 
   function parseGap(gap) {
@@ -300,7 +434,9 @@
         outlap: outlap && !pit,
         hold: hold,
         hide: hide,
-        mode: mode
+        mode: mode,
+        lapScale: ownLapScale(c, lapSeconds),
+        freshLap: !!prog.freshLap
       });
     }
     return {
@@ -355,7 +491,15 @@
       var room = wrap01(st.cap - st.anchor);
       if (room > 0.98) room = 0;
       else if (room > 0.5) room = null;
-      if (room != null && adv > room) adv = room;
+      if (room != null && adv > room) {
+        if (room === 0) adv = 0;
+        else {
+          // 靠近上限时减速，不要在迷你赛段之间突然钉死。
+          var bleed = (adv - room) * 0.22;
+          if (bleed > 0.006) bleed = 0.006;
+          adv = room + bleed;
+        }
+      }
     }
     return wrap01(st.anchor + adv);
   }
@@ -373,18 +517,18 @@
     var shown = sampleMotion(st, now, lapMs, frozen);
     var modeChanged = !!st.pit !== !!flags.pit || !!st.hold !== !!flags.hold;
     var targetMoved = st.lastTarget == null || Math.abs(wrapDelta(target - st.lastTarget)) > 0.0005;
-    if (modeChanged || (targetMoved && Math.abs(wrapDelta(target - shown)) > 0.08)) {
+    var err = wrapDelta(target - shown);
+    // 小步向前沿弧线滑过去。已经滑过点亮边界的不要为了对齐往回拽。
+    // 差了一大截（换圈、数据跳变）仍然沿短弧收回。
+    if (modeChanged || (targetMoved && (err > 0.0008 || err < -0.12))) {
       st.easeFrom = shown;
       st.easeTo = target;
       st.easeStart = now;
-      st.easeMs = flags.pit ? 420 : 640;
+      var gap = Math.abs(err);
+      st.easeMs = flags.pit ? 420 : (gap > 0.12 ? 700 : (gap > 0.05 ? 520 : 360));
       st.anchor = target;
       st.at = now;
       st.display = shown;
-    } else if (targetMoved) {
-      var err = wrapDelta(target - shown);
-      var nudged = wrap01(shown + err * 0.4);
-      rebaseMotion(st, nudged, now);
     }
     st.cap = cap;
     st.lastTarget = target;
@@ -404,7 +548,7 @@
       st.pit = !!flags.pit;
       st.hold = !!flags.hold;
       st.hide = !!flags.hide;
-      st.lapScale = flags.outlap && !flags.exact ? 1.75 : 1;
+      st.lapScale = flags.outlap && !flags.exact ? 1.75 : (flags.lapScale > 0.5 ? flags.lapScale : 1);
       st.lastTarget = target;
       return st;
     }
@@ -444,14 +588,34 @@
       return st;
     }
     st.hold = false;
-    st.lapScale = flags.outlap && !flags.exact ? 1.75 : 1;
+    var nextScale = flags.outlap && !flags.exact ? 1.75 : (flags.lapScale > 0.5 ? flags.lapScale : 1);
+    if (st.lapScale > 0 && Math.abs(nextScale - st.lapScale) / st.lapScale > 0.05) {
+      var shownScale = sampleMotion(st, now, lapMs, frozen);
+      rebaseMotion(st, shownScale, now);
+    }
+    st.lapScale = nextScale;
+
+    // 三赛段全亮时进度会落到起点。车若还在半圈上，多半是后两段留着上一圈的颜色，不要拉回去。
+    if (flags.freshLap) {
+      var shownLap = sampleMotion(st, now, lapMs, frozen);
+      if (shownLap > 0.15 && shownLap < 0.88) {
+        st.cap = wrap01(shownLap + 0.03);
+        return st;
+      }
+    }
 
     if (!flags.exact) {
       var shown = sampleMotion(st, now, lapMs, frozen);
       var behind = wrapDelta(target - shown);
-      if (behind > 0.02 && behind < 0.5) {
-        var raised = wrap01(shown + behind * 0.55);
-        rebaseMotion(st, raised, now);
+      if (behind > 0.02 && behind < 0.5 && st.easeTo == null) {
+        var raised = wrap01(shown + behind * 0.85);
+        st.easeFrom = shown;
+        st.easeTo = raised;
+        st.easeStart = now;
+        st.easeMs = 420;
+        st.anchor = raised;
+        st.at = now;
+        st.display = shown;
       }
       st.cap = cap;
       st.lastTarget = target;
@@ -801,6 +965,9 @@
     paceScale: paceScale,
     refLapSeconds: refLapSeconds,
     planField: planField,
+    ownLapScale: ownLapScale,
+    packOffset: packOffset,
+    finishGrid: finishGrid,
     sampleMotion: sampleMotion,
     rebaseMotion: rebaseMotion,
     stepMotion: stepMotion,
