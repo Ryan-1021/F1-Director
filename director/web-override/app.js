@@ -1893,6 +1893,7 @@
   var TRACKMAP = {
     outline: [],
     outlineSource: '',   // svg | ''
+    svgRel: '',
     arc: null,
     status: '估计 · 等待计时',
     timer: null,
@@ -1925,7 +1926,42 @@
 
   var TM_EST_TITLE = '估计位置：沿赛道轮廓按赛段/迷你赛段（练习、排位）或正赛与领先者的时间差推算，不是官方 GPS。维修区只是向赛道内侧偏一点；安全车、起跑线对齐都不精确。';
 
-  var TM_CACHE_KEY = 'f1-trackmap-cache-v2';
+  var TM_CACHE_KEY = 'f1-trackmap-cache-v3';
+
+  // 原始 SVG 折线的起点常常不是计时线。offset 是「从文件起点沿路径走到计时线」的弧长比例
+  // （reverse 为 true 时先掉头再量）。sectors 是 [S1 终点, S2 终点]，相对计时线。
+  // 没写的赛道仍从文件起点起、赛段三等分。
+  //
+  // 奥斯汀 austin-1.svg 逆时针，和比赛方向一致。文件从 T20 接到大直道的那个弯起笔，
+  // 不是起终点。T1 弯心约在原始弧长 0.218。计时线在这段直道上、大约从 T20 走向 T1 的
+  // 三分之一处（直道约 780 m，计时线在 T1 前约 520 m），所以 offset = 0.073。
+  // S1 收到图上 T6 附近（原始 0.36），S2 收到大直线尽头 T12（原始 0.63）。
+  var CIRCUIT_PHASE = {
+    'circuits/austin-1.svg': {
+      offset: 0.073,
+      reverse: false,
+      sectors: [0.287, 0.557]
+    }
+  };
+
+  function circuitPhase(rel) {
+    if (!rel || !CIRCUIT_PHASE[rel]) return null;
+    return CIRCUIT_PHASE[rel];
+  }
+
+  function phaseKey() {
+    var rel = TRACKMAP.svgRel || '';
+    var p = circuitPhase(rel);
+    if (!p) return rel + '|raw';
+    return rel + '|' + (p.reverse ? '1' : '0') + '|' + (p.offset || 0) + '|' +
+      ((p.sectors && p.sectors.join(',')) || '');
+  }
+
+  function orientOutlinePts(pts) {
+    var phase = circuitPhase(TRACKMAP.svgRel);
+    if (!phase || !window.TrackmapEstimate || !window.TrackmapEstimate.orientClosedOutline) return pts;
+    return window.TrackmapEstimate.orientClosedOutline(pts, phase.offset || 0, !!phase.reverse);
+  }
 
   function saveTrackmapCache() {
     try {
@@ -1936,6 +1972,8 @@
         raceKey: TRACKMAP.lastRaceKey,
         outline: TRACKMAP.outline,
         outlineSource: 'svg',
+        svgRel: TRACKMAP.svgRel || '',
+        phaseKey: phaseKey(),
         status: TRACKMAP.status,
         savedAt: Date.now()
       }));
@@ -1951,6 +1989,9 @@
       if (c.outlineSource !== 'svg') return false;
       if (!c.outline || c.outline.length < 30) return false;
       if (c.savedAt && (Date.now() - c.savedAt) > 6 * 3600 * 1000) return false;
+      var r = (state && state.race) || {};
+      TRACKMAP.svgRel = circuitSvgFor(r.circuit, r.meeting) || c.svgRel || '';
+      if (c.phaseKey !== phaseKey()) return false;
       TRACKMAP.outline = c.outline;
       TRACKMAP.outlineSource = 'svg';
       TRACKMAP.unknownCircuit = false;
@@ -2387,6 +2428,8 @@
   function adoptOutline(pts, source) {
     if (!pts || pts.length < 30) return false;
     if (source !== 'svg') return false;
+    pts = orientOutlinePts(pts);
+    if (!pts || pts.length < 30) return false;
     TRACKMAP.outline = pts;
     TRACKMAP.outlineSource = source;
     TRACKMAP.outlineError = false;
@@ -2422,6 +2465,7 @@
   function loadSvgOutline(rel) {
     var url = '/' + String(rel || '').replace(/^\//, '');
     if (!url || url === '/') return;
+    TRACKMAP.svgRel = rel;
     if (TRACKMAP.svgRequested === url) return;
     TRACKMAP.svgRequested = url;
     if (!window.TrackmapEstimate) {
@@ -2531,7 +2575,8 @@
     var track = (state && state.track) || {};
     var statusText = [race.status, race.session, track.label, track.detail, track.message]
       .filter(function (x) { return x != null && x !== ''; }).join(' ');
-    var plan = E.planField(cars, race.session, statusText);
+    var phase = circuitPhase(TRACKMAP.svgRel);
+    var plan = E.planField(cars, race.session, statusText, phase && phase.sectors);
     TRACKMAP.planMeta = plan;
     var frozen = plan.pace === 0;
     var lapMs = plan.pace > 0 ? (plan.lapSeconds / plan.pace) * 1000 : (TRACKMAP.estLapMs || 90000);
@@ -2802,8 +2847,9 @@
     var ahead = TRACKMAP.mapper(p.x + p.tx, p.y + p.ty);
     if (!sc || !ahead || !isFinite(sc.x) || !isFinite(sc.y) || !isFinite(ahead.x) || !isFinite(ahead.y)) return;
     var lw = strokeW > 0 ? strokeW : 6;
-    var cell = Math.max(2.4, Math.min(4.2, lw * 0.4));
-    var squares = E.finishGrid(sc, ahead.x - sc.x, ahead.y - sc.y, cell, 6, 2);
+    // 横跨赛道约一整条描边的好几倍，沿行进方向三排，白天黑格、夜间白格都看得清。
+    var cell = Math.max(5, Math.min(9, lw * 1.05));
+    var squares = E.finishGrid(sc, ahead.x - sc.x, ahead.y - sc.y, cell, 8, 3);
     for (var i = 0; i < squares.length; i++) {
       var sq = squares[i];
       var poly = svgEl('polygon', 'tm-finish-sq ' + (sq.light ? 'light' : 'dark'));
@@ -2815,6 +2861,9 @@
       }
       if (!ok) continue;
       poly.setAttribute('points', pts);
+      poly.setAttribute('fill', sq.light ? '#f4f6f8' : '#141414');
+      poly.setAttribute('stroke', sq.light ? '#141414' : '#f7f7f7');
+      poly.setAttribute('stroke-width', '1');
       g.appendChild(poly);
     }
   }
@@ -3077,11 +3126,14 @@
 
   function renderTrackmap(box) {
     var rk = raceKey();
+    var raceNow = (state && state.race) || {};
+    var relNow = circuitSvgFor(raceNow.circuit, raceNow.meeting) || '';
     if (rk !== TRACKMAP.lastRaceKey) {
       TRACKMAP.lastRaceKey = rk;
       TRACKMAP.outline = [];
       TRACKMAP.outlineSource = '';
       TRACKMAP.arc = null;
+      TRACKMAP.svgRel = relNow;
       TRACKMAP.svgRequested = '';
       TRACKMAP.outlineToken++;
       TRACKMAP.outlineError = false;
@@ -3096,6 +3148,7 @@
       stopTrackmapPoll();
       restoreTrackmapCache(rk);
     }
+    if (relNow) TRACKMAP.svgRel = relNow;
 
     ensureTrackmapSvg(box);
     ensureTrackmapChrome(box);
