@@ -799,16 +799,7 @@
     border-radius: 999px;
     padding: 0 6px;
   }
-  .p-head .tm-head-status {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    font-size: 10px;
-    font-weight: 550;
-    color: var(--muted);
-    line-height: 1.2;
-    opacity: 0.85;
-    cursor: inherit;
-  }
+  .p-head .tm-head-status { display: none !important; }
   .p-head .tm-hint {
     flex: 0 0 auto;
     width: 18px;
@@ -2761,11 +2752,6 @@
   function updateTrackmapHeadUi(el, data) {
     var head = el && el.querySelector('[data-tm-head]');
     if (!head || !data) return;
-    var st = head.querySelector('.tm-head-status');
-    if (st && data.status != null) {
-      st.textContent = data.status;
-      st.title = data.status;
-    }
     var lab = head.querySelector('.tm-rot-label');
     if (lab && data.rot != null) lab.textContent = Math.round(Number(data.rot) || 0) + '°';
     var hint = head.querySelector('.tm-hint');
@@ -3084,7 +3070,6 @@
         '<span class="spacer"></span>' +
         '<span class="tm-head" data-tm-head>' +
           '<span class="tm-est" title="位置按计时估计，不是官方 GPS。赛段或正赛时间差沿轮廓推算；维修区只是向内侧偏一点。">估计</span>' +
-          '<span class="tm-head-status" title=""></span>' +
           '<span class="tm-hint" role="img" aria-label="赛道图操作说明" title="滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位">ℹ</span>' +
           '<span class="tm-head-tools">' +
             '<button type="button" class="tm-tool" data-tm-rot="-90" title="逆时针 90°">↺</button>' +

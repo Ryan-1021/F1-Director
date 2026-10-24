@@ -27,7 +27,7 @@
 ## 自测
 
 1. `director/Start.cmd`（或 `Publish-Web.cmd`）发布后打开导播台，加一块「赛道图」。改完前端请 **硬刷新**（Ctrl+F5），否则 iframe 可能还拿着旧的 `app.js`。
-2. 有场次且赛道能对上本地 SVG 时，应看到闭合轮廓和车位；状态类似「估计 · 差距 · 18车」或「估计 · 赛段 · N车」。
+2. 有场次且赛道能对上本地 SVG 时，应看到闭合轮廓和车位。顶栏文字只有「估计」，旁边是旋转控件。
 3. `node director/web-override/trackmap-estimate.test.js`
 4. `node --check director/web-override/app.js`
 

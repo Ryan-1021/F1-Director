@@ -2022,7 +2022,6 @@
   }
 
   function applyTrackmapStatusBadge(badge) {
-    var status = trackmapStatusText();
     if (badge) {
       var textEl = badge.querySelector('.tm-status-text');
       var hintEl = badge.querySelector('.tm-hint');
@@ -2036,14 +2035,9 @@
         badge.appendChild(textEl);
         badge.appendChild(hintEl);
       }
-      textEl.textContent = status;
+      textEl.textContent = '';
       textEl.title = TM_EST_TITLE;
       hintEl.title = TM_VIEW_HINT;
-    }
-    var heads = document.querySelectorAll('.tm-head-status');
-    for (var i = 0; i < heads.length; i++) {
-      heads[i].textContent = status;
-      heads[i].title = TM_EST_TITLE;
     }
     var hints = document.querySelectorAll('.tm-hint');
     for (var h = 0; h < hints.length; h++) hints[h].title = TM_VIEW_HINT;
@@ -2084,9 +2078,6 @@
     var est = el('span', 'tm-est');
     est.textContent = '估计';
     est.title = TM_EST_TITLE;
-    var st = el('span', 'tm-head-status');
-    st.textContent = trackmapStatusText();
-    st.title = TM_EST_TITLE;
     var hint = el('span', 'tm-hint');
     hint.setAttribute('role', 'img');
     hint.setAttribute('aria-label', '赛道图操作说明');
@@ -2095,7 +2086,6 @@
     var tools = el('span', 'tm-head-tools');
     tools.innerHTML = trackmapRotMarkup();
     bar.appendChild(est);
-    bar.appendChild(st);
     bar.appendChild(hint);
     bar.appendChild(tools);
     wireTrackmapHeadTools(tools, box);

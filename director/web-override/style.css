@@ -1466,14 +1466,7 @@ html[data-theme="day"] .tm-dot { stroke: rgba(0, 0, 0, 0.55); }
   background: rgba(0,0,0,0.35);
   border: 1px solid rgba(255,255,255,0.1);
 }
-.tm-head-status {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  font-size: 10px;
-  font-weight: 550;
-  color: var(--muted);
-  line-height: 1.2;
-}
+.tm-head-status { display: none !important; }
 .tm-hint {
   flex: 0 0 auto;
   width: 18px;
