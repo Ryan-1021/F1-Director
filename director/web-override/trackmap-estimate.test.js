@@ -252,24 +252,29 @@ var miniCar = {
   ]
 };
 var evenMini = E.progressFromTiming(miniCar);
-var austinMini = E.progressFromTiming(miniCar, [0.287, 0.557]);
+var austinMini = E.progressFromTiming(miniCar, [0.305, 0.575]);
 near(evenMini.frac, 0.5 / 3, 0.001, 'default S1 is still a third');
-near(austinMini.frac, 0.287 * 0.5, 0.001, 'Austin S1 uses the shorter sector');
+near(austinMini.frac, 0.305 * 0.5, 0.001, 'Austin S1 uses the shorter sector');
 
 var austinSvg = fs.readFileSync(path.join(__dirname, 'circuits', 'austin-1.svg'), 'utf8');
 var austinRaw = E.outlineFromSvg(austinSvg, 4);
 var austinArc = E.buildArc(austinRaw);
 var austinTip = E.pointOnArc(austinArc, 0);
-var austinSf = E.pointOnArc(austinArc, 0.073);
+var austinSf = E.pointOnArc(austinArc, 0.055);
 var austinT1 = E.pointOnArc(austinArc, 0.218);
 function hyp(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 assert(hyp(austinSf, austinTip) > 20, 'Austin timing line is not the SVG start');
 assert(hyp(austinSf, austinT1) > 20, 'Austin timing line is not the T1 apex');
-var austinOriented = E.orientClosedOutline(austinRaw, 0.073, false);
+var toT1x = austinT1.x - austinTip.x;
+var toT1y = austinT1.y - austinTip.y;
+var alongT1 = ((austinSf.x - austinTip.x) * toT1x + (austinSf.y - austinTip.y) * toT1y) /
+  (toT1x * toT1x + toT1y * toT1y);
+assert(alongT1 > 0.20 && alongT1 < 0.32, 'Austin timing line stays on the T20 side of the straight ' + alongT1);
+var austinOriented = E.orientClosedOutline(austinRaw, 0.055, false);
 var austinZero = E.pointOnArc(E.buildArc(austinOriented), 0);
 near(austinZero.x, austinSf.x, 1.5, 'progress 0 sits on the Austin timing line');
 near(austinZero.y, austinSf.y, 1.5, 'progress 0 y');
-var austinT1b = E.pointOnArc(E.buildArc(austinOriented), 0.145);
+var austinT1b = E.pointOnArc(E.buildArc(austinOriented), 0.163);
 near(austinT1b.x, austinT1.x, 4, 'T1 stays on the hairpin after the shift');
 near(austinT1b.y, austinT1.y, 4, 'T1 y after the shift');
 
