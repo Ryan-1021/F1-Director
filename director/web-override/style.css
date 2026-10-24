@@ -56,6 +56,12 @@
   --top3-silver-border: rgba(255, 255, 255, 0.12);
   --flags-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   --chip-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  /* Mini-sector strip: slower / personal best / overall best. Night values. */
+  --sec-mini-empty: rgba(255, 255, 255, 0.14);
+  --sec-mini-yellow: #e6c200;
+  --sec-mini-green: #1db954;
+  --sec-mini-purple: #b24bff;
+  --sec-mini-dim: rgba(255, 255, 255, 0.28);
 }
 html[data-theme="day"] {
   color-scheme: light;
@@ -99,6 +105,12 @@ html[data-theme="day"] {
   --flags-shadow: 0 4px 14px rgba(15, 23, 42, 0.10);
   --chip-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
   --teal: #c40500;
+  /* Same roles as night, darkened so they stay visible on the white sector cell. */
+  --sec-mini-empty: rgba(15, 23, 42, 0.12);
+  --sec-mini-yellow: #c48a00;
+  --sec-mini-green: #0d8a42;
+  --sec-mini-purple: #7b2fe0;
+  --sec-mini-dim: rgba(15, 23, 42, 0.22);
 }
 
 * { box-sizing: border-box; }
@@ -1392,6 +1404,10 @@ html[data-theme="day"] .b-trackmap .tm-wrap {
 .tm-flag-sec { stroke-linecap: round; stroke-linejoin: round; }
 html[data-theme="day"] .tm-line-bg { stroke: rgba(55, 71, 79, 0.45); }
 html[data-theme="day"] .tm-line-fg { stroke: rgba(255, 255, 255, 0.94); }
+.tm-finish { pointer-events: none; }
+.tm-finish-sq { stroke-width: 0.7; stroke-linejoin: miter; }
+.tm-finish-sq.light { fill: #f4f4f4; stroke: #141414; }
+.tm-finish-sq.dark { fill: #141414; stroke: #f7f7f7; }
 .tm-empty {
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-size: 13px;
@@ -1571,13 +1587,13 @@ table.sectors .sec-mini-bit {
   flex: 1 1 0;
   min-width: 2px;
   border-radius: 1px;
-  background: rgba(255,255,255,.14);
+  background: var(--sec-mini-empty);
   box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.45);
 }
-table.sectors .sec-mini-yellow { background: #e6c200; }
-table.sectors .sec-mini-green { background: #1db954; }
-table.sectors .sec-mini-purple { background: #b24bff; }
-table.sectors .sec-mini-dim { background: rgba(255,255,255,.28); }
+table.sectors .sec-mini-yellow { background: var(--sec-mini-yellow); }
+table.sectors .sec-mini-green { background: var(--sec-mini-green); }
+table.sectors .sec-mini-purple { background: var(--sec-mini-purple); }
+table.sectors .sec-mini-dim { background: var(--sec-mini-dim); }
 table.sectors .sec-cur {
   display: block;
   height: 1.2em;
@@ -1624,12 +1640,9 @@ table.sectors td.col-last.sec-yellow {
   font-weight: 600;
   opacity: 1;
 }
-[data-theme="day"] table.sectors .sec-mini-bit {
-  background: rgba(15,23,42,.12);
-}
-[data-theme="day"] table.sectors .sec-mini-dim {
-  background: rgba(15,23,42,.22);
-}
+/* Day empty/dim colors live on --sec-mini-* above. Do not set background on
+   .sec-mini-bit here: that selector also matches yellow/green/purple bits
+   and used to wipe them. */
 
 /* Timing title only: [成绩榜] … [列] [弹出] — other panels keep .p-pop { margin-left:auto } */
 .ptitle:has(> .timing-cols-bar) > .timing-cols-bar {

@@ -2562,7 +2562,15 @@
         now,
         TRACKMAP.estLapMs || lapMs,
         frozen,
-        { exact: p.exact, pit: p.pit, hold: p.hold, hide: p.hide, outlap: p.outlap }
+        {
+          exact: p.exact,
+          pit: p.pit,
+          hold: p.hold,
+          hide: p.hide,
+          outlap: p.outlap,
+          lapScale: p.lapScale,
+          freshLap: p.freshLap
+        }
       );
       st.tla = p.tla || p.number;
       st.teamColour = p.teamColour || '';
@@ -2597,6 +2605,8 @@
     fullFlag.setAttribute('fill', 'none');
     fullFlag.style.display = 'none';
     flags.appendChild(fullFlag);
+    var finish = svgEl('g', 'tm-finish');
+    finish.appendChild(svgEl('title')).textContent = '估计起终点';
     var cars = svgEl('g', 'tm-cars');
     var empty = svgEl('text', 'tm-empty');
     empty.setAttribute('text-anchor', 'middle');
@@ -2604,6 +2614,7 @@
     svg.appendChild(bg);
     svg.appendChild(fg);
     svg.appendChild(flags);
+    svg.appendChild(finish);
     svg.appendChild(cars);
     svg.appendChild(empty);
     wrap.appendChild(svg);
@@ -2661,6 +2672,7 @@
       if (bg) bg.setAttribute('d', '');
       if (fg) fg.setAttribute('d', '');
       clearTrackmapFlagGeometry(svg);
+      clearTrackmapFinish(svg);
       if (empty) {
         empty.textContent = TRACKMAP.status || '估计 · 正在载入赛道轮廓';
         empty.setAttribute('x', String(Math.round(w / 2)));
@@ -2717,6 +2729,7 @@
     if (bg) bg.setAttribute('stroke-width', lw.toFixed(1));
     if (fg) fg.setAttribute('stroke-width', Math.max(1.4, lw * 0.28).toFixed(1));
     paintTrackmapFlags(svg);
+    paintTrackmapFinish(svg, lw);
   }
 
   var TM_FLAG_NIGHT = {
@@ -2752,6 +2765,58 @@
       g.insertBefore(fullPath, g.firstChild);
     }
     return g;
+  }
+
+  function clearTrackmapFinish(svg) {
+    if (!svg) return;
+    var g = svg.querySelector('.tm-finish');
+    if (!g) return;
+    var nodes = g.querySelectorAll('polygon');
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      nodes[i].parentNode.removeChild(nodes[i]);
+    }
+  }
+
+  function paintTrackmapFinish(svg, strokeW) {
+    if (!svg) return;
+    var g = svg.querySelector('.tm-finish');
+    if (!g) {
+      g = svgEl('g', 'tm-finish');
+      var title = svgEl('title');
+      title.textContent = '估计起终点';
+      g.appendChild(title);
+      var cars = svg.querySelector('.tm-cars');
+      if (cars) svg.insertBefore(g, cars);
+      else svg.appendChild(g);
+    } else {
+      var carsG = svg.querySelector('.tm-cars');
+      if (carsG && g.nextSibling !== carsG) svg.insertBefore(g, carsG);
+    }
+    clearTrackmapFinish(svg);
+    var E = window.TrackmapEstimate;
+    if (!E || !E.finishGrid || !E.pointOnArc || !TRACKMAP.mapper || !TRACKMAP.arc || !(TRACKMAP.arc.total > 0)) {
+      return;
+    }
+    var p = E.pointOnArc(TRACKMAP.arc, 0);
+    var sc = TRACKMAP.mapper(p.x, p.y);
+    var ahead = TRACKMAP.mapper(p.x + p.tx, p.y + p.ty);
+    if (!sc || !ahead || !isFinite(sc.x) || !isFinite(sc.y) || !isFinite(ahead.x) || !isFinite(ahead.y)) return;
+    var lw = strokeW > 0 ? strokeW : 6;
+    var cell = Math.max(2.4, Math.min(4.2, lw * 0.4));
+    var squares = E.finishGrid(sc, ahead.x - sc.x, ahead.y - sc.y, cell, 6, 2);
+    for (var i = 0; i < squares.length; i++) {
+      var sq = squares[i];
+      var poly = svgEl('polygon', 'tm-finish-sq ' + (sq.light ? 'light' : 'dark'));
+      var pts = '';
+      var ok = true;
+      for (var k = 0; k < sq.pts.length; k++) {
+        if (!isFinite(sq.pts[k].x) || !isFinite(sq.pts[k].y)) { ok = false; break; }
+        pts += (k ? ' ' : '') + sq.pts[k].x.toFixed(2) + ',' + sq.pts[k].y.toFixed(2);
+      }
+      if (!ok) continue;
+      poly.setAttribute('points', pts);
+      g.appendChild(poly);
+    }
   }
 
   function clearTrackmapFlagGeometry(svg) {
@@ -2905,12 +2970,13 @@
       nx = -nx;
       ny = -ny;
     }
-    var offN = pit ? 16 : (slot * 12);
-    var offT = pit ? (slot * 15) : 0;
-    return {
-      x: sc.x + nx * offN + tx * offT,
-      y: sc.y + ny * offN + ty * offT
-    };
+    var pack = (E.packOffset ? E.packOffset(slot, pit) : { n: pit ? 14 : 0, t: 0 });
+    var offN = pack.n;
+    var offT = pack.t;
+    var x = sc.x + nx * offN + tx * offT;
+    var y = sc.y + ny * offN + ty * offT;
+    if (!isFinite(x) || !isFinite(y)) return { x: sc.x, y: sc.y };
+    return { x: x, y: y };
   }
 
   function updateMarkerTransforms(now) {
@@ -2943,7 +3009,8 @@
       var xy = screenAlong(item.frac, item.pit, item.slot);
       var g = ensureMarker(item.num);
       seen[item.num] = 1;
-      var key = xy.x.toFixed(1) + ' ' + xy.y.toFixed(1);
+      if (!xy || !isFinite(xy.x) || !isFinite(xy.y)) continue;
+      var key = xy.x.toFixed(2) + ' ' + xy.y.toFixed(2);
       if (g.__xy !== key) {
         g.setAttribute('transform', 'translate(' + key + ')');
         g.__xy = key;
@@ -2982,9 +3049,12 @@
 
   function startTrackmapMotion() {
     if (TRACKMAP.raf) return;
-    var loop = function (now) {
+    // rAF 回调的时间戳是 performance 原点，运动状态的 anchor 用的是 Date.now()。
+    // 混用时 now - anchor 为负，外推被掐成 0，车标会钉在上一次计时上，下一拍再跳。
+    var loop = function () {
       TRACKMAP.raf = window.requestAnimationFrame(loop);
       if (document.hidden) return;
+      var now = Date.now();
       var box = document.querySelector('.b-trackmap');
       if (!box) return;
       var wrap = box.querySelector('.tm-wrap');
