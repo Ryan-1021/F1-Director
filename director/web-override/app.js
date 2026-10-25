@@ -1939,10 +1939,13 @@
     livePlan: null,
     planMeta: null,
     flagGeomKey: '',
-    flagPaintKey: ''
+    flagPaintKey: '',
+    screenOutline: null,
+    trackStrokeW: 8,
+    sfScreen: null
   };
 
-  var TM_EST_TITLE = '估计位置：沿赛道轮廓按赛段/迷你赛段（练习、排位）或正赛与领先者的时间差推算，不是官方 GPS。维修区只是向赛道内侧偏一点；安全车、起跑线对齐都不精确。';
+  var TM_EST_TITLE = '估计位置：沿赛道轮廓按赛段/迷你赛段（练习、排位）或正赛与领先者的时间差推算，不是官方 GPS。进站车收在统一 P 区，不压赛道灰线；安全车、起跑线对齐都不精确。';
 
   var TM_CACHE_KEY = 'f1-trackmap-cache-v3';
 
@@ -2679,6 +2682,7 @@
     var existing = box.querySelector('svg.tm-map');
     if (existing) {
       TRACKMAP.carsG = existing.querySelector('.tm-cars');
+      ensurePitBayLayer(existing);
       return box.querySelector('.tm-wrap');
     }
     clear(box);
@@ -2697,6 +2701,22 @@
     flags.appendChild(fullFlag);
     var finish = svgEl('g', 'tm-finish');
     finish.appendChild(svgEl('title')).textContent = '估计起终点';
+    var pitBay = svgEl('g', 'tm-pit-bay');
+    pitBay.style.display = 'none';
+    var pitBg = svgEl('rect', 'tm-pit-bay-bg');
+    pitBg.setAttribute('rx', '5');
+    pitBg.setAttribute('ry', '5');
+    var pitBadge = svgEl('g', 'tm-pit-badge');
+    var pitBadgeBg = svgEl('rect', 'tm-pit-badge-bg');
+    pitBadgeBg.setAttribute('rx', '3');
+    pitBadgeBg.setAttribute('ry', '3');
+    var pitBadgeTxt = svgEl('text', 'tm-pit-badge-t');
+    pitBadgeTxt.setAttribute('text-anchor', 'middle');
+    pitBadgeTxt.textContent = 'P';
+    pitBadge.appendChild(pitBadgeBg);
+    pitBadge.appendChild(pitBadgeTxt);
+    pitBay.appendChild(pitBg);
+    pitBay.appendChild(pitBadge);
     var cars = svgEl('g', 'tm-cars');
     var empty = svgEl('text', 'tm-empty');
     empty.setAttribute('text-anchor', 'middle');
@@ -2705,6 +2725,7 @@
     svg.appendChild(fg);
     svg.appendChild(flags);
     svg.appendChild(finish);
+    svg.appendChild(pitBay);
     svg.appendChild(cars);
     svg.appendChild(empty);
     wrap.appendChild(svg);
@@ -2759,10 +2780,13 @@
     if (!bounds || TRACKMAP.outline.length < 3) {
       TRACKMAP.mapper = null;
       TRACKMAP.screenCentroid = null;
+      TRACKMAP.screenOutline = null;
+      TRACKMAP.sfScreen = null;
       if (bg) bg.setAttribute('d', '');
       if (fg) fg.setAttribute('d', '');
       clearTrackmapFlagGeometry(svg);
       clearTrackmapFinish(svg);
+      paintPitBay(svg, null, false);
       if (empty) {
         empty.textContent = TRACKMAP.status || '估计 · 正在载入赛道轮廓';
         empty.setAttribute('x', String(Math.round(w / 2)));
@@ -2809,15 +2833,32 @@
     }
     TRACKMAP.screenCentroid = mapPoint(sx / outline.length, sy / outline.length);
     var d = '';
+    var screenPts = [];
     for (var i = 0; i < outline.length; i++) {
       var mp = mapPoint(outline[i].x, outline[i].y);
+      screenPts.push(mp);
       d += (i ? 'L' : 'M') + mp.x.toFixed(1) + ' ' + mp.y.toFixed(1);
     }
+    TRACKMAP.screenOutline = screenPts;
     if (bg) bg.setAttribute('d', d);
     if (fg) fg.setAttribute('d', d);
     var lw = Math.max(4, Math.min(12, 5 + Math.sqrt(zoom) * 3));
+    TRACKMAP.trackStrokeW = lw;
     if (bg) bg.setAttribute('stroke-width', lw.toFixed(1));
     if (fg) fg.setAttribute('stroke-width', Math.max(1.4, lw * 0.28).toFixed(1));
+    var E = window.TrackmapEstimate;
+    if (E && E.pointOnArc && TRACKMAP.arc && TRACKMAP.arc.total > 0) {
+      var sf = E.pointOnArc(TRACKMAP.arc, 0);
+      var sc = mapPoint(sf.x, sf.y);
+      var ahead = mapPoint(sf.x + sf.tx, sf.y + sf.ty);
+      TRACKMAP.sfScreen = {
+        origin: sc,
+        tx: ahead.x - sc.x,
+        ty: ahead.y - sc.y
+      };
+    } else {
+      TRACKMAP.sfScreen = null;
+    }
     paintTrackmapFlags(svg);
     paintTrackmapFinish(svg, lw);
   }
@@ -3026,6 +3067,69 @@
     }
   }
 
+  function ensurePitBayLayer(svg) {
+    if (!svg) return null;
+    var g = svg.querySelector('.tm-pit-bay');
+    if (!g) {
+      g = svgEl('g', 'tm-pit-bay');
+      g.style.display = 'none';
+      var bg = svgEl('rect', 'tm-pit-bay-bg');
+      bg.setAttribute('rx', '5');
+      bg.setAttribute('ry', '5');
+      var badge = svgEl('g', 'tm-pit-badge');
+      var badgeBg = svgEl('rect', 'tm-pit-badge-bg');
+      badgeBg.setAttribute('rx', '3');
+      badgeBg.setAttribute('ry', '3');
+      var badgeTxt = svgEl('text', 'tm-pit-badge-t');
+      badgeTxt.setAttribute('text-anchor', 'middle');
+      badgeTxt.textContent = 'P';
+      badge.appendChild(badgeBg);
+      badge.appendChild(badgeTxt);
+      g.appendChild(bg);
+      g.appendChild(badge);
+    }
+    var cars = svg.querySelector('.tm-cars');
+    if (g.parentNode !== svg) {
+      if (cars) svg.insertBefore(g, cars);
+      else svg.appendChild(g);
+    } else if (cars && g.nextSibling !== cars) {
+      svg.insertBefore(g, cars);
+    }
+    return g;
+  }
+
+  function paintPitBay(svg, layout, visible) {
+    var g = ensurePitBayLayer(svg);
+    if (!g) return;
+    if (!visible || !layout) {
+      if (g.style.display !== 'none') g.style.display = 'none';
+      return;
+    }
+    if (g.style.display === 'none') g.style.display = '';
+    var bg = g.querySelector('.tm-pit-bay-bg');
+    if (bg) {
+      bg.setAttribute('x', layout.x.toFixed(1));
+      bg.setAttribute('y', layout.y.toFixed(1));
+      bg.setAttribute('width', layout.width.toFixed(1));
+      bg.setAttribute('height', layout.height.toFixed(1));
+    }
+    var badge = layout.badge || {};
+    var br = badge.r > 0 ? badge.r : 7;
+    var badgeBg = g.querySelector('.tm-pit-badge-bg');
+    if (badgeBg && isFinite(badge.x) && isFinite(badge.y)) {
+      badgeBg.setAttribute('x', (badge.x - br).toFixed(1));
+      badgeBg.setAttribute('y', (badge.y - br).toFixed(1));
+      badgeBg.setAttribute('width', (br * 2).toFixed(1));
+      badgeBg.setAttribute('height', (br * 2).toFixed(1));
+    }
+    var txt = g.querySelector('.tm-pit-badge-t');
+    if (txt && isFinite(badge.x) && isFinite(badge.y)) {
+      txt.setAttribute('x', badge.x.toFixed(1));
+      txt.setAttribute('y', (badge.y + br * 0.36).toFixed(1));
+      txt.setAttribute('font-size', Math.max(8, br * 1.2).toFixed(1));
+    }
+  }
+
   function ensureMarker(num) {
     var g = TRACKMAP.nodes[num];
     if (g && g.parentNode) return g;
@@ -3047,7 +3151,34 @@
     return g;
   }
 
-  function screenAlong(frac, pit, slot) {
+  function paintMarker(item, xy) {
+    var g = ensureMarker(item.num);
+    if (!xy || !isFinite(xy.x) || !isFinite(xy.y)) return g;
+    var key = xy.x.toFixed(2) + ' ' + xy.y.toFixed(2);
+    if (g.__xy !== key) {
+      g.setAttribute('transform', 'translate(' + key + ')');
+      g.__xy = key;
+    }
+    var col = teamColourCss(item.st.teamColour);
+    if (g.__fill !== col) {
+      g.__dot.setAttribute('fill', col);
+      g.__fill = col;
+    }
+    var tla = item.st.tla || item.num;
+    if (g.__tla !== tla) {
+      g.__label.textContent = tla;
+      g.__tla = tla;
+    }
+    var cls = 'tm-car' + (item.pit ? ' tm-pit' : '') + (item.st.outlap && !item.pit ? ' tm-out' : '');
+    if (g.__cls !== cls) {
+      g.setAttribute('class', cls);
+      g.__cls = cls;
+    }
+    if (g.style.display === 'none') g.style.display = '';
+    return g;
+  }
+
+  function screenAlong(frac, slot) {
     var E = window.TrackmapEstimate;
     var p = E.pointOnArc(TRACKMAP.arc, frac);
     var sc = TRACKMAP.mapper(p.x, p.y);
@@ -3064,67 +3195,81 @@
       nx = -nx;
       ny = -ny;
     }
-    var pack = (E.packOffset ? E.packOffset(slot, pit) : { n: pit ? 14 : 0, t: 0 });
-    var offN = pack.n;
-    var offT = pack.t;
-    var x = sc.x + nx * offN + tx * offT;
-    var y = sc.y + ny * offN + ty * offT;
+    var pack = (E.packOffset ? E.packOffset(slot, false) : { n: 0, t: 0 });
+    var x = sc.x + nx * pack.n + tx * pack.t;
+    var y = sc.y + ny * pack.n + ty * pack.t;
     if (!isFinite(x) || !isFinite(y)) return { x: sc.x, y: sc.y };
     return { x: x, y: y };
+  }
+
+  function pitCarPos(item) {
+    var live = TRACKMAP.livePlan && TRACKMAP.livePlan[item.num];
+    var pos = live && parseInt(live.position, 10);
+    if (!isFinite(pos)) pos = parseInt(item.st.position, 10);
+    if (!isFinite(pos)) pos = 99;
+    return pos;
   }
 
   function updateMarkerTransforms(now) {
     if (!TRACKMAP.mapper || !TRACKMAP.arc || !window.TrackmapEstimate || !TRACKMAP.carsG) return;
     var E = window.TrackmapEstimate;
+    var svg = TRACKMAP.carsG.ownerSVGElement || TRACKMAP.carsG.parentNode;
     var lapMs = TRACKMAP.estLapMs || 90000;
     var frozen = !!TRACKMAP.estFrozen;
-    var placed = [];
+    var onTrack = [];
+    var inPit = [];
     var seen = {};
     Object.keys(TRACKMAP.motion).forEach(function (num) {
       var st = TRACKMAP.motion[num];
       if (!st || st.hide) return;
       var frac = E.sampleMotion(st, now, lapMs, frozen);
-      placed.push({ num: num, st: st, frac: frac, pit: !!st.pit });
+      var item = { num: num, st: st, frac: frac, pit: !!st.pit };
+      if (item.pit) inPit.push(item);
+      else onTrack.push(item);
     });
-    placed.sort(function (a, b) { return a.frac - b.frac; });
+    onTrack.sort(function (a, b) { return a.frac - b.frac; });
     var run = 0;
-    var pitSlot = 0;
-    for (var i = 0; i < placed.length; i++) {
-      var item = placed[i];
-      if (item.pit) {
-        item.slot = pitSlot++;
-      } else if (i > 0 && !placed[i - 1].pit && Math.abs(E.wrapDelta(item.frac - placed[i - 1].frac)) < 0.006) {
+    var i;
+    for (i = 0; i < onTrack.length; i++) {
+      var item = onTrack[i];
+      if (i > 0 && Math.abs(E.wrapDelta(item.frac - onTrack[i - 1].frac)) < 0.006) {
         run++;
         item.slot = run;
       } else {
         run = 0;
         item.slot = 0;
       }
-      var xy = screenAlong(item.frac, item.pit, item.slot);
-      var g = ensureMarker(item.num);
+      paintMarker(item, screenAlong(item.frac, item.slot));
       seen[item.num] = 1;
-      if (!xy || !isFinite(xy.x) || !isFinite(xy.y)) continue;
-      var key = xy.x.toFixed(2) + ' ' + xy.y.toFixed(2);
-      if (g.__xy !== key) {
-        g.setAttribute('transform', 'translate(' + key + ')');
-        g.__xy = key;
+    }
+
+    inPit.sort(function (a, b) {
+      var d = pitCarPos(a) - pitCarPos(b);
+      if (d) return d;
+      return String(a.num).localeCompare(String(b.num), 'en');
+    });
+    var bay = null;
+    if (inPit.length && E.placePitBay && TRACKMAP.sfScreen && TRACKMAP.screenOutline) {
+      bay = E.placePitBay({
+        origin: TRACKMAP.sfScreen.origin,
+        tx: TRACKMAP.sfScreen.tx,
+        ty: TRACKMAP.sfScreen.ty,
+        centroid: TRACKMAP.screenCentroid,
+        outline: TRACKMAP.screenOutline,
+        strokeW: TRACKMAP.trackStrokeW || 8,
+        viewW: TRACKMAP.viewW,
+        viewH: TRACKMAP.viewH,
+        zoom: TRACKMAP.viewZoom || 1.05,
+        carCount: inPit.length
+      });
+    }
+    paintPitBay(svg, bay, !!(bay && inPit.length));
+    if (bay) {
+      for (i = 0; i < inPit.length; i++) {
+        var slot = bay.slots[i] || bay.slots[bay.slots.length - 1];
+        paintMarker(inPit[i], slot);
+        seen[inPit[i].num] = 1;
       }
-      var col = teamColourCss(item.st.teamColour);
-      if (g.__fill !== col) {
-        g.__dot.setAttribute('fill', col);
-        g.__fill = col;
-      }
-      var tla = item.st.tla || item.num;
-      if (g.__tla !== tla) {
-        g.__label.textContent = tla;
-        g.__tla = tla;
-      }
-      var cls = 'tm-car' + (item.pit ? ' tm-pit' : '') + (item.st.outlap && !item.pit ? ' tm-out' : '');
-      if (g.__cls !== cls) {
-        g.setAttribute('class', cls);
-        g.__cls = cls;
-      }
-      if (g.style.display === 'none') g.style.display = '';
     }
     Object.keys(TRACKMAP.nodes).forEach(function (num) {
       if (!seen[num]) TRACKMAP.nodes[num].style.display = 'none';

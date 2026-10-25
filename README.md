@@ -17,7 +17,25 @@
 
 ![导播台效果：窄成绩榜与铺开的直播](docs/director-shot-2.jpg)
 
-图里赛道图还是旧界面的「OpenF1 场次查询失败」。当前版本不再请求 OpenF1，轮廓只用本地 SVG。
+图里赛道图还是旧界面的「OpenF1 场次查询失败」。**当前版本不再请求 OpenF1**：轮廓只用本地 f1db SVG，车位是计时估计（不是官方 GPS）。下面才是我们自己做的赛道图。
+
+估计赛道图旗语上色（银石，全部旗况）：本地 SVG + 已有 `track.yellowSectors` / `doubleYellowSectors` / `globalLevel`，黄 / 双黄 / VSC / 安全车 / 红旗 / 全场黄。不请求 OpenF1。同一张图也在 [`docs/trackmap-flags-silverstone.png`](docs/trackmap-flags-silverstone.png)。
+
+![估计赛道图旗语上色（银石，全部旗况）](docs/trackmap-flags-contact-sheet.png)
+
+进站统一 P 区：`inPit` / 差距含 PIT 的车收到轮廓外一块红底「P」码头（车队色点 + 缩写），不压赛道灰线；出站后回线。示意是默认 zoom 1.05 的估计图，不是真实维修区几何。
+
+奥斯汀：P 区在起终点内侧。
+
+![进站统一 P 区（奥斯汀）](docs/pit-bay-austin.png)
+
+摩纳哥：内场口袋。
+
+![进站统一 P 区（摩纳哥）](docs/pit-bay-monaco.png)
+
+银石：内场放不下整块码头时，落到不压线的视口角。
+
+![进站统一 P 区（银石）](docs/pit-bay-silverstone.png)
 
 ---
 
@@ -91,7 +109,7 @@
 | `director/director.html` | 导播台主页面 |
 | `director/web-override/` | 覆盖 UI（`app.js` / `style.css` / 状态 SVG 等） |
 | `director/web-override/circuits/` | 本地赛道轮廓 SVG（f1db，不联网） |
-| `docs/` | 效果图与银石旗语示意 |
+| `docs/` | 效果图、估计赛道图旗语拼图、进站 P 区示意 |
 | `director/layouts.json` | 首次布局种子（写入 `share/web/layouts.json` 后以运行时为准） |
 | `director/assets/` | 图标源与 favicon（`F1-Director.ico`、浏览器图标） |
 | `director/Publish-Web.cmd` | 把 UI（含 assets）拷到 `share/web/` |
@@ -110,12 +128,8 @@
 - 日/夜主题：按钮点击处约 **1s** 圆形扩散切换（View Transition）；启动读盘与布局预设仍瞬时切主题；`prefers-reduced-motion` 时跳过动画
 - 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
 - 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta
-- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。顶栏只有红色「估计」和旋转。对不上的赛道写「未识别赛道」，不联网。维修区、安全车和起跑线对齐都不精确。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
-- 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位
-
-估计赛道图旗语上色预览（银石，示意） / Estimated trackmap flag coloring preview (Silverstone, illustrative).
-
-![估计赛道图旗语上色预览（银石，示意）](docs/trackmap-flags-silverstone.png)
+- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）收到轮廓外统一 P 区（红底「P」+ 车队色点），与灰线间隙 ≥ 1.5×描边宽度，出站后回线。顶栏只有红色「估计」和旋转。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线。P 区、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
+- 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位。预览见上方效果图
 - 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
 - 轮胎 `Compound`：官方 Stints 增量常只推圈数、不带胎种；jar `deepMerge` 不再用空 Compound 盖掉旧值，读胎种自新到旧扫 stint 并 sticky 最近一次非空，避免成绩榜灰色 `—`
 - 正赛预设种子：成绩榜略增高、赛道图略减矮（`director/layouts.json`）
