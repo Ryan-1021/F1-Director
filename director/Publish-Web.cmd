@@ -6,6 +6,7 @@ if not exist "%WEBDIR%" mkdir "%WEBDIR%" >nul 2>&1
 if exist "%~dp0web-override\app.js" (
   copy /Y "%~dp0web-override\app.js" "%WEBDIR%\app.js" >nul
   copy /Y "%~dp0web-override\trackmap-estimate.js" "%WEBDIR%\trackmap-estimate.js" >nul
+  copy /Y "%~dp0web-override\rank-swap.js" "%WEBDIR%\rank-swap.js" >nul
   copy /Y "%~dp0web-override\board.html" "%WEBDIR%\board.html" >nul
   copy /Y "%~dp0web-override\index.html" "%WEBDIR%\index.html" >nul
   copy /Y "%~dp0web-override\style.css" "%WEBDIR%\style.css" >nul

@@ -33,6 +33,12 @@
 
 ![进站 P 徽章悬停提示](docs/pit-bay-tooltip.png)
 
+排名换行：成绩榜和赛段成绩在名次变化时，整行按车号滑到新位置（FLIP / `translateY`，约 **320ms** ease），而不是一帧跳变。多车同时换位也会一起动；POS（以及成绩榜的差距列）等落到新位置后再改。`prefers-reduced-motion` 时跳过动画、直接落位。这和 jar 下发的掉位闪烁 / ↓N（drop5 / drop10 / flash）是两套效果，互不影响。
+
+Rank swap: both the main timing board and the sector board slide rows to their new places when positions change (FLIP / `translateY`, ~320ms ease) instead of jumping. Multi-car reshuffles animate together; POS (and timing gap/interval) update after the slide lands. `prefers-reduced-motion` skips the motion. Separate from the jar’s drop5/drop10/flash blink + ↓N.
+
+![排名换行示意 / rank-swap demo](docs/rank-swap-demo.gif)
+
 ---
 
 ## 和原版的关系
@@ -103,9 +109,9 @@
 | `director/Start.cmd` | 实际启动入口 |
 | `director/Stop.cmd` | 强制停 jar、释放 `:8720` |
 | `director/director.html` | 导播台主页面 |
-| `director/web-override/` | 覆盖 UI（`app.js` / `style.css` / 状态 SVG 等） |
+| `director/web-override/` | 覆盖 UI（`app.js` / `rank-swap.js` / `style.css` / 状态 SVG 等） |
 | `director/web-override/circuits/` | 本地赛道轮廓 SVG（f1db，不联网） |
-| `docs/` | 效果图、估计赛道图旗语拼图、进站 P 区示意 |
+| `docs/` | 效果图、估计赛道图旗语拼图、进站 P 区示意、排名换行 GIF |
 | `director/layouts.json` | 首次布局种子（写入 `share/web/layouts.json` 后以运行时为准） |
 | `director/assets/` | 图标源与 favicon（`F1-Director.ico`、浏览器图标） |
 | `director/Publish-Web.cmd` | 把 UI（含 assets）拷到 `share/web/` |
@@ -127,6 +133,7 @@
 - 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）不画在轮廓上，只计入视口左上角「P + 人数」徽章；出站后回线。顶栏只有红色「估计」和旋转。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线。P 徽章、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
 - 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位。预览见上方效果图
 - 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
+- 成绩榜 / 赛段成绩排名换行：名次变了时按车号 FLIP 滑动（约 320ms），POS 落位后再改；`prefers-reduced-motion` 跳过。不是 jar 的 drop/flash 掉位闪烁
 - 轮胎 `Compound`：官方 Stints 增量常只推圈数、不带胎种；jar `deepMerge` 不再用空 Compound 盖掉旧值，读胎种自新到旧扫 stint 并 sticky 最近一次非空，避免成绩榜灰色 `—`
 - 正赛预设种子：成绩榜略增高、赛道图略减矮（`director/layouts.json`）
 - 天气顶栏：气温、赛道温、湿度、风速风向（中文方位）、气压 hPa、降雨文案；悬停分项提示
@@ -137,6 +144,7 @@
 ## 开发与发布备注
 
 - 改 `director/web-override/` 或 `director.html` 后跑一次 `director\Publish-Web.cmd`，或直接再开 `启动导播台.exe`（启动流程会发布）。
+- 排名换行自测：`node director/web-override/rank-swap.test.js`；界面上换位成绩榜或赛段成绩里任意两车的 POS 应看到整行滑动。
 - `share/web/` 为生成物，以 `director/` 为源。
 - 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。

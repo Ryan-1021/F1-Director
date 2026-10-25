@@ -37,6 +37,7 @@
   --inset-line: rgba(255, 255, 255, 0.03);
   --hover-row: rgba(255, 255, 255, 0.03);
   --stripe-row: rgba(255, 255, 255, 0.028);
+  --stripe-solid: #11161c;
   --row-line: rgba(255, 255, 255, 0.035);
   --soft-fill: rgba(255, 255, 255, 0.04);
   --soft-fill-hover: rgba(255, 255, 255, 0.08);
@@ -89,6 +90,7 @@ html[data-theme="day"] {
   --inset-line: rgba(15, 23, 42, 0.04);
   --hover-row: rgba(15, 23, 42, 0.04);
   --stripe-row: rgba(15, 23, 42, 0.035);
+  --stripe-solid: #f5f7fa;
   --row-line: rgba(15, 23, 42, 0.06);
   --soft-fill: rgba(15, 23, 42, 0.04);
   --soft-fill-hover: rgba(15, 23, 42, 0.08);
@@ -702,6 +704,42 @@ table.timing tr.retired:nth-child(even) > td {
 }
 table.timing tbody tr.retired:nth-child(even) > td {
   background: var(--stripe-row);
+}
+
+/* Rank-row swap (FLIP / translateY). Not the jar drop5/drop10/flash blink. */
+table.timing {
+  --rank-swap-ms: 320ms;
+  --rank-swap-ease: ease;
+}
+table.timing tr[data-car] {
+  position: relative;
+}
+table.timing.rank-swapping tr[data-car] {
+  will-change: transform;
+}
+table.timing.rank-swapping tr[data-car] > td {
+  background: var(--panel);
+}
+table.timing.rank-swapping tr[data-car].rank-stripe > td {
+  background: var(--stripe-solid);
+}
+table.timing.rank-swapping tr[data-car]:hover > td {
+  background: var(--panel);
+}
+table.timing.rank-swapping tr[data-car].rank-stripe:hover > td {
+  background: var(--stripe-solid);
+}
+table.timing.rank-swapping tr.rank-swap-up {
+  z-index: 3;
+}
+table.timing.rank-swapping tr.rank-swap-down {
+  z-index: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  table.timing.rank-swapping tr[data-car] {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* ---------- sector / current-lap board (dense fill like timing) ---------- */
