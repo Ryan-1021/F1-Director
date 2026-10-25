@@ -7,8 +7,8 @@
  * 被套圈（"1 LAP"）不用时间差，改回各车自己的赛段。
  * 两次计时之间按参考圈速外推。新采样只比画面略靠后时（差距抖动、
  * 迷你赛段 cap 收紧）不沿轮廓回退；进站 / 停车 / 大约 0.12 圈以上的后撤仍收回。
- * 进站冻在进站那一刻的估计进度；绘图层把所有进站车收到轮廓内侧、
- * 不压灰线的统一 P 区，而不是沿法线挤在赛道描边上。
+ * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
+ * 只在内侧放一块不压灰线的「P + 人数」徽章。出站后车点回到赛道上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
  * 其它赛道仍相对 SVG 起点。车与车的间距不受这条相位影响。
  *
@@ -433,63 +433,39 @@
     return min;
   }
 
-  var PIT_DOT_R = 6.5;
-
   /**
-   * 统一 P 区盒子尺寸。格子要装得下现有 tm-car（点 r=6.5，缩写在点上方）。
+   * 紧凑「P + 人数」徽章尺寸。人数只影响数字位数，不再为每辆车开格子。
    * 随 zoom 略放大，默认 1.05 仍能读。
    */
   function pitBaySize(carCount, zoom, compact) {
     var n = carCount | 0;
     if (n < 0) n = 0;
-    if (n > 24) n = 24;
+    if (n > 99) n = 99;
     var z = Number(zoom);
     if (!(z > 0)) z = 1;
-    var cellW = Math.max(18, Math.min(26, 18 + z * 5));
-    var cellH = Math.max(26, Math.min(34, 26 + z * 5));
     var badge = Math.max(12, Math.min(18, 12 + z * 3.2));
-    var pad = Math.max(4, Math.min(7, 4 + z));
-    var gap = Math.max(3, Math.min(6, 3 + z));
+    var pad = Math.max(3, Math.min(6, 3 + z * 0.8));
+    var gap = Math.max(3, Math.min(5, 3 + z * 0.6));
+    var digits = n >= 10 ? 2 : 1;
+    var countW = Math.max(10, Math.min(16, 10 + z * 3)) * (digits === 2 ? 1.55 : 1);
     if (compact > 1) {
-      cellW = Math.max(14, cellW * 0.72);
-      cellH = Math.max(20, cellH * 0.72);
       badge = Math.max(10, badge * 0.78);
-      pad = 3;
+      pad = 2;
       gap = 2;
+      countW = Math.max(8, countW * 0.82);
     } else if (compact) {
-      cellW = Math.max(16, cellW * 0.86);
-      cellH = Math.max(22, cellH * 0.86);
       badge = Math.max(11, badge * 0.88);
-      pad = Math.max(3, pad - 1);
+      pad = Math.max(2, pad - 1);
       gap = Math.max(2, gap - 1);
+      countW = Math.max(9, countW * 0.9);
     }
-    var cols = n <= 1 ? 1 : (n <= 3 ? n : (n <= 8 ? 3 : 4));
-    if (compact && n > 2) cols = Math.min(4, Math.max(cols, n <= 6 ? 3 : 4));
-    if (n < 1) cols = 1;
-    var rows = n < 1 ? 1 : Math.ceil(n / cols);
-    var width = pad + badge + gap + cols * cellW + pad;
-    var height = pad + Math.max(badge, rows * cellH) + pad;
+    var width = pad + badge + gap + countW + pad;
+    var height = pad + badge + pad;
     return {
-      n: n, cols: cols, rows: rows,
-      cellW: cellW, cellH: cellH, badge: badge, pad: pad, gap: gap,
+      n: n, digits: digits,
+      badge: badge, pad: pad, gap: gap, countW: countW,
       width: width, height: height
     };
-  }
-
-  function localPitSlots(size) {
-    var slots = [];
-    if (!size || size.n < 1) return slots;
-    var ox = size.pad + size.badge + size.gap;
-    var oy = size.pad;
-    for (var i = 0; i < size.n; i++) {
-      var col = i % size.cols;
-      var row = (i - col) / size.cols;
-      slots.push({
-        x: ox + col * size.cellW + size.cellW / 2,
-        y: oy + row * size.cellH + size.cellH * 0.68
-      });
-    }
-    return slots;
   }
 
   function clampBayOrigin(x, y, w, h, viewW, viewH, margin) {
@@ -503,21 +479,10 @@
     return { x: x, y: y };
   }
 
-  function scorePitBayRect(rect, locals, outline) {
-    var d = minDistRectToPolyline(rect, outline);
-    for (var i = 0; i < locals.length; i++) {
-      var px = rect.x + locals[i].x;
-      var py = rect.y + locals[i].y;
-      var dd = minDistPointToPolyline(px, py, outline) - PIT_DOT_R;
-      if (dd < d) d = dd;
-    }
-    return d;
-  }
-
   /**
-   * 屏幕坐标里给进站车找一块统一 P 区。
+   * 屏幕坐标里给进站人数找一块紧凑 P 徽章。
    * 先从进度 0 沿内侧法向推开（离开描边至少 1.5× 线宽），不够再往里推、
-   * 扫视口网格，或缩一号格子；还压线就落到能让开轮廓的视口角。
+   * 扫视口网格，或缩一号；还压线就落到能让开轮廓的视口角。
    */
   function placePitBay(opts) {
     opts = opts || {};
@@ -536,7 +501,6 @@
     var carCount = opts.carCount;
 
     function search(size) {
-      var locals = localPitSlots(size);
       var half = Math.max(size.width, size.height) / 2;
       var startDist = minClear + half;
       var preferred = {
@@ -546,12 +510,12 @@
       var best = null;
 
       function consider(rect) {
-        var clearance = scorePitBayRect(rect, locals, outline);
+        var clearance = minDistRectToPolyline(rect, outline);
         var cx = rect.x + rect.w / 2;
         var cy = rect.y + rect.h / 2;
         var pref = Math.hypot(cx - preferred.x, cy - preferred.y);
         var inside = (cx - origin.x) * nrm.x + (cy - origin.y) * nrm.y;
-        var cand = { rect: rect, clearance: clearance, pref: pref, inside: inside, size: size, locals: locals };
+        var cand = { rect: rect, clearance: clearance, pref: pref, inside: inside, size: size };
         if (!best) { best = cand; return; }
         var bestOk = best.clearance >= minClear;
         var candOk = clearance >= minClear;
@@ -630,26 +594,48 @@
     }
 
     var size = best && best.size ? best.size : pitBaySize(carCount, zoom, 0);
-    var locals = best && best.locals ? best.locals : localPitSlots(size);
     var rect = best ? best.rect : { x: 6, y: 6, w: size.width, h: size.height };
-    var slots = [];
-    var s;
-    for (s = 0; s < locals.length; s++) {
-      slots.push({ x: rect.x + locals[s].x, y: rect.y + locals[s].y });
-    }
+    var badgeX = rect.x + size.pad + size.badge / 2;
+    var midY = rect.y + size.height / 2;
     return {
       x: rect.x,
       y: rect.y,
       width: size.width,
       height: size.height,
+      count: size.n,
       badge: {
-        x: rect.x + size.pad + size.badge / 2,
-        y: rect.y + size.height / 2,
+        x: badgeX,
+        y: midY,
         r: size.badge / 2
       },
-      slots: slots,
+      countPos: {
+        x: rect.x + size.pad + size.badge + size.gap + size.countW / 2,
+        y: midY
+      },
       clearance: best ? best.clearance : 0,
       minClear: minClear
+    };
+  }
+
+  /**
+   * 画面分组：进站车只计入人数，不进轮廓。出站 / 在跑的车回轮廓。
+   */
+  function pitLanePaint(cars) {
+    var list = cars || [];
+    var onTrack = [];
+    var inPit = [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (!c || c.hide) continue;
+      if (c.pit) inPit.push(c);
+      else onTrack.push(c);
+    }
+    return {
+      pitCount: inPit.length,
+      onTrack: onTrack,
+      inPit: inPit,
+      showBay: inPit.length > 0
     };
   }
 
@@ -924,7 +910,7 @@
 
   /**
    * 把一帧计时测量揉进运动状态。目标没变时不重置时钟，车会沿圈继续走。
-   * 进站：冻在当前进度（绘图再向内侧偏），不要滑到轮廓起点。
+   * 进站：冻在当前进度（绘图层只计入 P 区人数，不画点），不要滑到轮廓起点。
    */
   function stepMotion(st, target, cap, now, lapMs, frozen, flags) {
     flags = flags || {};
@@ -1441,6 +1427,7 @@
     minDistRectToPolyline: minDistRectToPolyline,
     pitBaySize: pitBaySize,
     placePitBay: placePitBay,
+    pitLanePaint: pitLanePaint,
     finishGrid: finishGrid,
     sampleMotion: sampleMotion,
     rebaseMotion: rebaseMotion,

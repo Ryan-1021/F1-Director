@@ -2701,22 +2701,7 @@
     flags.appendChild(fullFlag);
     var finish = svgEl('g', 'tm-finish');
     finish.appendChild(svgEl('title')).textContent = '估计起终点';
-    var pitBay = svgEl('g', 'tm-pit-bay');
-    pitBay.style.display = 'none';
-    var pitBg = svgEl('rect', 'tm-pit-bay-bg');
-    pitBg.setAttribute('rx', '5');
-    pitBg.setAttribute('ry', '5');
-    var pitBadge = svgEl('g', 'tm-pit-badge');
-    var pitBadgeBg = svgEl('rect', 'tm-pit-badge-bg');
-    pitBadgeBg.setAttribute('rx', '3');
-    pitBadgeBg.setAttribute('ry', '3');
-    var pitBadgeTxt = svgEl('text', 'tm-pit-badge-t');
-    pitBadgeTxt.setAttribute('text-anchor', 'middle');
-    pitBadgeTxt.textContent = 'P';
-    pitBadge.appendChild(pitBadgeBg);
-    pitBadge.appendChild(pitBadgeTxt);
-    pitBay.appendChild(pitBg);
-    pitBay.appendChild(pitBadge);
+    var pitBay = makePitBayLayer();
     var cars = svgEl('g', 'tm-cars');
     var empty = svgEl('text', 'tm-empty');
     empty.setAttribute('text-anchor', 'middle');
@@ -3067,26 +3052,39 @@
     }
   }
 
+  function makePitBayLayer() {
+    var pitBay = svgEl('g', 'tm-pit-bay');
+    pitBay.style.display = 'none';
+    var pitBg = svgEl('rect', 'tm-pit-bay-bg');
+    pitBg.setAttribute('rx', '6');
+    pitBg.setAttribute('ry', '6');
+    var pitBadge = svgEl('g', 'tm-pit-badge');
+    var pitBadgeBg = svgEl('rect', 'tm-pit-badge-bg');
+    pitBadgeBg.setAttribute('rx', '3');
+    pitBadgeBg.setAttribute('ry', '3');
+    var pitBadgeTxt = svgEl('text', 'tm-pit-badge-t');
+    pitBadgeTxt.setAttribute('text-anchor', 'middle');
+    pitBadgeTxt.textContent = 'P';
+    pitBadge.appendChild(pitBadgeBg);
+    pitBadge.appendChild(pitBadgeTxt);
+    var pitCount = svgEl('text', 'tm-pit-count');
+    pitCount.setAttribute('text-anchor', 'middle');
+    pitCount.textContent = '0';
+    pitBay.appendChild(pitBg);
+    pitBay.appendChild(pitBadge);
+    pitBay.appendChild(pitCount);
+    return pitBay;
+  }
+
   function ensurePitBayLayer(svg) {
     if (!svg) return null;
     var g = svg.querySelector('.tm-pit-bay');
-    if (!g) {
-      g = svgEl('g', 'tm-pit-bay');
-      g.style.display = 'none';
-      var bg = svgEl('rect', 'tm-pit-bay-bg');
-      bg.setAttribute('rx', '5');
-      bg.setAttribute('ry', '5');
-      var badge = svgEl('g', 'tm-pit-badge');
-      var badgeBg = svgEl('rect', 'tm-pit-badge-bg');
-      badgeBg.setAttribute('rx', '3');
-      badgeBg.setAttribute('ry', '3');
-      var badgeTxt = svgEl('text', 'tm-pit-badge-t');
-      badgeTxt.setAttribute('text-anchor', 'middle');
-      badgeTxt.textContent = 'P';
-      badge.appendChild(badgeBg);
-      badge.appendChild(badgeTxt);
-      g.appendChild(bg);
-      g.appendChild(badge);
+    if (!g) g = makePitBayLayer();
+    if (!g.querySelector('.tm-pit-count')) {
+      var pitCount = svgEl('text', 'tm-pit-count');
+      pitCount.setAttribute('text-anchor', 'middle');
+      pitCount.textContent = '0';
+      g.appendChild(pitCount);
     }
     var cars = svg.querySelector('.tm-cars');
     if (g.parentNode !== svg) {
@@ -3106,6 +3104,8 @@
       return;
     }
     if (g.style.display === 'none') g.style.display = '';
+    var n = layout.count | 0;
+    g.setAttribute('aria-label', '进站 ' + n);
     var bg = g.querySelector('.tm-pit-bay-bg');
     if (bg) {
       bg.setAttribute('x', layout.x.toFixed(1));
@@ -3127,6 +3127,14 @@
       txt.setAttribute('x', badge.x.toFixed(1));
       txt.setAttribute('y', (badge.y + br * 0.36).toFixed(1));
       txt.setAttribute('font-size', Math.max(8, br * 1.2).toFixed(1));
+    }
+    var countPos = layout.countPos || {};
+    var countTxt = g.querySelector('.tm-pit-count');
+    if (countTxt && isFinite(countPos.x) && isFinite(countPos.y)) {
+      countTxt.textContent = String(n);
+      countTxt.setAttribute('x', countPos.x.toFixed(1));
+      countTxt.setAttribute('y', (countPos.y + br * 0.36).toFixed(1));
+      countTxt.setAttribute('font-size', Math.max(9, br * 1.25).toFixed(1));
     }
   }
 
@@ -3169,7 +3177,7 @@
       g.__label.textContent = tla;
       g.__tla = tla;
     }
-    var cls = 'tm-car' + (item.pit ? ' tm-pit' : '') + (item.st.outlap && !item.pit ? ' tm-out' : '');
+    var cls = 'tm-car' + (item.st.outlap ? ' tm-out' : '');
     if (g.__cls !== cls) {
       g.setAttribute('class', cls);
       g.__cls = cls;
@@ -3202,31 +3210,32 @@
     return { x: x, y: y };
   }
 
-  function pitCarPos(item) {
-    var live = TRACKMAP.livePlan && TRACKMAP.livePlan[item.num];
-    var pos = live && parseInt(live.position, 10);
-    if (!isFinite(pos)) pos = parseInt(item.st.position, 10);
-    if (!isFinite(pos)) pos = 99;
-    return pos;
-  }
-
   function updateMarkerTransforms(now) {
     if (!TRACKMAP.mapper || !TRACKMAP.arc || !window.TrackmapEstimate || !TRACKMAP.carsG) return;
     var E = window.TrackmapEstimate;
     var svg = TRACKMAP.carsG.ownerSVGElement || TRACKMAP.carsG.parentNode;
     var lapMs = TRACKMAP.estLapMs || 90000;
     var frozen = !!TRACKMAP.estFrozen;
-    var onTrack = [];
-    var inPit = [];
-    var seen = {};
+    var items = [];
     Object.keys(TRACKMAP.motion).forEach(function (num) {
       var st = TRACKMAP.motion[num];
       if (!st || st.hide) return;
-      var frac = E.sampleMotion(st, now, lapMs, frozen);
-      var item = { num: num, st: st, frac: frac, pit: !!st.pit };
-      if (item.pit) inPit.push(item);
-      else onTrack.push(item);
+      items.push({
+        num: num,
+        st: st,
+        frac: E.sampleMotion(st, now, lapMs, frozen),
+        pit: !!st.pit,
+        hide: !!st.hide
+      });
     });
+    var lane = E.pitLanePaint ? E.pitLanePaint(items) : {
+      onTrack: items.filter(function (c) { return !c.pit; }),
+      pitCount: items.filter(function (c) { return c.pit; }).length,
+      showBay: items.some(function (c) { return c.pit; })
+    };
+    var onTrack = lane.onTrack;
+    var pitCount = lane.pitCount;
+    var seen = {};
     onTrack.sort(function (a, b) { return a.frac - b.frac; });
     var run = 0;
     var i;
@@ -3243,13 +3252,8 @@
       seen[item.num] = 1;
     }
 
-    inPit.sort(function (a, b) {
-      var d = pitCarPos(a) - pitCarPos(b);
-      if (d) return d;
-      return String(a.num).localeCompare(String(b.num), 'en');
-    });
     var bay = null;
-    if (inPit.length && E.placePitBay && TRACKMAP.sfScreen && TRACKMAP.screenOutline) {
+    if (lane.showBay && E.placePitBay && TRACKMAP.sfScreen && TRACKMAP.screenOutline) {
       bay = E.placePitBay({
         origin: TRACKMAP.sfScreen.origin,
         tx: TRACKMAP.sfScreen.tx,
@@ -3260,17 +3264,10 @@
         viewW: TRACKMAP.viewW,
         viewH: TRACKMAP.viewH,
         zoom: TRACKMAP.viewZoom || 1.05,
-        carCount: inPit.length
+        carCount: pitCount
       });
     }
-    paintPitBay(svg, bay, !!(bay && inPit.length));
-    if (bay) {
-      for (i = 0; i < inPit.length; i++) {
-        var slot = bay.slots[i] || bay.slots[bay.slots.length - 1];
-        paintMarker(inPit[i], slot);
-        seen[inPit[i].num] = 1;
-      }
-    }
+    paintPitBay(svg, bay, !!(bay && lane.showBay));
     Object.keys(TRACKMAP.nodes).forEach(function (num) {
       if (!seen[num]) TRACKMAP.nodes[num].style.display = 'none';
     });
