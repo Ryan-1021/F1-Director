@@ -1945,7 +1945,9 @@
     sfScreen: null
   };
 
-  var TM_EST_TITLE = '估计位置：沿赛道轮廓按赛段/迷你赛段（练习、排位）或正赛与领先者的时间差推算，不是官方 GPS。进站车收在统一 P 区，不压赛道灰线；安全车、起跑线对齐都不精确。';
+  var TM_EST_TITLE = '估计位置：沿赛道轮廓按赛段/迷你赛段（练习、排位）或正赛与领先者的时间差推算，不是官方 GPS。进站车不画在轮廓上，人数记在左上角 P 徽章；安全车、起跑线对齐都不精确。';
+  var TM_PIT_TIP = (window.TrackmapEstimate && window.TrackmapEstimate.pitBayTip) ||
+    '进站中的车数（退赛/淘汰不计）';
 
   var TM_CACHE_KEY = 'f1-trackmap-cache-v3';
 
@@ -2682,8 +2684,9 @@
     var existing = box.querySelector('svg.tm-map');
     if (existing) {
       TRACKMAP.carsG = existing.querySelector('.tm-cars');
-      ensurePitBayLayer(existing);
-      return box.querySelector('.tm-wrap');
+      var wrapExist = box.querySelector('.tm-wrap');
+      ensurePitBayLayer(wrapExist);
+      return wrapExist;
     }
     clear(box);
     box.setAttribute('data-tm', '1');
@@ -2701,7 +2704,6 @@
     flags.appendChild(fullFlag);
     var finish = svgEl('g', 'tm-finish');
     finish.appendChild(svgEl('title')).textContent = '估计起终点';
-    var pitBay = makePitBayLayer();
     var cars = svgEl('g', 'tm-cars');
     var empty = svgEl('text', 'tm-empty');
     empty.setAttribute('text-anchor', 'middle');
@@ -2710,10 +2712,10 @@
     svg.appendChild(fg);
     svg.appendChild(flags);
     svg.appendChild(finish);
-    svg.appendChild(pitBay);
     svg.appendChild(cars);
     svg.appendChild(empty);
     wrap.appendChild(svg);
+    wrap.appendChild(makePitBayLayer());
     box.appendChild(wrap);
     TRACKMAP.carsG = cars;
     TRACKMAP.nodes = {};
@@ -2771,7 +2773,7 @@
       if (fg) fg.setAttribute('d', '');
       clearTrackmapFlagGeometry(svg);
       clearTrackmapFinish(svg);
-      paintPitBay(svg, null, false);
+      paintPitBay(wrap, null, false);
       if (empty) {
         empty.textContent = TRACKMAP.status || '估计 · 正在载入赛道轮廓';
         empty.setAttribute('x', String(Math.round(w / 2)));
@@ -3053,51 +3055,41 @@
   }
 
   function makePitBayLayer() {
-    var pitBay = svgEl('g', 'tm-pit-bay');
+    var pitBay = el('div', 'tm-pit-bay');
     pitBay.style.display = 'none';
-    var pitBg = svgEl('rect', 'tm-pit-bay-bg');
-    pitBg.setAttribute('rx', '6');
-    pitBg.setAttribute('ry', '6');
-    var pitBadge = svgEl('g', 'tm-pit-badge');
-    var pitBadgeBg = svgEl('rect', 'tm-pit-badge-bg');
-    pitBadgeBg.setAttribute('rx', '3');
-    pitBadgeBg.setAttribute('ry', '3');
-    var pitBadgeTxt = svgEl('text', 'tm-pit-badge-t');
-    pitBadgeTxt.setAttribute('text-anchor', 'middle');
-    pitBadgeTxt.textContent = 'P';
-    pitBadge.appendChild(pitBadgeBg);
-    pitBadge.appendChild(pitBadgeTxt);
-    var pitCount = svgEl('text', 'tm-pit-count');
-    pitCount.setAttribute('text-anchor', 'middle');
-    pitCount.textContent = '0';
-    pitBay.appendChild(pitBg);
+    pitBay.setAttribute('tabindex', '0');
+    pitBay.setAttribute('role', 'img');
+    pitBay.setAttribute('data-tip', TM_PIT_TIP);
+    pitBay.setAttribute('aria-label', TM_PIT_TIP);
+    var pitBadge = el('span', 'tm-pit-badge', 'P');
+    var pitCount = el('span', 'tm-pit-count', '0');
     pitBay.appendChild(pitBadge);
     pitBay.appendChild(pitCount);
     return pitBay;
   }
 
-  function ensurePitBayLayer(svg) {
-    if (!svg) return null;
-    var g = svg.querySelector('.tm-pit-bay');
-    if (!g) g = makePitBayLayer();
+  function ensurePitBayLayer(wrap) {
+    if (!wrap) return null;
+    var svg = wrap.querySelector ? wrap.querySelector('svg.tm-map') : null;
+    if (svg) {
+      var stale = svg.querySelector('.tm-pit-bay');
+      if (stale) stale.parentNode.removeChild(stale);
+    }
+    var g = wrap.querySelector('.tm-pit-bay');
+    if (!g) {
+      g = makePitBayLayer();
+      wrap.appendChild(g);
+    }
     if (!g.querySelector('.tm-pit-count')) {
-      var pitCount = svgEl('text', 'tm-pit-count');
-      pitCount.setAttribute('text-anchor', 'middle');
-      pitCount.textContent = '0';
-      g.appendChild(pitCount);
+      g.appendChild(el('span', 'tm-pit-count', '0'));
     }
-    var cars = svg.querySelector('.tm-cars');
-    if (g.parentNode !== svg) {
-      if (cars) svg.insertBefore(g, cars);
-      else svg.appendChild(g);
-    } else if (cars && g.nextSibling !== cars) {
-      svg.insertBefore(g, cars);
-    }
+    if (!g.getAttribute('data-tip')) g.setAttribute('data-tip', TM_PIT_TIP);
+    if (!g.getAttribute('tabindex')) g.setAttribute('tabindex', '0');
     return g;
   }
 
-  function paintPitBay(svg, layout, visible) {
-    var g = ensurePitBayLayer(svg);
+  function paintPitBay(wrap, layout, visible) {
+    var g = ensurePitBayLayer(wrap);
     if (!g) return;
     if (!visible || !layout) {
       if (g.style.display !== 'none') g.style.display = 'none';
@@ -3105,37 +3097,23 @@
     }
     if (g.style.display === 'none') g.style.display = '';
     var n = layout.count | 0;
-    g.setAttribute('aria-label', '进站 ' + n);
-    var bg = g.querySelector('.tm-pit-bay-bg');
-    if (bg) {
-      bg.setAttribute('x', layout.x.toFixed(1));
-      bg.setAttribute('y', layout.y.toFixed(1));
-      bg.setAttribute('width', layout.width.toFixed(1));
-      bg.setAttribute('height', layout.height.toFixed(1));
-    }
-    var badge = layout.badge || {};
-    var br = badge.r > 0 ? badge.r : 7;
-    var badgeBg = g.querySelector('.tm-pit-badge-bg');
-    if (badgeBg && isFinite(badge.x) && isFinite(badge.y)) {
-      badgeBg.setAttribute('x', (badge.x - br).toFixed(1));
-      badgeBg.setAttribute('y', (badge.y - br).toFixed(1));
-      badgeBg.setAttribute('width', (br * 2).toFixed(1));
-      badgeBg.setAttribute('height', (br * 2).toFixed(1));
-    }
-    var txt = g.querySelector('.tm-pit-badge-t');
-    if (txt && isFinite(badge.x) && isFinite(badge.y)) {
-      txt.setAttribute('x', badge.x.toFixed(1));
-      txt.setAttribute('y', (badge.y + br * 0.36).toFixed(1));
-      txt.setAttribute('font-size', Math.max(8, br * 1.2).toFixed(1));
-    }
-    var countPos = layout.countPos || {};
+    var tip = layout.tip || TM_PIT_TIP;
+    g.setAttribute('data-tip', tip);
+    g.setAttribute('aria-label', tip + '：' + n);
+    g.style.left = (isFinite(layout.x) ? layout.x : 8).toFixed(1) + 'px';
+    g.style.top = (isFinite(layout.y) ? layout.y : 8).toFixed(1) + 'px';
+    if (layout.width > 0) g.style.width = layout.width.toFixed(1) + 'px';
+    if (layout.height > 0) g.style.height = layout.height.toFixed(1) + 'px';
+    var br = layout.badge && layout.badge.r > 0 ? layout.badge.r : 7;
+    g.style.setProperty('--tm-pit-badge', (br * 2).toFixed(1) + 'px');
+    g.style.setProperty('--tm-pit-pad', Math.max(2, br * 0.42).toFixed(1) + 'px');
     var countTxt = g.querySelector('.tm-pit-count');
-    if (countTxt && isFinite(countPos.x) && isFinite(countPos.y)) {
+    if (countTxt) {
       countTxt.textContent = String(n);
-      countTxt.setAttribute('x', countPos.x.toFixed(1));
-      countTxt.setAttribute('y', (countPos.y + br * 0.36).toFixed(1));
-      countTxt.setAttribute('font-size', Math.max(9, br * 1.25).toFixed(1));
+      countTxt.style.fontSize = Math.max(9, br * 1.25).toFixed(1) + 'px';
     }
+    var badgeTxt = g.querySelector('.tm-pit-badge');
+    if (badgeTxt) badgeTxt.style.fontSize = Math.max(8, br * 1.2).toFixed(1) + 'px';
   }
 
   function ensureMarker(num) {
@@ -3253,13 +3231,9 @@
     }
 
     var bay = null;
-    if (lane.showBay && E.placePitBay && TRACKMAP.sfScreen && TRACKMAP.screenOutline) {
+    if (lane.showBay && E.placePitBay) {
       bay = E.placePitBay({
-        origin: TRACKMAP.sfScreen.origin,
-        tx: TRACKMAP.sfScreen.tx,
-        ty: TRACKMAP.sfScreen.ty,
-        centroid: TRACKMAP.screenCentroid,
-        outline: TRACKMAP.screenOutline,
+        outline: TRACKMAP.screenOutline || [],
         strokeW: TRACKMAP.trackStrokeW || 8,
         viewW: TRACKMAP.viewW,
         viewH: TRACKMAP.viewH,
@@ -3267,7 +3241,9 @@
         carCount: pitCount
       });
     }
-    paintPitBay(svg, bay, !!(bay && lane.showBay));
+    var wrap = (svg && svg.parentNode && svg.parentNode.classList &&
+      svg.parentNode.classList.contains('tm-wrap')) ? svg.parentNode : null;
+    paintPitBay(wrap || svg, bay, !!(bay && lane.showBay));
     Object.keys(TRACKMAP.nodes).forEach(function (num) {
       if (!seen[num]) TRACKMAP.nodes[num].style.display = 'none';
     });

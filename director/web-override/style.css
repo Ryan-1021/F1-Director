@@ -1437,26 +1437,84 @@ html[data-theme="day"] .tm-dot { stroke: rgba(0, 0, 0, 0.55); }
   stroke-width: 2.25;
 }
 .tm-car.tm-out .tm-dot { stroke-dasharray: 2.2 1.5; }
-.tm-pit-bay { pointer-events: none; }
-.tm-pit-bay-bg {
-  fill: rgba(8, 11, 16, 0.78);
-  stroke: rgba(225, 6, 0, 0.62);
-  stroke-width: 1.1;
-}
-html[data-theme="day"] .tm-pit-bay-bg {
-  fill: rgba(255, 255, 255, 0.86);
-  stroke: rgba(225, 6, 0, 0.7);
-}
-.tm-pit-badge-bg { fill: #e10600; }
-.tm-pit-badge-t,
-.tm-pit-count {
+.tm-pit-bay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--tm-pit-pad, 3px) 6px var(--tm-pit-pad, 3px) var(--tm-pit-pad, 3px);
+  border-radius: 6px;
+  background: rgba(8, 11, 16, 0.78);
+  border: 1.1px solid rgba(225, 6, 0, 0.62);
+  pointer-events: auto;
+  cursor: help;
+  outline: none;
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  font-weight: 800;
-  fill: #fff;
-  stroke: none;
 }
-.tm-pit-count { fill: #f4f6f8; }
-html[data-theme="day"] .tm-pit-count { fill: #102027; }
+.tm-pit-bay:focus-visible {
+  box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.55);
+}
+.tm-pit-badge {
+  flex: 0 0 auto;
+  width: var(--tm-pit-badge, 16px);
+  height: var(--tm-pit-badge, 16px);
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e10600;
+  color: #fff;
+  font-weight: 800;
+  line-height: 1;
+}
+.tm-pit-count {
+  flex: 1 1 auto;
+  min-width: 0.7em;
+  text-align: center;
+  font-weight: 800;
+  color: #f4f6f8;
+  line-height: 1;
+}
+html[data-theme="day"] .tm-pit-bay {
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(225, 6, 0, 0.7);
+}
+html[data-theme="day"] .tm-pit-count { color: #102027; }
+.tm-pit-bay[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 4;
+  max-width: min(240px, 70vw);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(8, 11, 16, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #f4f6f8;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease;
+}
+.tm-pit-bay:hover::after,
+.tm-pit-bay:focus-visible::after {
+  opacity: 1;
+  transform: none;
+}
+html[data-theme="day"] .tm-pit-bay[data-tip]::after {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #102027;
+}
 .tm-est {
   flex: 0 0 auto;
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
