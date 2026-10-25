@@ -3,7 +3,17 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.7+20261024**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.8+20261025**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+
+相对 **v0.2.7**：
+
+- 赛段成绩增加「最快圈」列（各车个人最快）
+- 估计赛道图进度 0 画一小块方格旗
+- 白天迷你赛段黄 / 绿 / 紫与夜间同亮
+- 估计车位小幅回采时保持不回退
+- 已知赛道 `CIRCUIT_PHASE` 对齐计时线（巴林仍为例外）
+- 进站改为左上角 P + 人数徽章
+- 成绩榜 / 赛段成绩排名换行滑动
 
 ---
 
@@ -19,7 +29,7 @@
 
 图里赛道图还是旧界面的「OpenF1 场次查询失败」。**当前版本不再请求 OpenF1**：轮廓只用本地 f1db SVG，车位是计时估计（不是官方 GPS）。下面才是我们自己做的赛道图。
 
-估计赛道图旗语上色（银石，全部旗况）：本地 SVG + 已有 `track.yellowSectors` / `doubleYellowSectors` / `globalLevel`，黄 / 双黄 / VSC / 安全车 / 红旗 / 全场黄。不请求 OpenF1。同一张图也在 [`docs/trackmap-flags-silverstone.png`](docs/trackmap-flags-silverstone.png)。
+估计赛道图旗语上色（银石，全部旗况）：本地 SVG + 已有 `track.yellowSectors` / `doubleYellowSectors` / `globalLevel`，黄 / 双黄 / VSC / 安全车 / 红旗 / 全场黄。不请求 OpenF1。进度 0（计时线；巴林仍是文件起点）有一小块方格旗（估计起终点）。同一张图也在 [`docs/trackmap-flags-silverstone.png`](docs/trackmap-flags-silverstone.png)。
 
 ![估计赛道图旗语上色（银石，全部旗况）](docs/trackmap-flags-contact-sheet.png)
 
@@ -129,8 +139,9 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 看板数据延迟只推迟四周看板和左上角场次，**不改变直播画面**。秒数记在本标签的 sessionStorage：关掉标签即丢，同一标签刷新还在。启动时清掉旧的 localStorage 延迟，避免上一场的缓冲留到下次打开
 - 日/夜主题：按钮点击处约 **1s** 圆形扩散切换（View Transition）；启动读盘与布局预设仍瞬时切主题；`prefers-reduced-motion` 时跳过动画
 - 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
-- 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta
-- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）不画在轮廓上，只计入视口左上角「P + 人数」徽章；出站后回线。顶栏只有红色「估计」和旋转。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线。P 徽章、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
+- 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta；白天黄/绿/紫与夜间同亮，格子描边更浅
+- 赛段成绩有「最快圈」列：各车个人最快（`TimingData.BestLapTime` / TimingStats），全场最快紫、其余绿；「本圈」同色规则
+- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）不画在轮廓上，只计入视口左上角「P + 人数」徽章；出站后回线。顶栏只有红色「估计」和旋转。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线（巴林仍是文件起点），并画一小块方格旗（估计起终点）。新计时若只比外推略靠后，车位保持不回退；真后撤 / 进站仍收回。P 徽章、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
 - 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位。预览见上方效果图
 - 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
 - 成绩榜 / 赛段成绩排名换行：名次变了时按车号 FLIP 滑动（约 320ms），POS 落位后再改；`prefers-reduced-motion` 跳过。不是 jar 的 drop/flash 掉位闪烁
