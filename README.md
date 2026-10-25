@@ -3,7 +3,7 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.9+20261026**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.10+20261026**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
 相对 **v0.2.7**：
 
@@ -161,6 +161,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
 - 分支命名：`{base}_{content}`（如 `main_timingWeatherCache`）。
 - 带 JRE 的「解压即用」包请走 GitHub Release 单独 zip；仓库保持苗条（不提交 `share/jre`、`share/web`）。
+- Windows 任务栏 / 小尺寸 ICO 条目应保持 BMP/DIB（仅 256 用 PNG），避免 Shell 忽略 PNG 小图后把 256 缩小显示。
 ---
 
 ## 相关链接
