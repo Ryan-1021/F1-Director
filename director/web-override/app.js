@@ -1074,10 +1074,29 @@
     return td;
   }
 
+  function rankSwapApi() {
+    return (typeof window !== 'undefined' && window.F1RankSwap) || null;
+  }
+
+  function carRowKey(c) {
+    var RS = rankSwapApi();
+    if (RS) return RS.carKey(c);
+    if (!c) return '';
+    if (c.number != null && c.number !== '') return String(c.number);
+    return String(c.tla || '');
+  }
+
+  function applyTimingPlace(tr, c) {
+    var tds = tr.children;
+    if (tds[0]) tds[0].textContent = c.position || '';
+    if (tds[3]) tds[3].textContent = c.gap || '';
+    if (tds[4]) tds[4].textContent = c.interval || '';
+  }
+
   function buildTimingRow(c) {
     var tr = el('tr');
-    if (carRowRetired(c)) { tr.className = 'retired'; }
-    tr.setAttribute('data-car', String(c.number != null ? c.number : (c.tla || '')));
+    if (carRowRetired(c)) { tr.classList.add('retired'); }
+    tr.setAttribute('data-car', carRowKey(c));
     tr.appendChild(el('td', 'num', c.position || ''));
     var who = el('td', 'who');
     var bar = el('span', 'teambar');
@@ -1128,12 +1147,14 @@
     td.appendChild(badge);
   }
 
-  function patchTimingRow(tr, c) {
-    tr.className = carRowRetired(c) ? 'retired' : '';
-    tr.setAttribute('data-car', String(c.number != null ? c.number : (c.tla || '')));
+  function patchTimingRow(tr, c, opts) {
+    opts = opts || {};
+    tr.classList.toggle('retired', carRowRetired(c));
+    tr.setAttribute('data-car', carRowKey(c));
     var tds = tr.children;
     // 0 num, 1 who, 2 status, 3 gap, 4 int, 5 tyre, 6 pit
-    if (tds[0]) tds[0].textContent = c.position || '';
+    // POS / gap / interval are place-dependent — hold them while the row slides.
+    if (tds[0] && !opts.deferPlace) tds[0].textContent = c.position || '';
     if (tds[1]) {
       var bar = tds[1].querySelector('.teambar');
       if (bar) bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
@@ -1143,8 +1164,8 @@
       if (carno) carno.textContent = c.number != null && c.number !== '' ? String(c.number) : '';
     }
     if (tds[2]) patchTrackStatusTd(tds[2], c);
-    if (tds[3]) tds[3].textContent = c.gap || '';
-    if (tds[4]) tds[4].textContent = c.interval || '';
+    if (tds[3] && !opts.deferPlace) tds[3].textContent = c.gap || '';
+    if (tds[4] && !opts.deferPlace) tds[4].textContent = c.interval || '';
         if (tds[5]) {
       var badge = tds[5].querySelector('.tyre-stint');
       var lapsTxt = formatTyreLaps(c.tyreLaps);
@@ -1178,21 +1199,28 @@
     var table = wrap && wrap.querySelector('table.timing');
     // In-place update: keeps density fit + avoids wipe flicker on every SSE.
     if (wrap && table && table.getAttribute('data-live') === '1') {
-      var rows = [];
-      for (var ri = 0; ri < table.children.length; ri++) {
-        if (table.children[ri].tagName === 'TR') rows.push(table.children[ri]);
-      }
-      // rows[0] = header
-      while (rows.length - 1 > cars.length) {
-        table.removeChild(rows[rows.length - 1]);
-        rows.pop();
-      }
-      for (var i = 0; i < cars.length; i++) {
-        var tr = rows[i + 1];
-        if (!tr) {
-          table.appendChild(buildTimingRow(cars[i]));
-        } else {
-          patchTimingRow(tr, cars[i]);
+      var RS = rankSwapApi();
+      if (RS) {
+        RS.reconcile(table, cars, {
+          buildRow: buildTimingRow,
+          patchRow: patchTimingRow,
+          applyPlace: applyTimingPlace
+        });
+      } else {
+        var rows = table.querySelectorAll('tr');
+        var data = [];
+        var di;
+        for (di = 0; di < rows.length; di++) {
+          if (!rows[di].querySelector('th')) data.push(rows[di]);
+        }
+        while (data.length > cars.length) {
+          var extra = data.pop();
+          if (extra && extra.parentNode) extra.parentNode.removeChild(extra);
+        }
+        for (var i = 0; i < cars.length; i++) {
+          var tr = data[i];
+          if (!tr) table.appendChild(buildTimingRow(cars[i]));
+          else patchTimingRow(tr, cars[i]);
         }
       }
       // Keep existing title + column picker; re-placing would stack .ptitle rows.
@@ -1602,22 +1630,326 @@
   }
 
   /**
+   * Field-wide mins for purple on the sectors board.
+   */
+  function computeSectorFieldBests(cars) {
+    var fieldBestSec = [NaN, NaN, NaN];
+    var fieldBestLapMs = Infinity;
+    var fieldLastLapMs = Infinity;
+    var anySector = false;
+    var bi, bs, fi;
+    for (bi = 0; bi < cars.length; bi++) {
+      for (bs = 0; bs < 3; bs++) {
+        var info0 = carSectorInfo(cars[bi], bs);
+        if (info0.value || info0.bestValue) anySector = true;
+        var bv = info0.bestValue || carBestSectorValue(cars[bi], bs);
+        if (!bv) continue;
+        var bsecs = parseSectorSeconds(bv);
+        if (!isFinite(bsecs)) continue;
+        if (!isFinite(fieldBestSec[bs]) || bsecs < fieldBestSec[bs]) fieldBestSec[bs] = bsecs;
+      }
+    }
+    for (fi = 0; fi < cars.length; fi++) {
+      var fBest = carBestLap(cars[fi]);
+      if (fBest) {
+        var fbm = lapMs(fBest);
+        if (isFinite(fbm) && fbm < fieldBestLapMs) fieldBestLapMs = fbm;
+      }
+      var fLast = carLastLapTime(cars[fi]);
+      if (fLast) {
+        var flm = lapMs(fLast);
+        if (isFinite(flm) && flm < fieldLastLapMs) fieldLastLapMs = flm;
+      }
+    }
+    return {
+      fieldBestSec: fieldBestSec,
+      fieldBestLapMs: fieldBestLapMs,
+      fieldLastLapMs: fieldLastLapMs,
+      anySector: anySector
+    };
+  }
+
+  function sectorsWhoTd(c) {
+    var who = el('td', 'who');
+    var bar = el('span', 'teambar');
+    bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
+    who.appendChild(bar);
+    who.appendChild(el('span', 'tla', c.tla || ''));
+    who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
+    return who;
+  }
+
+  function patchSectorsWho(td, c) {
+    if (!td) return;
+    var bar = td.querySelector('.teambar');
+    if (bar) bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
+    var tla = td.querySelector('.tla');
+    if (tla) tla.textContent = c.tla || '';
+    var carno = td.querySelector('.carno');
+    if (carno) carno.textContent = c.number != null && c.number !== '' ? String(c.number) : '';
+  }
+
+  function sectorsTyreTd(c) {
+    var tyreTd = el('td', 'col-tyre');
+    var tyreCell = el('span', 'tyre-stint');
+    tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
+    tyreCell.appendChild(el('span', 'tlaps', formatTyreLaps(c.tyreLaps)));
+    tyreTd.appendChild(tyreCell);
+    return tyreTd;
+  }
+
+  function patchSectorsTyre(td, c) {
+    if (!td) return;
+    var lapsTxt = formatTyreLaps(c.tyreLaps);
+    var badge = td.querySelector('.tyre-stint');
+    if (badge) {
+      var tlaps = badge.querySelector('.tlaps');
+      if (tlaps) tlaps.textContent = lapsTxt;
+      var wantLetter = compoundInfo(c.compound, c.compoundCn).letter;
+      var curBadge = badge.querySelector('.ttyre, .compound, .tyre');
+      var cur = curBadge ? String(curBadge.textContent || '').trim() : '';
+      if (wantLetter !== cur) {
+        clear(td);
+        var tyreCell = el('span', 'tyre-stint');
+        tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
+        tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
+        td.appendChild(tyreCell);
+      }
+    } else {
+      clear(td);
+      var tyreCell2 = el('span', 'tyre-stint');
+      tyreCell2.appendChild(compoundBadge(c.compound, c.compoundCn));
+      tyreCell2.appendChild(el('span', 'tlaps', lapsTxt));
+      td.appendChild(tyreCell2);
+    }
+  }
+
+  function sectorsBestLapClass(c, bests) {
+    var bestLap = carBestLap(c);
+    var bestCls = 'mono col-best';
+    if (bestLap) {
+      var bestMs = lapMs(bestLap);
+      if (isFinite(bestMs) && isFinite(bests.fieldBestLapMs) &&
+          Math.abs(bestMs - bests.fieldBestLapMs) < 0.5) {
+        bestCls += ' sec-purple';
+      } else {
+        bestCls += ' sec-green';
+      }
+    }
+    return { cls: bestCls, text: bestLap || '—' };
+  }
+
+  function sectorsLastLapClass(c, bests) {
+    var last = carLastLapTime(c);
+    var lastCls = 'mono col-last';
+    if (last) {
+      var lastMs = lapMs(last);
+      var lastOverall = false;
+      var lastPersonal = false;
+      var rawLast = c.lastLap || c.lastLapTime || c.LastLapTime;
+      if (rawLast != null && typeof rawLast === 'object') {
+        lastOverall = !!(rawLast.overallBest || rawLast.OverallBest ||
+          rawLast.lastLapOverallBest || rawLast.LastLapOverallBest);
+        lastPersonal = !!(rawLast.personalBest || rawLast.PersonalBest);
+      }
+      if (!lastOverall && isFinite(lastMs) && isFinite(bests.fieldLastLapMs) &&
+          Math.abs(lastMs - bests.fieldLastLapMs) < 0.5) lastOverall = true;
+      if (!lastPersonal) {
+        var bestLap = carBestLap(c);
+        if (bestLap && isFinite(lastMs)) {
+          var pbMs = lapMs(bestLap);
+          if (isFinite(pbMs) && Math.abs(lastMs - pbMs) < 0.5) lastPersonal = true;
+        }
+      }
+      if (lastOverall) lastCls += ' sec-purple';
+      else if (lastPersonal) lastCls += ' sec-green';
+      else lastCls += ' sec-yellow';
+    }
+    return { cls: lastCls, text: last || '—' };
+  }
+
+  function fillSectorsMini(td, info) {
+    var strip = td.querySelector('.sec-mini');
+    if (!strip) {
+      strip = el('div', 'sec-mini');
+      td.insertBefore(strip, td.firstChild);
+    }
+    var segs = info.segments || [];
+    var sig = segs.join(',');
+    if (td.__segSig === sig) return;
+    td.__segSig = sig;
+    clear(strip);
+    for (var mi = 0; mi < segs.length; mi++) {
+      var mst = segs[mi] | 0;
+      var mcls = 'sec-mini-bit';
+      if (mst === 2051) mcls += ' sec-mini-purple';
+      else if (mst === 2049) mcls += ' sec-mini-green';
+      else if (mst === 2048) mcls += ' sec-mini-yellow';
+      else if (mst) mcls += ' sec-mini-dim';
+      strip.appendChild(el('span', mcls, ''));
+    }
+  }
+
+  function fillSectorsSectorTd(td, c, idx, bests) {
+    var info = carSectorInfo(c, idx);
+    var st = info.value;
+    var bestSt = info.bestValue || '';
+    if (st || bestSt) bests.anySector = true;
+    fillSectorsMini(td, info);
+    var cur = td.querySelector('.sec-cur');
+    if (!cur) {
+      cur = el('div', 'sec-cur', st || '—');
+      td.appendChild(cur);
+    } else {
+      cur.textContent = st || '—';
+    }
+    var bestEl = td.querySelector('.sec-best');
+    var bestCls = 'sec-best';
+    if (bestSt) {
+      var bestSecs = parseSectorSeconds(bestSt);
+      var isFieldBest = isFinite(bestSecs) && isFinite(bests.fieldBestSec[idx]) &&
+        Math.abs(bestSecs - bests.fieldBestSec[idx]) < 0.0005;
+      if (isFieldBest) bestCls += ' sec-purple';
+      else bestCls += ' sec-green';
+    }
+    if (!bestEl) {
+      bestEl = el('div', bestCls, bestSt || '—');
+      td.appendChild(bestEl);
+    } else {
+      bestEl.className = bestCls;
+      bestEl.textContent = bestSt || '—';
+    }
+  }
+
+  function buildSectorsSectorTd(c, idx, bests) {
+    var td = el('td', 'mono col-s' + (idx + 1) + ' sec-cell');
+    td.appendChild(el('div', 'sec-mini'));
+    td.appendChild(el('div', 'sec-cur', '—'));
+    td.appendChild(el('div', 'sec-best', '—'));
+    fillSectorsSectorTd(td, c, idx, bests);
+    return td;
+  }
+
+  function buildSectorsRow(c, bests) {
+    var tr = el('tr');
+    if (carRowRetired(c)) tr.classList.add('retired');
+    tr.setAttribute('data-car', carRowKey(c));
+    tr.appendChild(el('td', 'num', c.position || ''));
+    tr.appendChild(sectorsWhoTd(c));
+    tr.appendChild(sectorsTyreTd(c));
+    var best = sectorsBestLapClass(c, bests);
+    tr.appendChild(el('td', best.cls, best.text));
+    var last = sectorsLastLapClass(c, bests);
+    tr.appendChild(el('td', last.cls, last.text));
+    for (var s = 0; s < 3; s++) tr.appendChild(buildSectorsSectorTd(c, s, bests));
+    return tr;
+  }
+
+  function patchSectorsRow(tr, c, bests, opts) {
+    opts = opts || {};
+    tr.classList.toggle('retired', carRowRetired(c));
+    tr.setAttribute('data-car', carRowKey(c));
+    var tds = tr.children;
+    if (tds[0] && !opts.deferPlace) tds[0].textContent = c.position || '';
+    if (tds[1]) patchSectorsWho(tds[1], c);
+    if (tds[2]) patchSectorsTyre(tds[2], c);
+    if (tds[3]) {
+      var best = sectorsBestLapClass(c, bests);
+      tds[3].className = best.cls;
+      tds[3].textContent = best.text;
+    }
+    if (tds[4]) {
+      var last = sectorsLastLapClass(c, bests);
+      tds[4].className = last.cls;
+      tds[4].textContent = last.text;
+    }
+    for (var s = 0; s < 3; s++) {
+      if (tds[5 + s]) fillSectorsSectorTd(tds[5 + s], c, s, bests);
+    }
+  }
+
+  function applySectorsPlace(tr, c) {
+    if (tr && tr.children[0]) tr.children[0].textContent = c.position || '';
+  }
+
+  function syncSectorsNote(box, anySector) {
+    var note = box.querySelector('.sectors-note');
+    if (anySector) {
+      if (note) note.remove();
+      return;
+    }
+    if (!note) {
+      box.appendChild(el('div', 'sub sectors-note',
+        '本场次暂无 S1–S3 / 本圈时间（字段已接通，有分段后会自动填色）'));
+    }
+  }
+
+  function syncSectorsTable(table, cars, bests) {
+    var RS = rankSwapApi();
+    if (RS) {
+      RS.reconcile(table, cars, {
+        buildRow: function (c) { return buildSectorsRow(c, bests); },
+        patchRow: function (tr, c, opts) { patchSectorsRow(tr, c, bests, opts); },
+        applyPlace: applySectorsPlace
+      });
+      return;
+    }
+    var rows = table.querySelectorAll('tr');
+    var data = [];
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (!rows[i].querySelector('th')) data.push(rows[i]);
+    }
+    while (data.length > cars.length) {
+      var extra = data.pop();
+      if (extra && extra.parentNode) extra.parentNode.removeChild(extra);
+    }
+    for (i = 0; i < cars.length; i++) {
+      if (!data[i]) table.appendChild(buildSectorsRow(cars[i], bests));
+      else patchSectorsRow(data[i], cars[i], bests, {});
+    }
+  }
+
+  /**
    * Sector / current-lap detail board.
    * Upstream F1Feed currently ships bestLap/gap/… on cars, but not per-driver
    * S1-S3 from patched F1Feed (lastLap + sectors[] with PB/overall flags).
    * until then cells show "—".
    */
   function renderSectors(box) {
-    clear(box);
-    if (!ONCE) panelTitle(box, '赛段成绩');
     var cars = (state && state.cars) || [];
-    if (!cars.length) {
-      box.appendChild(el('div', 'sub', '还没有车手数据'));
+    var wrap = box.querySelector('.sectors-wrap');
+    var table = wrap && wrap.querySelector('table.timing');
+    if (wrap && table && table.getAttribute('data-live') === '1') {
+      var empty = box.querySelector('.sectors-empty');
+      if (!cars.length) {
+        syncSectorsTable(table, [], computeSectorFieldBests([]));
+        if (!empty) box.appendChild(el('div', 'sub sectors-empty', '还没有车手数据'));
+      } else {
+        if (empty) empty.remove();
+        var liveBests = computeSectorFieldBests(cars);
+        syncSectorsTable(table, cars, liveBests);
+        syncSectorsNote(box, liveBests.anySector);
+      }
+      if (!wrap.__boardFit || !wrap.__boardFit.exact || wrap.__sectorCars !== cars.length) {
+        wrap.__boardFit = null;
+      }
+      wrap.__sectorCars = cars.length;
+      fitSectorsTable(wrap, 'exact');
+      ensureBoardFitObserver(box, 'sectors');
       return;
     }
 
-    var wrap = el('div', 'sectors-wrap');
+    clear(box);
+    if (!ONCE) panelTitle(box, '赛段成绩');
+    if (!cars.length) {
+      box.appendChild(el('div', 'sub sectors-empty', '还没有车手数据'));
+      return;
+    }
+
+    wrap = el('div', 'sectors-wrap');
     var t = el('table', 'timing sectors');
+    t.setAttribute('data-live', '1');
     var head = el('tr');
     var headCols = [
       { label: '#', cls: 'num' },
@@ -1633,133 +1965,14 @@
       head.appendChild(el('th', col.cls, col.label));
     });
     t.appendChild(head);
-
-    var anySector = false;
-    // Field-wide min of personal bestSectors[i] — purple on the bottom "最快赛段" row.
-    var fieldBestSec = [NaN, NaN, NaN];
-    for (var bi = 0; bi < cars.length; bi++) {
-      for (var bs = 0; bs < 3; bs++) {
-        var bv = carBestSectorValue(cars[bi], bs);
-        if (!bv) continue;
-        var bsecs = parseSectorSeconds(bv);
-        if (!isFinite(bsecs)) continue;
-        if (!isFinite(fieldBestSec[bs]) || bsecs < fieldBestSec[bs]) fieldBestSec[bs] = bsecs;
-      }
-    }
-    // Field-wide min bestLap / lastLap for purple on col-best / col-last.
-    var fieldBestLapMs = Infinity;
-    var fieldLastLapMs = Infinity;
-    for (var fi = 0; fi < cars.length; fi++) {
-      var fBest = carBestLap(cars[fi]);
-      if (fBest) {
-        var fbm = lapMs(fBest);
-        if (isFinite(fbm) && fbm < fieldBestLapMs) fieldBestLapMs = fbm;
-      }
-      var fLast = carLastLapTime(cars[fi]);
-      if (fLast) {
-        var flm = lapMs(fLast);
-        if (isFinite(flm) && flm < fieldLastLapMs) fieldLastLapMs = flm;
-      }
-    }
+    var bests = computeSectorFieldBests(cars);
     for (var i = 0; i < cars.length; i++) {
-      var c = cars[i];
-      var tr = el('tr');
-      if (carRowRetired(c)) tr.className = 'retired';
-      tr.appendChild(el('td', 'num', c.position || ''));
-      var who = el('td', 'who');
-      var bar = el('span', 'teambar');
-      bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
-      who.appendChild(bar);
-      who.appendChild(el('span', 'tla', c.tla || ''));
-      who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
-      tr.appendChild(who);
-      var tyreTd = el('td', 'col-tyre');
-      var tyreCell = el('span', 'tyre-stint');
-      tyreCell.appendChild(compoundBadge(c.compound, c.compoundCn));
-      var lapsTxt = formatTyreLaps(c.tyreLaps);
-      tyreCell.appendChild(el('span', 'tlaps', lapsTxt));
-      tyreTd.appendChild(tyreCell);
-      tr.appendChild(tyreTd);
-      var bestLap = carBestLap(c);
-      var bestCls = 'mono col-best';
-      if (bestLap) {
-        var bestMs = lapMs(bestLap);
-        if (isFinite(bestMs) && isFinite(fieldBestLapMs) && Math.abs(bestMs - fieldBestLapMs) < 0.5) {
-          bestCls += ' sec-purple';
-        } else {
-          bestCls += ' sec-green';
-        }
-      }
-      tr.appendChild(el('td', bestCls, bestLap || '—'));
-      var last = carLastLapTime(c);
-      var lastCls = 'mono col-last';
-      if (last) {
-        var lastMs = lapMs(last);
-        var lastOverall = false;
-        var lastPersonal = false;
-        var rawLast = c.lastLap || c.lastLapTime || c.LastLapTime;
-        if (rawLast != null && typeof rawLast === 'object') {
-          lastOverall = !!(rawLast.overallBest || rawLast.OverallBest ||
-            rawLast.lastLapOverallBest || rawLast.LastLapOverallBest);
-          lastPersonal = !!(rawLast.personalBest || rawLast.PersonalBest);
-        }
-        if (!lastOverall && isFinite(lastMs) && isFinite(fieldLastLapMs) &&
-            Math.abs(lastMs - fieldLastLapMs) < 0.5) lastOverall = true;
-        if (!lastPersonal && bestLap && isFinite(lastMs)) {
-          var pbMs = lapMs(bestLap);
-          if (isFinite(pbMs) && Math.abs(lastMs - pbMs) < 0.5) lastPersonal = true;
-        }
-        if (lastOverall) lastCls += ' sec-purple';
-        else if (lastPersonal) lastCls += ' sec-green';
-        else lastCls += ' sec-yellow';
-      }
-      tr.appendChild(el('td', lastCls, last || '—'));
-      for (var s = 0; s < 3; s++) {
-        var info = carSectorInfo(c, s);
-        var st = info.value;
-        var bestSt = info.bestValue || '';
-        if (st || bestSt) anySector = true;
-        var td = el('td', 'mono col-s' + (s + 1) + ' sec-cell');
-
-        // Top: mini-sector strip (fixed band; empty if no segments)
-        var strip = el('div', 'sec-mini');
-        if (info.segments && info.segments.length) {
-          for (var mi = 0; mi < info.segments.length; mi++) {
-            var mst = info.segments[mi] | 0;
-            var mcls = 'sec-mini-bit';
-            if (mst === 2051) mcls += ' sec-mini-purple';
-            else if (mst === 2049) mcls += ' sec-mini-green';
-            else if (mst === 2048) mcls += ' sec-mini-yellow';
-            else if (mst) mcls += ' sec-mini-dim';
-            strip.appendChild(el('span', mcls, ''));
-          }
-        }
-        td.appendChild(strip);
-
-        // Middle: current sector time (plain mono)
-        td.appendChild(el('div', 'sec-cur', st || '—'));
-
-        // Bottom: personal best sector — purple = field overall, green = PB, else yellow
-        var bestCls = 'sec-best';
-        if (bestSt) {
-          var bestSecs = parseSectorSeconds(bestSt);
-          var isFieldBest = isFinite(bestSecs) && isFinite(fieldBestSec[s]) &&
-            Math.abs(bestSecs - fieldBestSec[s]) < 0.0005;
-          if (isFieldBest) bestCls += ' sec-purple';
-          else bestCls += ' sec-green';
-        }
-        td.appendChild(el('div', bestCls, bestSt || '—'));
-
-        tr.appendChild(td);
-      }
-      t.appendChild(tr);
+      t.appendChild(buildSectorsRow(cars[i], bests));
     }
     wrap.appendChild(t);
     box.appendChild(wrap);
-    if (!anySector) {
-      box.appendChild(el('div', 'sub sectors-note',
-        '本场次暂无 S1–S3 / 本圈时间（字段已接通，有分段后会自动填色）'));
-    }
+    syncSectorsNote(box, bests.anySector);
+    wrap.__sectorCars = cars.length;
     fitSectorsTable(wrap, 'exact');
     ensureBoardFitObserver(box, 'sectors');
   }
