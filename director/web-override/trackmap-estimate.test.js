@@ -203,6 +203,76 @@ assert(crossing > 0.9, 'finish stays near the line at the tick ' + crossing);
 var crossed = E.sampleMotion(fin, 1700, 90000, false);
 assert(crossed < 0.08, 'finish eases across the line ' + crossed);
 
+// 外推超前后，新采样略落后或把 cap 收紧：这一拍不能沿轮廓回退。
+var coast = E.stepMotion(null, 0.40, 0.50, 0, 90000, false, { exact: true });
+var coastShown = E.sampleMotion(coast, 3000, 90000, false);
+assert(coastShown > 0.42, 'precondition: coasted past the tighter cap ' + coastShown);
+coast = E.stepMotion(coast, 0.41, 0.425, 3000, 90000, false, { exact: true });
+var heldCoast = E.sampleMotion(coast, 3000, 90000, false);
+assert(heldCoast + 1e-6 >= coastShown, 'tighter cap does not yank ' + heldCoast + ' from ' + coastShown);
+var heldLater = E.sampleMotion(coast, 3600, 90000, false);
+assert(E.wrapDelta(heldLater - heldCoast) > -0.001, 'held car does not roll back after the tick ' + heldLater);
+
+// 同一采样反复进来时，车仍应停在官方 cap 附近，不能一层层 bleed 出去。
+var pinned = E.stepMotion(null, 0.20, 0.22, 0, 90000, false, { exact: true });
+var pinT;
+for (pinT = 1000; pinT <= 8000; pinT += 1000) {
+  pinned = E.stepMotion(pinned, 0.20, 0.22, pinT, 90000, false, { exact: true });
+}
+var pinShown = E.sampleMotion(pinned, 8000, 90000, false);
+assert(pinShown < 0.23, 'repeated samples do not creep past the mini-sector cap ' + pinShown);
+assert(pinShown > 0.215, 'still allowed a little bleed at the cap ' + pinShown);
+
+// 迷你赛段褪了再点亮：exact 目标回到旧格子，cap 收紧，也不回退。
+var fade = E.stepMotion(null, 0.50, 0.515, 0, 90000, false, { exact: true });
+var fadeMid = E.sampleMotion(fade, 2000, 90000, false);
+fade = E.stepMotion(fade, 0.343, 0.40, 2000, 90000, false, { exact: false });
+var fadeFloor = E.sampleMotion(fade, 2000, 90000, false);
+assert(fadeFloor + 1e-6 >= fadeMid, 'faded strips keep the coasted dot ' + fadeFloor);
+var fadeLater = E.sampleMotion(fade, 4000, 90000, false);
+fade = E.stepMotion(fade, 0.50, 0.515, 4000, 90000, false, { exact: true });
+var fadeBack = E.sampleMotion(fade, 4000, 90000, false);
+assert(fadeBack + 1e-6 >= fadeLater, 'restored mini-sectors do not yank ' + fadeBack + ' from ' + fadeLater);
+
+// 正赛差距在 1s 一拍里抖动：外推点不能跟着 cap 往回夹。
+function gapCar(gap) {
+  return {
+    number: 16, tla: 'LEC', position: 2, gap: gap, bestLap: '1:30.200',
+    sectors: [{ value: '30.100', segments: [] }, { value: '', segments: [] }, { value: '', segments: [] }]
+  };
+}
+var gapLeader = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', bestLap: '1:30.000',
+  sectors: [
+    { value: '30.000', segments: [2048, 2048, 2048] },
+    { value: '', segments: [2048, 2048, 2048, 2048, 0, 0, 0, 0] },
+    { value: '', segments: [] }
+  ]
+};
+var gapSt = null;
+var gapPrev = null;
+var gapTicks = ['+1.500', '+1.520', '+1.480', '+1.600', '+1.550', '+1.700'];
+for (var gi = 0; gi < gapTicks.length; gi++) {
+  var gapNow = gi * 1000;
+  var gapPlan = E.planField([gapLeader, gapCar(gapTicks[gi])], 'Race', 'Green');
+  var gapP = gapPlan.cars[1];
+  gapSt = E.stepMotion(gapSt, gapP.frac, gapP.cap, gapNow, 90000, false, { exact: gapP.exact, lapScale: gapP.lapScale });
+  var gapShown = E.sampleMotion(gapSt, gapNow, 90000, false);
+  if (gapPrev != null) {
+    assert(E.wrapDelta(gapShown - gapPrev) > -0.001,
+      'gap tick ' + gapTicks[gi] + ' rolled back ' + gapShown + ' from ' + gapPrev);
+  }
+  gapPrev = gapShown;
+}
+
+// 超过约 0.12 圈的后撤仍然沿短弧收回（重置 / 大幅跳数）。
+var rewind = E.stepMotion(null, 0.55, 0.62, 0, 90000, false, { exact: true });
+rewind = E.stepMotion(rewind, 0.30, 0.36, 1000, 90000, false, { exact: true });
+var rewindMid = E.sampleMotion(rewind, 1400, 90000, false);
+assert(rewindMid < 0.52 && rewindMid > 0.30, 'large rearward sample still eases back ' + rewindMid);
+var rewindEnd = E.sampleMotion(rewind, 2000, 90000, false);
+near(rewindEnd, 0.30, 0.02, 'large rearward ease lands on the new sample');
+
 for (var slot = 0; slot < 16; slot++) {
   var pack = E.packOffset(slot, false);
   var pitPack = E.packOffset(slot, true);

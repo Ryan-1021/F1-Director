@@ -5,6 +5,8 @@
  * 已经点亮的格子（非 0 都算到达），不拿上一圈残留的赛段时间把车拉回起点。
  * 正赛 / 冲刺赛：领先者仍用赛段；其余车用相对领先者的时间差 ÷ 参考圈速。
  * 被套圈（"1 LAP"）不用时间差，改回各车自己的赛段。
+ * 两次计时之间按参考圈速外推。新采样只比画面略靠后时（差距抖动、
+ * 迷你赛段 cap 收紧）不沿轮廓回退；进站 / 停车 / 大约 0.12 圈以上的后撤仍收回。
  * 进站冻在进站那一刻的估计进度；绘图层把所有进站车收到轮廓内侧、
  * 不压灰线的统一 P 区，而不是沿法线挤在赛道描边上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
@@ -33,6 +35,9 @@
     if (d > 0.5) d -= 1;
     return d;
   }
+
+  // 约 0.12 圈（90s 圈速大约 11s）以内的回退，当成外推超前或采样抖动，不往回拽。
+  var HOLD_BACK = 0.12;
 
   function timeSeconds(str) {
     if (str == null) return NaN;
@@ -844,7 +849,9 @@
         if (u < 0) u = 0;
         var s = u * u * (3 - 2 * u);
         var d = wrapDelta(st.easeTo - st.easeFrom);
-        return wrap01(st.easeFrom + d * s);
+        var eased = wrap01(st.easeFrom + d * s);
+        st.display = eased;
+        return eased;
       }
       st.display = st.easeTo;
       st.anchor = st.easeTo;
@@ -852,7 +859,10 @@
       st.easeTo = null;
       st.easeFrom = null;
     }
-    if (frozen || st.hold || st.pit || st.hide) return st.anchor;
+    if (frozen || st.hold || st.pit || st.hide) {
+      st.display = st.anchor;
+      return st.anchor;
+    }
     var scale = st.lapScale > 0 ? st.lapScale : 1;
     var ms = (lapMs > 1 ? lapMs : 90000) * scale;
     var adv = Math.max(0, now - st.at) / ms;
@@ -870,7 +880,15 @@
         }
       }
     }
-    return wrap01(st.anchor + adv);
+    var next = wrap01(st.anchor + adv);
+    // 新采样把 cap 收紧时，夹到 cap 会比上一帧画面靠后。停在已画出的点，
+    // 不要把 cap 抬高（否则 1s 重绘会一层层 bleed 出去）。大回撤仍走 ease。
+    if (st.display != null && isFinite(st.display)) {
+      var pull = wrapDelta(next - st.display);
+      if (pull < -0.0005 && pull > -HOLD_BACK) next = st.display;
+    }
+    st.display = next;
+    return next;
   }
 
   function rebaseMotion(st, shown, now) {
@@ -889,12 +907,12 @@
     var err = wrapDelta(target - shown);
     // 小步向前沿弧线滑过去。已经滑过点亮边界的不要为了对齐往回拽。
     // 差了一大截（换圈、数据跳变）仍然沿短弧收回。
-    if (modeChanged || (targetMoved && (err > 0.0008 || err < -0.12))) {
+    if (modeChanged || (targetMoved && (err > 0.0008 || err < -HOLD_BACK))) {
       st.easeFrom = shown;
       st.easeTo = target;
       st.easeStart = now;
       var gap = Math.abs(err);
-      st.easeMs = flags.pit ? 420 : (gap > 0.12 ? 700 : (gap > 0.05 ? 520 : 360));
+      st.easeMs = flags.pit ? 420 : (gap > HOLD_BACK ? 700 : (gap > 0.05 ? 520 : 360));
       st.anchor = target;
       st.at = now;
       st.display = shown;
