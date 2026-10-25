@@ -358,6 +358,108 @@ var austinAhead = E.pointOnArc(E.buildArc(austinOriented), 0.04);
 var austinT1 = E.pointOnArc(austinArc, austinPit.f1);
 assert(hyp(austinAhead, austinT1) < hyp(austinZero, austinT1), 'racing direction leaves the line toward Turn 1');
 
+var appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+assert(appSrc.indexOf('multiviewer.app') < 0, 'runtime does not call MultiViewer');
+assert(appSrc.indexOf('openf1') < 0 && appSrc.indexOf('OpenF1') < 0, 'runtime does not call OpenF1');
+var phaseSrc = appSrc.split('var CIRCUIT_PHASE')[1].split('function circuitPhase')[0];
+var svgSrc = appSrc.split('var CIRCUIT_SVG')[1].split('};')[0];
+function parsePhases(block) {
+  var re = /'(circuits\/[^']+\.svg)'\s*:\s*\{([^}]+)\}/g;
+  var out = {};
+  var m;
+  while ((m = re.exec(block))) {
+    var body = m[2];
+    var sectors = /sectors:\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]/.exec(body);
+    out[m[1]] = {
+      offset: +/offset:\s*([0-9.]+)/.exec(body)[1],
+      reverse: /reverse:\s*true/.test(body),
+      sectors: sectors ? [+sectors[1], +sectors[2]] : null
+    };
+  }
+  return out;
+}
+var phases = parsePhases(phaseSrc);
+var svgTargets = {};
+var svgRe = /'(circuits\/[^']+\.svg)'/g;
+var sm;
+while ((sm = svgRe.exec(svgSrc))) svgTargets[sm[1]] = true;
+var svgKeys = Object.keys(svgTargets);
+assert(svgKeys.length >= 23, 'circuit svg map ' + svgKeys.length);
+assert(phases['circuits/bahrain-3.svg'] == null, 'Bahrain outline is not calibrated');
+assert(svgTargets['circuits/bahrain-3.svg'], 'Bahrain is still a known circuit');
+svgKeys.forEach(function (rel) {
+  if (rel === 'circuits/bahrain-3.svg') return;
+  assert(phases[rel], 'missing phase ' + rel);
+});
+function nearestFrac(pts, q) {
+  var best = Infinity;
+  var bestF = 0;
+  var cum = [0];
+  var total = 0;
+  var i;
+  for (i = 1; i < pts.length; i++) {
+    total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    cum.push(total);
+  }
+  var close = Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y);
+  var per = total + close;
+  function consider(ax, ay, bx, by, segStart, segLen) {
+    var vx = bx - ax;
+    var vy = by - ay;
+    var len2 = vx * vx + vy * vy;
+    var u = 0;
+    if (len2 > 1e-12) {
+      u = ((q.x - ax) * vx + (q.y - ay) * vy) / len2;
+      if (u < 0) u = 0;
+      if (u > 1) u = 1;
+    }
+    var d = Math.hypot(q.x - (ax + vx * u), q.y - (ay + vy * u));
+    if (d < best) {
+      best = d;
+      bestF = per > 0 ? (segStart + segLen * u) / per : 0;
+    }
+  }
+  for (i = 1; i < pts.length; i++) {
+    consider(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y, cum[i - 1], cum[i] - cum[i - 1]);
+  }
+  consider(pts[pts.length - 1].x, pts[pts.length - 1].y, pts[0].x, pts[0].y, total, close);
+  return { frac: bestF, dist: best, per: per };
+}
+function flipY(pts) {
+  var out = [];
+  for (var i = 0; i < pts.length; i++) out.push({ x: pts[i].x, y: -pts[i].y });
+  return out;
+}
+Object.keys(phases).forEach(function (rel) {
+  var phase = phases[rel];
+  assert(phase.offset >= 0 && phase.offset < 1, rel + ' offset ' + phase.offset);
+  if (phase.sectors) {
+    assert(phase.sectors[0] > 0.05 && phase.sectors[0] < phase.sectors[1] && phase.sectors[1] < 0.95,
+      rel + ' sectors ' + phase.sectors);
+  }
+  var text = fs.readFileSync(path.join(__dirname, rel), 'utf8');
+  var raw = flipY(E.outlineFromSvg(text, 4));
+  var oriented = E.orientClosedOutline(raw, phase.offset, phase.reverse);
+  var zero = E.pointOnArc(E.buildArc(oriented), 0);
+  var hit = nearestFrac(raw, zero);
+  assert(hit.dist < 1.5, rel + ' finish leaves the polyline ' + hit.dist);
+  var along = phase.reverse ? (1 - hit.frac) % 1 : hit.frac;
+  var delta = along - phase.offset;
+  if (delta > 0.5) delta -= 1;
+  if (delta < -0.5) delta += 1;
+  assert(Math.abs(delta) < 0.012, rel + ' progress 0 fraction ' + along + ' vs ' + phase.offset);
+});
+var monzaPhase = phases['circuits/monza-7.svg'];
+var monacoPhase = phases['circuits/monaco-6.svg'];
+var shanghaiPhase = phases['circuits/shanghai-1.svg'];
+near(monzaPhase.offset, 0.692, 0.0001, 'Monza offset');
+assert(monzaPhase.reverse === false && monzaPhase.sectors[0] === 0.33 && monzaPhase.sectors[1] === 0.644, 'Monza sectors');
+near(monacoPhase.offset, 0.335, 0.0001, 'Monaco offset');
+near(E.progressFromTiming(miniCar, monacoPhase.sectors).frac, monacoPhase.sectors[0] * 0.5, 0.001, 'Monaco S1 uses the sector end');
+near(E.progressFromTiming(miniCar, monzaPhase.sectors).frac, monzaPhase.sectors[0] * 0.5, 0.001, 'Monza S1 uses the sector end');
+assert(shanghaiPhase.reverse === true, 'Shanghai file direction is opposite the race');
+assert(phases['circuits/austin-1.svg'].offset === 0.522, 'Austin hand offset stays');
+
 // 弧长：中点大致在线段中间。
 var arc = E.buildArc([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
 var midPt = E.pointOnArc(arc, 0.5);
