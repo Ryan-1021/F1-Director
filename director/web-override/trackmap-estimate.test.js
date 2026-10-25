@@ -432,7 +432,10 @@ var appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appSrc.indexOf('multiviewer.app') < 0, 'runtime does not call MultiViewer');
 assert(appSrc.indexOf('openf1') < 0 && appSrc.indexOf('OpenF1') < 0, 'runtime does not call OpenF1');
 assert(appSrc.indexOf('tm-pit-count') >= 0, 'app paints a pit count');
+assert(appSrc.indexOf('data-tip') >= 0 && appSrc.indexOf('进站中的车数') >= 0, 'app wires a pit-count tooltip');
+assert(appSrc.indexOf('tabindex') >= 0, 'pit badge is focusable');
 assert(appSrc.indexOf('bay.slots') < 0, 'app no longer paints pit-bay car slots');
+assert(appSrc.indexOf('makePitBayLayer()') >= 0, 'pit badge is a wrap overlay');
 var phaseSrc = appSrc.split('var CIRCUIT_PHASE')[1].split('function circuitPhase')[0];
 var svgSrc = appSrc.split('var CIRCUIT_SVG')[1].split('};')[0];
 function parsePhases(block) {
@@ -673,11 +676,10 @@ assert(leftPits.pit === true, 'entered pits');
 leftPits = E.stepMotion(leftPits, 0.05, 0.12, 2000, 90000, false, { exact: true, pit: false, outlap: true });
 assert(leftPits.pit === false, 'pitOut clears the pit flag so the dot can return to the outline');
 
+assert(E.pitBayTip && E.pitBayTip.indexOf('进站') >= 0, 'shared Chinese tooltip copy');
+assert(E.pitBayInset === 8, 'default panel inset is 8px');
+
 var bay0 = E.placePitBay({
-  origin: { x: 200, y: 200 },
-  tx: 1,
-  ty: 0,
-  centroid: { x: 200, y: 120 },
   outline: squareScreen,
   strokeW: 8,
   viewW: 400,
@@ -686,13 +688,10 @@ var bay0 = E.placePitBay({
   carCount: 0
 });
 assert(bay0.count === 0, 'placed badge reports 0');
+assert(bay0.corner === 'top-left', 'zero-count layout still names the corner');
 assert(!bay0.slots || bay0.slots.length === 0, 'count badge has no car slots');
 
 var bay = E.placePitBay({
-  origin: { x: 200, y: 200 },
-  tx: 1,
-  ty: 0,
-  centroid: { x: 200, y: 120 },
   outline: squareScreen,
   strokeW: 8,
   viewW: 400,
@@ -703,37 +702,35 @@ var bay = E.placePitBay({
 assert(bay.count === 4, 'placed badge reports N');
 assert(!bay.slots || bay.slots.length === 0, 'N-count badge still has no car slots');
 assert(isFinite(bay.countPos.x) && bay.countPos.x > bay.badge.x, 'count sits beside P');
-assert(bay.clearance >= bay.minClear, 'square circuit bay clears 1.5x stroke ' + bay.clearance);
-assert(bay.minClear === 12, 'minClear is 1.5x stroke');
-assert(bay.y + bay.height < 200 - 12 + 0.5, 'bay sits above the S/F stroke');
-assert(bay.x > 40 && bay.x + bay.width < 360, 'bay stays inside the infield x');
-var bayMidY = bay.y + bay.height / 2;
-assert(bayMidY < 200, 'bay is toward the centroid, not outside the circuit');
-var bayC = { x: bay.x + bay.width / 2, y: bay.y + bay.height / 2 };
-assert(Math.hypot(bayC.x - 200, bayC.y - 120) < Math.hypot(200 - 200, 200 - 120),
-  'square bay is closer to the centroid than S/F');
+assert(bay.corner === 'top-left', 'badge is pinned to the viewport corner');
+assert(bay.tip === E.pitBayTip, 'layout carries the tooltip');
+near(bay.x, E.pitBayInset, 0.6, 'square bay x is the panel inset');
+near(bay.y, E.pitBayInset, 0.6, 'square bay y is the panel inset');
+assert(bay.minClear === 4, 'minClear is half the stroke (no grey-line overlap)');
+assert(bay.clearance >= bay.minClear, 'square top-left clears the stroke ' + bay.clearance);
+assert(bay.x + bay.width < 80, 'top-left badge stays in the left gutter');
+assert(bay.y + bay.height < 48, 'top-left badge stays in the top gutter');
 
-// 起终点内侧有一条近距离障碍时，第一步会压线，必须再往里推。
-var tight = [
-  { x: 40, y: 200 }, { x: 360, y: 200 }, { x: 360, y: 40 }, { x: 40, y: 40 }, { x: 40, y: 200 },
-  { x: 80, y: 164 }, { x: 320, y: 164 }
-];
-var tightBay = E.placePitBay({
-  origin: { x: 200, y: 200 },
-  tx: 1,
-  ty: 0,
-  centroid: { x: 200, y: 120 },
-  outline: tight,
+var padded = E.placePitBay({
+  outline: squareScreen,
   strokeW: 8,
   viewW: 400,
   viewH: 240,
   zoom: 1.05,
-  carCount: 3
+  carCount: 3,
+  inset: 14
 });
-assert(tightBay.clearance >= tightBay.minClear, 'near-SF obstacle still clears the outline ' + tightBay.clearance);
-assert(tightBay.y + tightBay.height <= 164 - 12 + 0.5, 'bay sits past the inner bar');
+assert(padded.corner === 'top-left', 'custom inset stays top-left');
+near(padded.x, 14, 0.6, 'honors a larger top-left inset x');
+near(padded.y, 14, 0.6, 'honors a larger top-left inset y');
 
-function mapOutlineToView(pts, w, h) {
+function trackStrokeW(zoom) {
+  var z = Number(zoom);
+  if (!(z > 0)) z = 1.05;
+  return Math.max(4, Math.min(12, 5 + Math.sqrt(z) * 3));
+}
+
+function mapOutlineToView(pts, w, h, zoom) {
   var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   var i;
   for (i = 0; i < pts.length; i++) {
@@ -747,7 +744,9 @@ function mapOutlineToView(pts, w, h) {
   minX -= padX; minY -= padY; maxX += padX; maxY += padY;
   var bw = maxX - minX;
   var bh = maxY - minY;
-  var scale = Math.min(w / bw, h / bh) * 0.92 * 1.05;
+  var z = Number(zoom);
+  if (!(z > 0)) z = 1.05;
+  var scale = Math.min(w / bw, h / bh) * 0.92 * z;
   var ox = (w - bw * scale) / 2;
   var oy = (h - bh * scale) / 2;
   function mapPoint(x, y) {
@@ -768,56 +767,59 @@ function mapOutlineToView(pts, w, h) {
     origin: sc,
     tx: ahead.x - sc.x,
     ty: ahead.y - sc.y,
-    centroid: mapPoint(sx / pts.length, sy / pts.length)
+    centroid: mapPoint(sx / pts.length, sy / pts.length),
+    strokeW: trackStrokeW(z)
   };
 }
 
 var austinFlipped = E.orientClosedOutline(flipY(austinRaw), austinPhase.offset, austinPhase.reverse);
-var austinView = mapOutlineToView(austinFlipped, 420, 280);
+var austinView = mapOutlineToView(austinFlipped, 420, 280, 1.05);
 var austinBay = E.placePitBay({
-  origin: austinView.origin,
-  tx: austinView.tx,
-  ty: austinView.ty,
-  centroid: austinView.centroid,
   outline: austinView.outline,
-  strokeW: 8,
+  strokeW: austinView.strokeW,
   viewW: 420,
   viewH: 280,
   zoom: 1.05,
   carCount: 6
 });
 assert(austinBay.count === 6, 'Austin badge shows six in the pits');
+assert(austinBay.corner === 'top-left', 'Austin badge is top-left');
+near(austinBay.x, E.pitBayInset, 0.6, 'Austin x is the panel inset');
+near(austinBay.y, E.pitBayInset, 0.6, 'Austin y is the panel inset');
 assert(austinBay.clearance >= austinBay.minClear,
   'Austin default view bay clears the outline by ' + austinBay.clearance.toFixed(1) +
   ' (need ' + austinBay.minClear + ')');
-var austinBayC = { x: austinBay.x + austinBay.width / 2, y: austinBay.y + austinBay.height / 2 };
-var austinIn = E.inwardNormal(austinView.tx, austinView.ty, austinView.origin, austinView.centroid);
-assert(
-  (austinBayC.x - austinView.origin.x) * austinIn.x + (austinBayC.y - austinView.origin.y) * austinIn.y > 0,
-  'Austin bay is on the inward side of S/F'
-);
 assert(!austinBay.slots || austinBay.slots.length === 0, 'Austin badge has no car dots');
 
+var views = [
+  { w: 420, h: 280, zoom: 1.05, label: 'preview' },
+  { w: 438, h: 298, zoom: 1.05, label: 'default-panel' }
+];
+var usedRels = {};
+svgKeys.forEach(function (rel) { usedRels[rel] = true; });
 files.forEach(function (f) {
   var rel = 'circuits/' + f;
+  if (!usedRels[rel] && f !== 'marina-bay.svg') return;
   var text = fs.readFileSync(path.join(dir, f), 'utf8');
   var phase = phases[rel] || { offset: 0, reverse: false };
   var oriented = E.orientClosedOutline(flipY(E.outlineFromSvg(text, 4)), phase.offset, phase.reverse);
-  var view = mapOutlineToView(oriented, 420, 280);
-  var laid = E.placePitBay({
-    origin: view.origin,
-    tx: view.tx,
-    ty: view.ty,
-    centroid: view.centroid,
-    outline: view.outline,
-    strokeW: 8,
-    viewW: 420,
-    viewH: 280,
-    zoom: 1.05,
-    carCount: 8
+  views.forEach(function (vp) {
+    var view = mapOutlineToView(oriented, vp.w, vp.h, vp.zoom);
+    var laid = E.placePitBay({
+      outline: view.outline,
+      strokeW: view.strokeW,
+      viewW: vp.w,
+      viewH: vp.h,
+      zoom: vp.zoom,
+      carCount: 8
+    });
+    assert(laid.corner === 'top-left', f + ' ' + vp.label + ' stays top-left');
+    assert(laid.x <= E.pitBayInset + 20 && laid.y <= E.pitBayInset + 20,
+      f + ' ' + vp.label + ' stays in the top-left gutter ' + laid.x + ',' + laid.y);
+    assert(laid.clearance >= laid.minClear,
+      f + ' ' + vp.label + ' pit badge overlaps outline (clearance ' +
+      laid.clearance.toFixed(2) + ', need ' + laid.minClear.toFixed(2) + ')');
   });
-  assert(laid.clearance >= laid.minClear,
-    f + ' default-view pit bay overlaps outline (clearance ' + laid.clearance.toFixed(2) + ')');
 });
 
 if (failed) {

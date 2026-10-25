@@ -8,7 +8,7 @@
  * 两次计时之间按参考圈速外推。新采样只比画面略靠后时（差距抖动、
  * 迷你赛段 cap 收紧）不沿轮廓回退；进站 / 停车 / 大约 0.12 圈以上的后撤仍收回。
  * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
- * 只在内侧放一块不压灰线的「P + 人数」徽章。出站后车点回到赛道上。
+ * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
  * 其它赛道仍相对 SVG 起点。车与车的间距不受这条相位影响。
  *
@@ -468,6 +468,9 @@
     };
   }
 
+  var PIT_BAY_INSET = 8;
+  var PIT_BAY_TIP = '进站中的车数（退赛/淘汰不计）';
+
   function clampBayOrigin(x, y, w, h, viewW, viewH, margin) {
     var m = margin > 0 ? margin : 8;
     var vw = viewW > w + m * 2 ? viewW : (w + m * 2);
@@ -480,126 +483,46 @@
   }
 
   /**
-   * 屏幕坐标里给进站人数找一块紧凑 P 徽章。
-   * 先从进度 0 沿内侧法向推开（离开描边至少 1.5× 线宽），不够再往里推、
-   * 扫视口网格，或缩一号；还压线就落到能让开轮廓的视口角。
+   * 屏幕坐标：P 徽章钉在赛道图视口左上角（面板 UI 角，不是按赛道搜空位）。
+   * 默认离开边缘 PIT_BAY_INSET；若 AABB 仍压到灰线描边（间隙 < 半线宽），
+   * 只把同一角的边距略加大，不回到内侧/网格搜索。
    */
   function placePitBay(opts) {
     opts = opts || {};
-    var origin = opts.origin || { x: 0, y: 0 };
-    var centroid = opts.centroid || origin;
-    var nrm = inwardNormal(opts.tx, opts.ty, origin, centroid);
     var strokeW = Number(opts.strokeW);
     if (!(strokeW > 0)) strokeW = 8;
-    var minClear = strokeW * 1.5;
+    var minClear = strokeW / 2;
     var outline = opts.outline || [];
     var viewW = Number(opts.viewW);
     var viewH = Number(opts.viewH);
     if (!(viewW > 0)) viewW = 320;
     if (!(viewH > 0)) viewH = 240;
-    var zoom = opts.zoom;
-    var carCount = opts.carCount;
+    var size = pitBaySize(opts.carCount, opts.zoom, 0);
+    var baseInset = Number(opts.inset);
+    if (!(baseInset >= 0)) baseInset = PIT_BAY_INSET;
 
-    function search(size) {
-      var half = Math.max(size.width, size.height) / 2;
-      var startDist = minClear + half;
-      var preferred = {
-        x: origin.x + nrm.x * startDist,
-        y: origin.y + nrm.y * startDist
-      };
-      var best = null;
-
-      function consider(rect) {
-        var clearance = minDistRectToPolyline(rect, outline);
-        var cx = rect.x + rect.w / 2;
-        var cy = rect.y + rect.h / 2;
-        var pref = Math.hypot(cx - preferred.x, cy - preferred.y);
-        var inside = (cx - origin.x) * nrm.x + (cy - origin.y) * nrm.y;
-        var cand = { rect: rect, clearance: clearance, pref: pref, inside: inside, size: size };
-        if (!best) { best = cand; return; }
-        var bestOk = best.clearance >= minClear;
-        var candOk = clearance >= minClear;
-        if (candOk !== bestOk) {
-          if (candOk) best = cand;
-          return;
-        }
-        if (candOk) {
-          var bestIn = best.inside > 4;
-          var candIn = inside > 4;
-          if (candIn !== bestIn) {
-            if (candIn) best = cand;
-            return;
-          }
-          if (pref < best.pref - 2) { best = cand; return; }
-          if (Math.abs(pref - best.pref) <= 2 && clearance > best.clearance + 0.5) best = cand;
-          return;
-        }
-        if (clearance > best.clearance) best = cand;
-      }
-
-      function tryCenter(cx, cy) {
-        var clamped = clampBayOrigin(cx - size.width / 2, cy - size.height / 2, size.width, size.height, viewW, viewH, 6);
-        consider({ x: clamped.x, y: clamped.y, w: size.width, h: size.height });
-      }
-
-      var steps = [0, 8, 16, 28, 44, 64, 88, 120, 160, 210];
-      var s;
-      function acceptInside() {
-        return best && best.clearance >= minClear && best.inside > 4;
-      }
-      for (s = 0; s < steps.length; s++) {
-        tryCenter(origin.x + nrm.x * (startDist + steps[s]), origin.y + nrm.y * (startDist + steps[s]));
-        if (acceptInside()) return best;
-      }
-      tryCenter(centroid.x, centroid.y);
-      var laterals = [-70, -35, 35, 70];
-      for (s = 0; s < laterals.length; s++) {
-        tryCenter(
-          origin.x + nrm.x * (startDist + 40) + nrm.tx * laterals[s],
-          origin.y + nrm.y * (startDist + 40) + nrm.ty * laterals[s]
-        );
-      }
-      if (acceptInside()) return best;
-
-      if (!best || best.clearance < minClear) {
-        var gx, gy;
-        var cols = 8;
-        var rows = 6;
-        var x0 = 6 + size.width / 2;
-        var y0 = 6 + size.height / 2;
-        var x1 = viewW - 6 - size.width / 2;
-        var y1 = viewH - 6 - size.height / 2;
-        if (x1 < x0) x1 = x0;
-        if (y1 < y0) y1 = y0;
-        for (gy = 0; gy < rows; gy++) {
-          for (gx = 0; gx < cols; gx++) {
-            tryCenter(
-              x0 + (x1 - x0) * (cols === 1 ? 0 : gx / (cols - 1)),
-              y0 + (y1 - y0) * (rows === 1 ? 0 : gy / (rows - 1))
-            );
-          }
-        }
-      }
-      return best;
+    function atInset(m) {
+      var origin = clampBayOrigin(m, m, size.width, size.height, viewW, viewH, Math.min(m, 4));
+      var rect = { x: origin.x, y: origin.y, w: size.width, h: size.height };
+      var clearance = outline.length ? minDistRectToPolyline(rect, outline) : Infinity;
+      return { x: origin.x, y: origin.y, rect: rect, clearance: clearance, inset: m };
     }
 
-    var best = search(pitBaySize(carCount, zoom, 0));
-    if (!best || best.clearance < minClear) {
-      var compact = search(pitBaySize(carCount, zoom, 1));
-      if (compact && (!best || compact.clearance > best.clearance)) best = compact;
-    }
-    if (!best || best.clearance < minClear) {
-      var tiny = search(pitBaySize(carCount, zoom, 2));
-      if (tiny && (!best || tiny.clearance > best.clearance)) best = tiny;
+    var placed = atInset(baseInset);
+    if (outline.length && placed.clearance < minClear) {
+      var extra;
+      for (extra = 2; extra <= 20; extra += 2) {
+        var cand = atInset(baseInset + extra);
+        if (cand.clearance > placed.clearance) placed = cand;
+        if (placed.clearance >= minClear) break;
+      }
     }
 
-    var size = best && best.size ? best.size : pitBaySize(carCount, zoom, 0);
-    var rect = best ? best.rect : { x: 6, y: 6, w: size.width, h: size.height };
-    var badgeX = rect.x + size.pad + size.badge / 2;
-    var midY = rect.y + size.height / 2;
+    var badgeX = placed.x + size.pad + size.badge / 2;
+    var midY = placed.y + size.height / 2;
     return {
-      x: rect.x,
-      y: rect.y,
+      x: placed.x,
+      y: placed.y,
       width: size.width,
       height: size.height,
       count: size.n,
@@ -609,11 +532,14 @@
         r: size.badge / 2
       },
       countPos: {
-        x: rect.x + size.pad + size.badge + size.gap + size.countW / 2,
+        x: placed.x + size.pad + size.badge + size.gap + size.countW / 2,
         y: midY
       },
-      clearance: best ? best.clearance : 0,
-      minClear: minClear
+      clearance: placed.clearance,
+      minClear: minClear,
+      inset: placed.inset,
+      corner: 'top-left',
+      tip: PIT_BAY_TIP
     };
   }
 
@@ -1427,6 +1353,8 @@
     minDistRectToPolyline: minDistRectToPolyline,
     pitBaySize: pitBaySize,
     placePitBay: placePitBay,
+    pitBayInset: PIT_BAY_INSET,
+    pitBayTip: PIT_BAY_TIP,
     pitLanePaint: pitLanePaint,
     finishGrid: finishGrid,
     sampleMotion: sampleMotion,
