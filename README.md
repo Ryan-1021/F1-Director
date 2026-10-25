@@ -29,18 +29,6 @@
 
 ![进站 P + 人数（奥斯汀）](docs/pit-bay-austin.png)
 
-摩纳哥：同样左上角，不跟弯道走。
-
-![进站 P + 人数（摩纳哥）](docs/pit-bay-monaco.png)
-
-银石：左上角，灰线在徽章下方留空。
-
-![进站 P + 人数（银石）](docs/pit-bay-silverstone.png)
-
-墨西哥城是默认面板尺寸里左上角离灰线最近的一条（仍不压描边）。
-
-![进站 P + 人数（墨西哥城，最紧）](docs/pit-bay-mexico.png)
-
 悬停 / 聚焦徽章时的说明：「进站中的车数（退赛/淘汰不计）」。
 
 ![进站 P 徽章悬停提示](docs/pit-bay-tooltip.png)
