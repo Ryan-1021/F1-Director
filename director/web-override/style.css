@@ -1448,12 +1448,15 @@ html[data-theme="day"] .tm-pit-bay-bg {
   stroke: rgba(225, 6, 0, 0.7);
 }
 .tm-pit-badge-bg { fill: #e10600; }
-.tm-pit-badge-t {
+.tm-pit-badge-t,
+.tm-pit-count {
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-weight: 800;
   fill: #fff;
   stroke: none;
 }
+.tm-pit-count { fill: #f4f6f8; }
+html[data-theme="day"] .tm-pit-count { fill: #102027; }
 .tm-est {
   flex: 0 0 auto;
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;

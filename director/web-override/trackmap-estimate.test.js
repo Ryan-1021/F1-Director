@@ -431,6 +431,8 @@ assert(hyp(austinAhead, austinT1) < hyp(austinZero, austinT1), 'racing direction
 var appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appSrc.indexOf('multiviewer.app') < 0, 'runtime does not call MultiViewer');
 assert(appSrc.indexOf('openf1') < 0 && appSrc.indexOf('OpenF1') < 0, 'runtime does not call OpenF1');
+assert(appSrc.indexOf('tm-pit-count') >= 0, 'app paints a pit count');
+assert(appSrc.indexOf('bay.slots') < 0, 'app no longer paints pit-bay car slots');
 var phaseSrc = appSrc.split('var CIRCUIT_PHASE')[1].split('function circuitPhase')[0];
 var svgSrc = appSrc.split('var CIRCUIT_SVG')[1].split('};')[0];
 function parsePhases(block) {
@@ -623,9 +625,68 @@ var nrm = E.inwardNormal(1, 0, { x: 200, y: 200 }, { x: 200, y: 120 });
 near(nrm.x, 0, 0.01, 'inward x is toward centroid');
 assert(nrm.y < 0, 'inward y points up the page toward centroid ' + nrm.y);
 
+var sized0 = E.pitBaySize(0, 1.05);
 var sized = E.pitBaySize(5, 1.05);
-assert(sized.cols === 3 && sized.rows === 2, 'five cars use a 3x2 grid');
-assert(sized.width < 140 && sized.height < 90, 'default-zoom bay stays compact');
+var sized20 = E.pitBaySize(20, 1.05);
+assert(sized0.n === 0 && sized.n === 5 && sized20.n === 20, 'count badge keeps the pit headcount');
+assert(!sized.cols && !sized.rows, 'count badge has no car grid');
+assert(sized.width < 70 && sized.height < 40, 'default-zoom count badge stays compact');
+assert(Math.abs(sized.width - sized0.width) < 1, '0 and single-digit counts share a size');
+assert(sized20.width > sized.width && sized20.width < 80, 'two-digit count is only slightly wider');
+assert(sized20.height === sized.height, 'count height does not grow with N');
+
+var emptyLane = E.pitLanePaint([
+  { number: '1', tla: 'VER', pit: false },
+  { number: '16', tla: 'LEC', pit: false }
+]);
+assert(emptyLane.pitCount === 0 && emptyLane.showBay === false, '0 pit cars hide the badge');
+assert(emptyLane.onTrack.length === 2 && emptyLane.inPit.length === 0, 'racing cars stay on the outline');
+
+var mixedLane = E.pitLanePaint([
+  { number: '1', tla: 'VER', pit: false },
+  { number: '44', tla: 'HAM', pit: true },
+  { number: '16', tla: 'LEC', pit: true },
+  { number: '55', tla: 'SAI', hide: true, pit: true },
+  { number: '4', tla: 'NOR', pit: false }
+]);
+assert(mixedLane.pitCount === 2 && mixedLane.showBay === true, 'N pit cars feed the count badge');
+assert(mixedLane.onTrack.map(function (c) { return c.number; }).join(',') === '1,4',
+  'outline keeps only racing cars');
+assert(mixedLane.inPit.every(function (c) { return c.pit && !c.hide; }), 'hidden pit cars do not count');
+
+var pitPlan = E.planField([
+  { number: 1, tla: 'VER', position: 1, gap: 'LEADER', sectors: [{}, {}, {}] },
+  { number: 44, tla: 'HAM', position: 2, inPit: true, gap: 'IN PIT', sectors: [{}, {}, {}] },
+  { number: 16, tla: 'LEC', position: 3, gap: 'PIT', sectors: [{}, {}, {}] },
+  { number: 55, tla: 'SAI', position: 4, pitOut: true, gap: '+1.200',
+    sectors: [{ value: '', segments: [0, 0, 0] }, { value: '', segments: [] }, { value: '', segments: [] }] }
+], 'Qualifying', 'Started');
+var pitPaint = E.pitLanePaint(pitPlan.cars);
+assert(pitPlan.cars[1].pit && pitPlan.cars[2].pit, 'inPit / PIT gap stay in the count');
+assert(pitPlan.cars[3].pit === false && pitPlan.cars[3].outlap === true, 'pitOut is not inPit');
+assert(pitPaint.pitCount === 2, 'count badge is 2');
+assert(pitPaint.onTrack.map(function (c) { return c.number; }).join(',') === '1,55',
+  'outline is leader + pitOut only');
+
+var leftPits = E.stepMotion(null, 0.42, 0.55, 0, 90000, false, { exact: true, pit: true });
+assert(leftPits.pit === true, 'entered pits');
+leftPits = E.stepMotion(leftPits, 0.05, 0.12, 2000, 90000, false, { exact: true, pit: false, outlap: true });
+assert(leftPits.pit === false, 'pitOut clears the pit flag so the dot can return to the outline');
+
+var bay0 = E.placePitBay({
+  origin: { x: 200, y: 200 },
+  tx: 1,
+  ty: 0,
+  centroid: { x: 200, y: 120 },
+  outline: squareScreen,
+  strokeW: 8,
+  viewW: 400,
+  viewH: 240,
+  zoom: 1.05,
+  carCount: 0
+});
+assert(bay0.count === 0, 'placed badge reports 0');
+assert(!bay0.slots || bay0.slots.length === 0, 'count badge has no car slots');
 
 var bay = E.placePitBay({
   origin: { x: 200, y: 200 },
@@ -639,7 +700,9 @@ var bay = E.placePitBay({
   zoom: 1.05,
   carCount: 4
 });
-assert(bay.slots.length === 4, 'four pit slots');
+assert(bay.count === 4, 'placed badge reports N');
+assert(!bay.slots || bay.slots.length === 0, 'N-count badge still has no car slots');
+assert(isFinite(bay.countPos.x) && bay.countPos.x > bay.badge.x, 'count sits beside P');
 assert(bay.clearance >= bay.minClear, 'square circuit bay clears 1.5x stroke ' + bay.clearance);
 assert(bay.minClear === 12, 'minClear is 1.5x stroke');
 assert(bay.y + bay.height < 200 - 12 + 0.5, 'bay sits above the S/F stroke');
@@ -649,10 +712,6 @@ assert(bayMidY < 200, 'bay is toward the centroid, not outside the circuit');
 var bayC = { x: bay.x + bay.width / 2, y: bay.y + bay.height / 2 };
 assert(Math.hypot(bayC.x - 200, bayC.y - 120) < Math.hypot(200 - 200, 200 - 120),
   'square bay is closer to the centroid than S/F');
-for (var bi = 0; bi < bay.slots.length; bi++) {
-  var slotD = E.minDistPointToPolyline(bay.slots[bi].x, bay.slots[bi].y, squareScreen) - 6.5;
-  assert(slotD >= bay.minClear - 0.2, 'slot ' + bi + ' clears outline ' + slotD);
-}
 
 // 起终点内侧有一条近距离障碍时，第一步会压线，必须再往里推。
 var tight = [
@@ -727,7 +786,7 @@ var austinBay = E.placePitBay({
   zoom: 1.05,
   carCount: 6
 });
-assert(austinBay.slots.length === 6, 'Austin bay has six slots');
+assert(austinBay.count === 6, 'Austin badge shows six in the pits');
 assert(austinBay.clearance >= austinBay.minClear,
   'Austin default view bay clears the outline by ' + austinBay.clearance.toFixed(1) +
   ' (need ' + austinBay.minClear + ')');
@@ -737,9 +796,7 @@ assert(
   (austinBayC.x - austinView.origin.x) * austinIn.x + (austinBayC.y - austinView.origin.y) * austinIn.y > 0,
   'Austin bay is on the inward side of S/F'
 );
-var austinDot = austinBay.slots[0];
-var austinDotClear = E.minDistPointToPolyline(austinDot.x, austinDot.y, austinView.outline) - 6.5;
-assert(austinDotClear >= austinBay.minClear - 0.2, 'Austin first pit dot clears stroke ' + austinDotClear);
+assert(!austinBay.slots || austinBay.slots.length === 0, 'Austin badge has no car dots');
 
 files.forEach(function (f) {
   var rel = 'circuits/' + f;
