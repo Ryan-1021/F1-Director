@@ -52,7 +52,7 @@
 ## 自测
 
 1. `director/Start.cmd`（或 `Publish-Web.cmd`）发布后打开导播台，加一块「赛道图」。改完前端请 **硬刷新**（Ctrl+F5），否则 iframe 可能还拿着旧的 `app.js`。
-2. 有场次且赛道能对上本地 SVG 时，应看到闭合轮廓和车位。顶栏文字只有「估计」，旁边是旋转控件。有黄旗区段时，对应的一段轮廓变黄；红旗或安全车时整圈变色。计时里有车 `inPit` / 差距含 PIT 时，轮廓上只留在跑的车，左上角 P 徽章只显示人数，不该再看到进站车点或缩写网格。仓库 `docs/pit-bay-*.png` 和 `docs/trackmap-flags-contact-sheet.png` 是默认 zoom 下的估计图示意，README 效果图一节有拼贴。
+2. 有场次且赛道能对上本地 SVG 时，应看到闭合轮廓和车位。顶栏文字只有「估计」，旁边是旋转控件。有黄旗区段时，对应的一段轮廓变黄；红旗或安全车时整圈变色。计时里有车 `inPit` / 差距含 PIT 时，轮廓上只留在跑的车，左上角 P 徽章只显示人数，不该再看到进站车点或缩写网格。仓库 `docs/pit-bay-austin.png` / `docs/pit-bay-tooltip.png` 和 `docs/trackmap-flags-contact-sheet.png` 是默认 zoom 下的估计图示意，README 效果图一节有拼贴。
 3. `node director/web-override/trackmap-estimate.test.js`
 4. `node --check director/web-override/app.js`
 

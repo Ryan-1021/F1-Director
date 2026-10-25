@@ -72,6 +72,12 @@ if exist "%~dp0web-override\icons" (
   if not exist "%WEBDIR%\icons" mkdir "%WEBDIR%\icons" >nul 2>&1
   xcopy /Y /Q /E "%~dp0web-override\icons\*" "%WEBDIR%\icons\" >nul
 )
+if exist "%~dp0web-override\favicon.ico" copy /Y "%~dp0web-override\favicon.ico" "%WEBDIR%\favicon.ico" >nul
+if exist "%~dp0web-override\favicon-32.png" copy /Y "%~dp0web-override\favicon-32.png" "%WEBDIR%\favicon-32.png" >nul
+if exist "%~dp0assets" (
+  if not exist "%WEBDIR%\assets" mkdir "%WEBDIR%\assets" >nul 2>&1
+  xcopy /Y /Q /E "%~dp0assets\*" "%WEBDIR%\assets\" >nul
+)
 copy /Y "%HTML%" "%WEBDIR%\director.html" >nul
 rem Seed layouts.json once (do not overwrite user-saved presets in share\web)
 if not exist "%WEBDIR%\layouts.json" if exist "%~dp0layouts.json" (

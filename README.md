@@ -121,7 +121,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 | `director/director.html` | 导播台主页面 |
 | `director/web-override/` | 覆盖 UI（`app.js` / `rank-swap.js` / `style.css` / 状态 SVG 等） |
 | `director/web-override/circuits/` | 本地赛道轮廓 SVG（f1db，不联网） |
-| `docs/` | 效果图、估计赛道图旗语拼图、进站 P 区示意、排名换行 GIF |
+| `docs/` | 效果图、旗语拼图、奥斯汀进站 P 示意、排名换行 GIF |
 | `director/layouts.json` | 首次布局种子（写入 `share/web/layouts.json` 后以运行时为准） |
 | `director/assets/` | 图标源与 favicon（`F1-Director.ico`、浏览器图标） |
 | `director/Publish-Web.cmd` | 把 UI（含 assets）拷到 `share/web/` |
