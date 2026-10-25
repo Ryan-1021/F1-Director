@@ -539,6 +539,160 @@ assert(vsc.full === 'vsc' && vsc.sectors.length === 0, 'vsc full lap');
 var bareYellow = E.marshalFlagPlan({ level: 2, globalLevel: 2, yellowSectors: [] }, 19);
 assert(bareYellow.full === 'yellow' && bareYellow.sectors.length === 0, 'yellow with no sector list');
 
+var squareScreen = [
+  { x: 40, y: 200 }, { x: 360, y: 200 }, { x: 360, y: 40 }, { x: 40, y: 40 }, { x: 40, y: 200 }
+];
+var pitBox = { x: 80, y: 80, w: 40, h: 30 };
+near(E.minDistRectToPolyline(pitBox, squareScreen), 40, 0.6, 'infield rect clears the bottom edge');
+var onLine = { x: 30, y: 190, w: 30, h: 20 };
+assert(E.minDistRectToPolyline(onLine, squareScreen) <= 0, 'rect on the outline reports overlap');
+near(E.minDistPointToPolyline(200, 200, squareScreen), 0, 0.01, 'point on polyline');
+near(E.minDistPointToPolyline(200, 188, squareScreen), 12, 0.01, 'point above bottom edge');
+
+var nrm = E.inwardNormal(1, 0, { x: 200, y: 200 }, { x: 200, y: 120 });
+near(nrm.x, 0, 0.01, 'inward x is toward centroid');
+assert(nrm.y < 0, 'inward y points up the page toward centroid ' + nrm.y);
+
+var sized = E.pitBaySize(5, 1.05);
+assert(sized.cols === 3 && sized.rows === 2, 'five cars use a 3x2 grid');
+assert(sized.width < 140 && sized.height < 90, 'default-zoom bay stays compact');
+
+var bay = E.placePitBay({
+  origin: { x: 200, y: 200 },
+  tx: 1,
+  ty: 0,
+  centroid: { x: 200, y: 120 },
+  outline: squareScreen,
+  strokeW: 8,
+  viewW: 400,
+  viewH: 240,
+  zoom: 1.05,
+  carCount: 4
+});
+assert(bay.slots.length === 4, 'four pit slots');
+assert(bay.clearance >= bay.minClear, 'square circuit bay clears 1.5x stroke ' + bay.clearance);
+assert(bay.minClear === 12, 'minClear is 1.5x stroke');
+assert(bay.y + bay.height < 200 - 12 + 0.5, 'bay sits above the S/F stroke');
+assert(bay.x > 40 && bay.x + bay.width < 360, 'bay stays inside the infield x');
+var bayMidY = bay.y + bay.height / 2;
+assert(bayMidY < 200, 'bay is toward the centroid, not outside the circuit');
+var bayC = { x: bay.x + bay.width / 2, y: bay.y + bay.height / 2 };
+assert(Math.hypot(bayC.x - 200, bayC.y - 120) < Math.hypot(200 - 200, 200 - 120),
+  'square bay is closer to the centroid than S/F');
+for (var bi = 0; bi < bay.slots.length; bi++) {
+  var slotD = E.minDistPointToPolyline(bay.slots[bi].x, bay.slots[bi].y, squareScreen) - 6.5;
+  assert(slotD >= bay.minClear - 0.2, 'slot ' + bi + ' clears outline ' + slotD);
+}
+
+// 起终点内侧有一条近距离障碍时，第一步会压线，必须再往里推。
+var tight = [
+  { x: 40, y: 200 }, { x: 360, y: 200 }, { x: 360, y: 40 }, { x: 40, y: 40 }, { x: 40, y: 200 },
+  { x: 80, y: 164 }, { x: 320, y: 164 }
+];
+var tightBay = E.placePitBay({
+  origin: { x: 200, y: 200 },
+  tx: 1,
+  ty: 0,
+  centroid: { x: 200, y: 120 },
+  outline: tight,
+  strokeW: 8,
+  viewW: 400,
+  viewH: 240,
+  zoom: 1.05,
+  carCount: 3
+});
+assert(tightBay.clearance >= tightBay.minClear, 'near-SF obstacle still clears the outline ' + tightBay.clearance);
+assert(tightBay.y + tightBay.height <= 164 - 12 + 0.5, 'bay sits past the inner bar');
+
+function mapOutlineToView(pts, w, h) {
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  var i;
+  for (i = 0; i < pts.length; i++) {
+    if (pts[i].x < minX) minX = pts[i].x;
+    if (pts[i].y < minY) minY = pts[i].y;
+    if (pts[i].x > maxX) maxX = pts[i].x;
+    if (pts[i].y > maxY) maxY = pts[i].y;
+  }
+  var padX = (maxX - minX) * 0.06 || 1;
+  var padY = (maxY - minY) * 0.06 || 1;
+  minX -= padX; minY -= padY; maxX += padX; maxY += padY;
+  var bw = maxX - minX;
+  var bh = maxY - minY;
+  var scale = Math.min(w / bw, h / bh) * 0.92 * 1.05;
+  var ox = (w - bw * scale) / 2;
+  var oy = (h - bh * scale) / 2;
+  function mapPoint(x, y) {
+    return { x: ox + (x - minX) * scale, y: oy + (maxY - y) * scale };
+  }
+  var screen = [];
+  var sx = 0, sy = 0;
+  for (i = 0; i < pts.length; i++) {
+    screen.push(mapPoint(pts[i].x, pts[i].y));
+    sx += pts[i].x;
+    sy += pts[i].y;
+  }
+  var p0 = E.pointOnArc(E.buildArc(pts), 0);
+  var sc = mapPoint(p0.x, p0.y);
+  var ahead = mapPoint(p0.x + p0.tx, p0.y + p0.ty);
+  return {
+    outline: screen,
+    origin: sc,
+    tx: ahead.x - sc.x,
+    ty: ahead.y - sc.y,
+    centroid: mapPoint(sx / pts.length, sy / pts.length)
+  };
+}
+
+var austinFlipped = E.orientClosedOutline(flipY(austinRaw), austinPhase.offset, austinPhase.reverse);
+var austinView = mapOutlineToView(austinFlipped, 420, 280);
+var austinBay = E.placePitBay({
+  origin: austinView.origin,
+  tx: austinView.tx,
+  ty: austinView.ty,
+  centroid: austinView.centroid,
+  outline: austinView.outline,
+  strokeW: 8,
+  viewW: 420,
+  viewH: 280,
+  zoom: 1.05,
+  carCount: 6
+});
+assert(austinBay.slots.length === 6, 'Austin bay has six slots');
+assert(austinBay.clearance >= austinBay.minClear,
+  'Austin default view bay clears the outline by ' + austinBay.clearance.toFixed(1) +
+  ' (need ' + austinBay.minClear + ')');
+var austinBayC = { x: austinBay.x + austinBay.width / 2, y: austinBay.y + austinBay.height / 2 };
+var austinIn = E.inwardNormal(austinView.tx, austinView.ty, austinView.origin, austinView.centroid);
+assert(
+  (austinBayC.x - austinView.origin.x) * austinIn.x + (austinBayC.y - austinView.origin.y) * austinIn.y > 0,
+  'Austin bay is on the inward side of S/F'
+);
+var austinDot = austinBay.slots[0];
+var austinDotClear = E.minDistPointToPolyline(austinDot.x, austinDot.y, austinView.outline) - 6.5;
+assert(austinDotClear >= austinBay.minClear - 0.2, 'Austin first pit dot clears stroke ' + austinDotClear);
+
+files.forEach(function (f) {
+  var rel = 'circuits/' + f;
+  var text = fs.readFileSync(path.join(dir, f), 'utf8');
+  var phase = phases[rel] || { offset: 0, reverse: false };
+  var oriented = E.orientClosedOutline(flipY(E.outlineFromSvg(text, 4)), phase.offset, phase.reverse);
+  var view = mapOutlineToView(oriented, 420, 280);
+  var laid = E.placePitBay({
+    origin: view.origin,
+    tx: view.tx,
+    ty: view.ty,
+    centroid: view.centroid,
+    outline: view.outline,
+    strokeW: 8,
+    viewW: 420,
+    viewH: 280,
+    zoom: 1.05,
+    carCount: 8
+  });
+  assert(laid.clearance >= laid.minClear,
+    f + ' default-view pit bay overlaps outline (clearance ' + laid.clearance.toFixed(2) + ')');
+});
+
 if (failed) {
   console.error(failed + ' failed');
   process.exit(1);

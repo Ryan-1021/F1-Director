@@ -1437,6 +1437,23 @@ html[data-theme="day"] .tm-dot { stroke: rgba(0, 0, 0, 0.55); }
   stroke-width: 2.25;
 }
 .tm-car.tm-out .tm-dot { stroke-dasharray: 2.2 1.5; }
+.tm-pit-bay { pointer-events: none; }
+.tm-pit-bay-bg {
+  fill: rgba(8, 11, 16, 0.78);
+  stroke: rgba(225, 6, 0, 0.62);
+  stroke-width: 1.1;
+}
+html[data-theme="day"] .tm-pit-bay-bg {
+  fill: rgba(255, 255, 255, 0.86);
+  stroke: rgba(225, 6, 0, 0.7);
+}
+.tm-pit-badge-bg { fill: #e10600; }
+.tm-pit-badge-t {
+  font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-weight: 800;
+  fill: #fff;
+  stroke: none;
+}
 .tm-est {
   flex: 0 0 auto;
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;

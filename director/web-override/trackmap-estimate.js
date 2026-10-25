@@ -5,7 +5,8 @@
  * 已经点亮的格子（非 0 都算到达），不拿上一圈残留的赛段时间把车拉回起点。
  * 正赛 / 冲刺赛：领先者仍用赛段；其余车用相对领先者的时间差 ÷ 参考圈速。
  * 被套圈（"1 LAP"）不用时间差，改回各车自己的赛段。
- * 进站不沿赛道飞到某个假维修区，只在当前进度上由绘图层向内侧偏一点。
+ * 进站冻在进站那一刻的估计进度；绘图层把所有进站车收到轮廓内侧、
+ * 不压灰线的统一 P 区，而不是沿法线挤在赛道描边上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
  * 其它赛道仍相对 SVG 起点。车与车的间距不受这条相位影响。
  *
@@ -302,6 +303,349 @@
     if (pit && n > 28) n = 28;
     if (t > 22) t = 22;
     return { n: n, t: t };
+  }
+
+  function unit2(x, y) {
+    var len = Math.sqrt(x * x + y * y);
+    if (!(len > 1e-9)) return { x: 1, y: 0 };
+    return { x: x / len, y: y / len };
+  }
+
+  /** 指向质心的单位法向（赛道内侧）。tx/ty 是切向。 */
+  function inwardNormal(tx, ty, origin, centroid) {
+    var t = unit2(Number(tx) || 0, Number(ty) || 0);
+    var nx = -t.y;
+    var ny = t.x;
+    var ox = origin && isFinite(origin.x) ? origin.x : 0;
+    var oy = origin && isFinite(origin.y) ? origin.y : 0;
+    if (centroid && isFinite(centroid.x) && isFinite(centroid.y)) {
+      if ((centroid.x - ox) * nx + (centroid.y - oy) * ny < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+    }
+    return { x: nx, y: ny, tx: t.x, ty: t.y };
+  }
+
+  function distPointToSeg(px, py, ax, ay, bx, by) {
+    var dx = bx - ax;
+    var dy = by - ay;
+    var len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) {
+      dx = px - ax;
+      dy = py - ay;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    var u = ((px - ax) * dx + (py - ay) * dy) / len2;
+    if (u < 0) u = 0;
+    else if (u > 1) u = 1;
+    dx = px - (ax + dx * u);
+    dy = py - (ay + dy * u);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function minDistPointToPolyline(px, py, pts) {
+    if (!pts || !pts.length) return Infinity;
+    if (pts.length === 1) {
+      var dx0 = px - pts[0].x;
+      var dy0 = py - pts[0].y;
+      return Math.sqrt(dx0 * dx0 + dy0 * dy0);
+    }
+    var min = Infinity;
+    for (var i = 1; i < pts.length; i++) {
+      var d = distPointToSeg(px, py, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
+      if (d < min) min = d;
+    }
+    return min;
+  }
+
+  function pointInRect(px, py, r) {
+    return px >= r.x && py >= r.y && px <= r.x + r.w && py <= r.y + r.h;
+  }
+
+  function distPointToRect(px, py, r) {
+    if (pointInRect(px, py, r)) {
+      var dx = Math.min(px - r.x, r.x + r.w - px);
+      var dy = Math.min(py - r.y, r.y + r.h - py);
+      return -Math.min(dx, dy);
+    }
+    var cx = Math.max(r.x, Math.min(px, r.x + r.w));
+    var cy = Math.max(r.y, Math.min(py, r.y + r.h));
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  function segHitsSeg(ax, ay, bx, by, cx, cy, dx, dy) {
+    var d1x = bx - ax;
+    var d1y = by - ay;
+    var d2x = dx - cx;
+    var d2y = dy - cy;
+    var cross = d1x * d2y - d1y * d2x;
+    if (Math.abs(cross) < 1e-12) return false;
+    var t = ((cx - ax) * d2y - (cy - ay) * d2x) / cross;
+    var u = ((cx - ax) * d1y - (cy - ay) * d1x) / cross;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+  }
+
+  function segHitsRect(ax, ay, bx, by, r) {
+    if (pointInRect(ax, ay, r) || pointInRect(bx, by, r)) return true;
+    return segHitsSeg(ax, ay, bx, by, r.x, r.y, r.x + r.w, r.y) ||
+      segHitsSeg(ax, ay, bx, by, r.x + r.w, r.y, r.x + r.w, r.y + r.h) ||
+      segHitsSeg(ax, ay, bx, by, r.x + r.w, r.y + r.h, r.x, r.y + r.h) ||
+      segHitsSeg(ax, ay, bx, by, r.x, r.y + r.h, r.x, r.y);
+  }
+
+  /**
+   * 轴对齐矩形到折线的最短距离。相交为 0，矩形盖住折线时为负。
+   * 用四角、边中点、折线顶点，以及线段是否穿矩形来估。
+   */
+  function minDistRectToPolyline(rect, pts) {
+    if (!rect || !pts || !pts.length) return Infinity;
+    var min = Infinity;
+    var probes = [
+      { x: rect.x, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y + rect.h },
+      { x: rect.x, y: rect.y + rect.h },
+      { x: rect.x + rect.w / 2, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y + rect.h / 2 },
+      { x: rect.x + rect.w / 2, y: rect.y + rect.h },
+      { x: rect.x, y: rect.y + rect.h / 2 }
+    ];
+    var i;
+    for (i = 0; i < probes.length; i++) {
+      var d = minDistPointToPolyline(probes[i].x, probes[i].y, pts);
+      if (d < min) min = d;
+    }
+    for (i = 0; i < pts.length; i++) {
+      var pr = distPointToRect(pts[i].x, pts[i].y, rect);
+      if (pr < min) min = pr;
+    }
+    for (i = 1; i < pts.length; i++) {
+      if (segHitsRect(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y, rect)) {
+        return Math.min(min, 0);
+      }
+    }
+    return min;
+  }
+
+  var PIT_DOT_R = 6.5;
+
+  /**
+   * 统一 P 区盒子尺寸。格子要装得下现有 tm-car（点 r=6.5，缩写在点上方）。
+   * 随 zoom 略放大，默认 1.05 仍能读。
+   */
+  function pitBaySize(carCount, zoom, compact) {
+    var n = carCount | 0;
+    if (n < 0) n = 0;
+    if (n > 24) n = 24;
+    var z = Number(zoom);
+    if (!(z > 0)) z = 1;
+    var cellW = Math.max(18, Math.min(26, 18 + z * 5));
+    var cellH = Math.max(26, Math.min(34, 26 + z * 5));
+    var badge = Math.max(12, Math.min(18, 12 + z * 3.2));
+    var pad = Math.max(4, Math.min(7, 4 + z));
+    var gap = Math.max(3, Math.min(6, 3 + z));
+    if (compact > 1) {
+      cellW = Math.max(14, cellW * 0.72);
+      cellH = Math.max(20, cellH * 0.72);
+      badge = Math.max(10, badge * 0.78);
+      pad = 3;
+      gap = 2;
+    } else if (compact) {
+      cellW = Math.max(16, cellW * 0.86);
+      cellH = Math.max(22, cellH * 0.86);
+      badge = Math.max(11, badge * 0.88);
+      pad = Math.max(3, pad - 1);
+      gap = Math.max(2, gap - 1);
+    }
+    var cols = n <= 1 ? 1 : (n <= 3 ? n : (n <= 8 ? 3 : 4));
+    if (compact && n > 2) cols = Math.min(4, Math.max(cols, n <= 6 ? 3 : 4));
+    if (n < 1) cols = 1;
+    var rows = n < 1 ? 1 : Math.ceil(n / cols);
+    var width = pad + badge + gap + cols * cellW + pad;
+    var height = pad + Math.max(badge, rows * cellH) + pad;
+    return {
+      n: n, cols: cols, rows: rows,
+      cellW: cellW, cellH: cellH, badge: badge, pad: pad, gap: gap,
+      width: width, height: height
+    };
+  }
+
+  function localPitSlots(size) {
+    var slots = [];
+    if (!size || size.n < 1) return slots;
+    var ox = size.pad + size.badge + size.gap;
+    var oy = size.pad;
+    for (var i = 0; i < size.n; i++) {
+      var col = i % size.cols;
+      var row = (i - col) / size.cols;
+      slots.push({
+        x: ox + col * size.cellW + size.cellW / 2,
+        y: oy + row * size.cellH + size.cellH * 0.68
+      });
+    }
+    return slots;
+  }
+
+  function clampBayOrigin(x, y, w, h, viewW, viewH, margin) {
+    var m = margin > 0 ? margin : 8;
+    var vw = viewW > w + m * 2 ? viewW : (w + m * 2);
+    var vh = viewH > h + m * 2 ? viewH : (h + m * 2);
+    if (x < m) x = m;
+    if (y < m) y = m;
+    if (x + w > vw - m) x = vw - m - w;
+    if (y + h > vh - m) y = vh - m - h;
+    return { x: x, y: y };
+  }
+
+  function scorePitBayRect(rect, locals, outline) {
+    var d = minDistRectToPolyline(rect, outline);
+    for (var i = 0; i < locals.length; i++) {
+      var px = rect.x + locals[i].x;
+      var py = rect.y + locals[i].y;
+      var dd = minDistPointToPolyline(px, py, outline) - PIT_DOT_R;
+      if (dd < d) d = dd;
+    }
+    return d;
+  }
+
+  /**
+   * 屏幕坐标里给进站车找一块统一 P 区。
+   * 先从进度 0 沿内侧法向推开（离开描边至少 1.5× 线宽），不够再往里推、
+   * 扫视口网格，或缩一号格子；还压线就落到能让开轮廓的视口角。
+   */
+  function placePitBay(opts) {
+    opts = opts || {};
+    var origin = opts.origin || { x: 0, y: 0 };
+    var centroid = opts.centroid || origin;
+    var nrm = inwardNormal(opts.tx, opts.ty, origin, centroid);
+    var strokeW = Number(opts.strokeW);
+    if (!(strokeW > 0)) strokeW = 8;
+    var minClear = strokeW * 1.5;
+    var outline = opts.outline || [];
+    var viewW = Number(opts.viewW);
+    var viewH = Number(opts.viewH);
+    if (!(viewW > 0)) viewW = 320;
+    if (!(viewH > 0)) viewH = 240;
+    var zoom = opts.zoom;
+    var carCount = opts.carCount;
+
+    function search(size) {
+      var locals = localPitSlots(size);
+      var half = Math.max(size.width, size.height) / 2;
+      var startDist = minClear + half;
+      var preferred = {
+        x: origin.x + nrm.x * startDist,
+        y: origin.y + nrm.y * startDist
+      };
+      var best = null;
+
+      function consider(rect) {
+        var clearance = scorePitBayRect(rect, locals, outline);
+        var cx = rect.x + rect.w / 2;
+        var cy = rect.y + rect.h / 2;
+        var pref = Math.hypot(cx - preferred.x, cy - preferred.y);
+        var inside = (cx - origin.x) * nrm.x + (cy - origin.y) * nrm.y;
+        var cand = { rect: rect, clearance: clearance, pref: pref, inside: inside, size: size, locals: locals };
+        if (!best) { best = cand; return; }
+        var bestOk = best.clearance >= minClear;
+        var candOk = clearance >= minClear;
+        if (candOk !== bestOk) {
+          if (candOk) best = cand;
+          return;
+        }
+        if (candOk) {
+          var bestIn = best.inside > 4;
+          var candIn = inside > 4;
+          if (candIn !== bestIn) {
+            if (candIn) best = cand;
+            return;
+          }
+          if (pref < best.pref - 2) { best = cand; return; }
+          if (Math.abs(pref - best.pref) <= 2 && clearance > best.clearance + 0.5) best = cand;
+          return;
+        }
+        if (clearance > best.clearance) best = cand;
+      }
+
+      function tryCenter(cx, cy) {
+        var clamped = clampBayOrigin(cx - size.width / 2, cy - size.height / 2, size.width, size.height, viewW, viewH, 6);
+        consider({ x: clamped.x, y: clamped.y, w: size.width, h: size.height });
+      }
+
+      var steps = [0, 8, 16, 28, 44, 64, 88, 120, 160, 210];
+      var s;
+      function acceptInside() {
+        return best && best.clearance >= minClear && best.inside > 4;
+      }
+      for (s = 0; s < steps.length; s++) {
+        tryCenter(origin.x + nrm.x * (startDist + steps[s]), origin.y + nrm.y * (startDist + steps[s]));
+        if (acceptInside()) return best;
+      }
+      tryCenter(centroid.x, centroid.y);
+      var laterals = [-70, -35, 35, 70];
+      for (s = 0; s < laterals.length; s++) {
+        tryCenter(
+          origin.x + nrm.x * (startDist + 40) + nrm.tx * laterals[s],
+          origin.y + nrm.y * (startDist + 40) + nrm.ty * laterals[s]
+        );
+      }
+      if (acceptInside()) return best;
+
+      if (!best || best.clearance < minClear) {
+        var gx, gy;
+        var cols = 8;
+        var rows = 6;
+        var x0 = 6 + size.width / 2;
+        var y0 = 6 + size.height / 2;
+        var x1 = viewW - 6 - size.width / 2;
+        var y1 = viewH - 6 - size.height / 2;
+        if (x1 < x0) x1 = x0;
+        if (y1 < y0) y1 = y0;
+        for (gy = 0; gy < rows; gy++) {
+          for (gx = 0; gx < cols; gx++) {
+            tryCenter(
+              x0 + (x1 - x0) * (cols === 1 ? 0 : gx / (cols - 1)),
+              y0 + (y1 - y0) * (rows === 1 ? 0 : gy / (rows - 1))
+            );
+          }
+        }
+      }
+      return best;
+    }
+
+    var best = search(pitBaySize(carCount, zoom, 0));
+    if (!best || best.clearance < minClear) {
+      var compact = search(pitBaySize(carCount, zoom, 1));
+      if (compact && (!best || compact.clearance > best.clearance)) best = compact;
+    }
+    if (!best || best.clearance < minClear) {
+      var tiny = search(pitBaySize(carCount, zoom, 2));
+      if (tiny && (!best || tiny.clearance > best.clearance)) best = tiny;
+    }
+
+    var size = best && best.size ? best.size : pitBaySize(carCount, zoom, 0);
+    var locals = best && best.locals ? best.locals : localPitSlots(size);
+    var rect = best ? best.rect : { x: 6, y: 6, w: size.width, h: size.height };
+    var slots = [];
+    var s;
+    for (s = 0; s < locals.length; s++) {
+      slots.push({ x: rect.x + locals[s].x, y: rect.y + locals[s].y });
+    }
+    return {
+      x: rect.x,
+      y: rect.y,
+      width: size.width,
+      height: size.height,
+      badge: {
+        x: rect.x + size.pad + size.badge / 2,
+        y: rect.y + size.height / 2,
+        r: size.badge / 2
+      },
+      slots: slots,
+      clearance: best ? best.clearance : 0,
+      minClear: minClear
+    };
   }
 
   function parseGap(gap) {
@@ -1074,6 +1418,11 @@
     planField: planField,
     ownLapScale: ownLapScale,
     packOffset: packOffset,
+    inwardNormal: inwardNormal,
+    minDistPointToPolyline: minDistPointToPolyline,
+    minDistRectToPolyline: minDistRectToPolyline,
+    pitBaySize: pitBaySize,
+    placePitBay: placePitBay,
     finishGrid: finishGrid,
     sampleMotion: sampleMotion,
     rebaseMotion: rebaseMotion,
