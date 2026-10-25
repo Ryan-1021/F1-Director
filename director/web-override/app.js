@@ -1947,23 +1947,46 @@
   var TM_CACHE_KEY = 'f1-trackmap-cache-v3';
 
   // 原始 SVG 折线的起点常常不是计时线。offset 是「从文件起点沿路径走到计时线」的弧长比例
-  // （reverse 为 true 时先掉头再量）。sectors 是 [S1 终点, S2 终点]，相对计时线。
-  // 没写的赛道仍从文件起点起、赛段三等分。
+  // （reverse 为 true 时先掉头再量）。sectors 是 [S1 终点, S2 终点]，相对计时线，沿比赛方向。
+  // 没写 sectors 的赛道，赛段仍三等分。进度 0 就是方格旗（paintTrackmapFinish），不要另画一面旗。
   //
-  // 奥斯汀 austin-1.svg 逆时针，和比赛方向一致，所以 reverse 保持 false。
-  // 文件起点不是 T20：原始弧长 0 在 T11 弯心，0–0.20 是 T11→T12 的大直线。
-  // 旧 offset 0.055 因此把进度 0 和方格旗放在 T11 一侧，而不是主直道。
-  // 计时线在另一条直道上，T20（原始约 0.504）和 T1（原始约 0.651）之间，
-  // 靠近 T20（大约从 T20 走向 T1 的一成多，不是弯心，也不是大直线）。
-  // 对照赛段分界，计时线取原始弧长 0.522。
-  // S1 终点约在 T6 与 T7 之间（原始 0.833，相对计时线 0.311），
-  // S2 终点在 T12 之后（原始 0.238，相对计时线 0.715）。
+  // 这些数是离线对出来的：用和运行时一样的 outlineFromSvg（y 取负），
+  // 对 MultiViewer 中心线做相似变换，把计时线投到折线上。运行时不请求 MultiViewer。
+  // 重算脚本：director/calibrate-circuit-phase.js。对照表：circuit-phase-notes.md。
+  //
+  // 奥斯汀保持手调的 0.522 / [0.311, 0.715]。同一套投影得到约 0.537，
+  // 和旧的 0.536 一样，都在 T20–T1 主直道上，不改。
+  // 巴林 bahrain-3.svg 的轮廓对不上萨基尔大奖赛中心线，没有写相位。
+  // 斯皮尔伯格只写了起终点：示意图拉得比较开，赛段终点没有稳稳落在折线上。
+  // 吉达、伊莫拉、因特拉戈斯没有对上可靠的赛段里程，赛段仍三等分。
   var CIRCUIT_PHASE = {
+    'circuits/jeddah-1.svg': { offset: 0.071, reverse: false },
+    'circuits/melbourne-2.svg': { offset: 0.083, reverse: false, sectors: [0.335, 0.602] },
+    'circuits/suzuka-2.svg': { offset: 0.591, reverse: false, sectors: [0.375, 0.810] },
+    'circuits/shanghai-1.svg': { offset: 0.436, reverse: true, sectors: [0.278, 0.558] },
+    'circuits/miami-1.svg': { offset: 0.040, reverse: false, sectors: [0.342, 0.664] },
+    'circuits/imola-3.svg': { offset: 0.887, reverse: false },
+    'circuits/monaco-6.svg': { offset: 0.335, reverse: false, sectors: [0.317, 0.739] },
+    'circuits/montreal-6.svg': { offset: 0.415, reverse: false, sectors: [0.251, 0.572] },
+    'circuits/catalunya-6.svg': { offset: 0.185, reverse: false, sectors: [0.230, 0.599] },
+    'circuits/spielberg-3.svg': { offset: 0.182, reverse: true },
+    'circuits/silverstone-8.svg': { offset: 0.939, reverse: false, sectors: [0.309, 0.730] },
+    'circuits/hungaroring-3.svg': { offset: 0.868, reverse: false, sectors: [0.396, 0.748] },
+    'circuits/spa-francorchamps-4.svg': { offset: 0.980, reverse: false, sectors: [0.322, 0.724] },
+    'circuits/zandvoort-5.svg': { offset: 0.135, reverse: false, sectors: [0.352, 0.693] },
+    'circuits/monza-7.svg': { offset: 0.692, reverse: false, sectors: [0.330, 0.644] },
+    'circuits/baku-1.svg': { offset: 0.938, reverse: false, sectors: [0.354, 0.675] },
+    'circuits/marina-bay-4.svg': { offset: 0.056, reverse: false, sectors: [0.327, 0.694] },
     'circuits/austin-1.svg': {
       offset: 0.522,
       reverse: false,
       sectors: [0.311, 0.715]
-    }
+    },
+    'circuits/mexico-city-3.svg': { offset: 0.014, reverse: false, sectors: [0.432, 0.792] },
+    'circuits/interlagos-2.svg': { offset: 0.205, reverse: false },
+    'circuits/las-vegas-1.svg': { offset: 0.475, reverse: false, sectors: [0.262, 0.539] },
+    'circuits/lusail-1.svg': { offset: 0.004, reverse: false, sectors: [0.341, 0.633] },
+    'circuits/yas-marina-2.svg': { offset: 0.623, reverse: true, sectors: [0.233, 0.684] }
   };
 
   function circuitPhase(rel) {
