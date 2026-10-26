@@ -3202,10 +3202,14 @@
     var width = Math.max(5.1, Math.min(8.0, lw * 0.84));
     // 方格旗沿切线约两格，再留一条描边的空隙，箭头落在起终点之后。
     var minDist = cell * 2 + lw * 0.72 + length * 0.42;
+    var outset = E.directionOutset ? E.directionOutset(lw, width) : (lw * 0.5 + 2 + width * 0.48);
     var cue = E.directionCue(TRACKMAP.arc, TRACKMAP.mapper, {
       minDist: minDist,
       length: length,
       width: width,
+      strokeW: lw,
+      outset: outset,
+      centroid: TRACKMAP.screenCentroid,
       maxFrac: 0.05
     });
     if (!cue || !cue.pts || cue.pts.length < 3) return;

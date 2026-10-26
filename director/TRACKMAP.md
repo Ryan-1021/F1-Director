@@ -14,7 +14,7 @@
 
 `CIRCUIT_SVG` 里除巴林以外的赛道都已写上相位。方格旗仍只画在**进度 0**（`paintTrackmapFinish` + `finishGrid` 的 4×2 小格，大约一条描边那么宽），offset 把进度 0 转到计时线之后，旗就在计时线上，没有第二套旗。
 
-比赛方向用同一条定向弧：`paintTrackmapDir` + `directionCue` 在进度 0 **稍后**画一枚小箭头（大约一条描边那么大），沿切线指向比赛方向。reverse / offset 已经写进轮廓，箭头不再另做一套方向。它压在赛道线上、叠在方格旗和车点之下，跟着平移 / 缩放 / 旋转走。日夜主题用不同的填充和描边，避免和灰线糊在一起。仓库 `docs/trackmap-dir-austin.png` 是奥斯汀默认 zoom 的日夜对照。
+比赛方向用同一条定向弧：`paintTrackmapDir` + `directionCue` 在进度 0 **稍后**画一枚小箭头（大约一条描边那么大），沿切线指向比赛方向。reverse / offset 已经写进轮廓，箭头不再另做一套方向。箭头沿外法向偏出灰线（默认 zoom 大约半条描边 + 2px 空隙 + 半个箭头宽，奥斯汀约 9px），不压在描边中心；叠在方格旗和车点之下，跟着平移 / 缩放 / 旋转走。日夜主题用不同的填充和描边，避免和灰线糊在一起。仓库 `docs/trackmap-dir-austin.png` 是奥斯汀默认 zoom 的日夜对照。
 
 相位是离线校准的，不是运行时请求。做法和奥斯汀那次对照一样：用运行时的 `outlineFromSvg`（并像 `loadSvgOutline` 那样把 y 取负），对 [MultiViewer](https://api.multiviewer.app/api/v1/circuits/) 的中心线做相似变换（平移、旋转、均匀缩放；试镜像和反向），再把 `length ≈ 0` 的 marshal light 投到折线上。导播台页面不调用 MultiViewer，也不调用 OpenF1。重算用 `node director/calibrate-circuit-phase.js`（需要事先放好的 JSON 缓存）。键、年份、置信度和取舍记在 `web-override/circuit-phase-notes.md`。
 

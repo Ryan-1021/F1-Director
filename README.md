@@ -34,7 +34,7 @@
 
 ![估计赛道图旗语上色（银石，全部旗况）](docs/trackmap-flags-contact-sheet.png)
 
-比赛方向：默认 zoom 下的奥斯汀估计图。方格旗仍在进度 0；一枚小箭头落在旗后不远处，沿 `CIRCUIT_PHASE` 定向后的切线指向比赛方向。左夜右昼。
+比赛方向：默认 zoom 下的奥斯汀估计图。方格旗仍在进度 0；一枚小箭头落在旗后不远处、赛道外侧，沿 `CIRCUIT_PHASE` 定向后的切线指向比赛方向。左夜右昼。
 
 ![估计赛道图比赛方向箭头（奥斯汀，日夜）](docs/trackmap-dir-austin.png)
 

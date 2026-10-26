@@ -323,9 +323,22 @@ function idMap(x, y) { return { x: x, y: y }; }
 var squareCue = E.directionCue(squareArc, idMap, { minDist: 8, length: 4, width: 3, maxFrac: 0.2 });
 assert(squareCue && squareCue.frac > 0 && squareCue.frac <= 0.2, 'cue sits shortly after progress 0');
 assert(squareCue.origin.x > squarePts[0].x + 4, 'cue walks along the first edge');
-near(squareCue.origin.y, 0, 0.4, 'cue stays on the first edge');
+near(squareCue.origin.y, 0, 0.4, 'cue without strokeW stays on the first edge');
 assert(squareCue.tip.x > squareCue.origin.x, 'square cue points toward the next corner');
 assert(E.directionCue(null, idMap) == null, 'missing arc yields no cue');
+
+near(E.directionOutset(8, 6.4), 8 * 0.5 + 2 + 6.4 * 0.48, 0.01, 'outset is half stroke + 2px + ~half arrow');
+assert(E.directionOutset(3, 4) >= 6, 'outset has a floor');
+assert(E.directionOutset(20, 12) <= 14, 'outset has a ceiling');
+var squareOut = E.directionCue(squareArc, idMap, {
+  minDist: 8, length: 4, width: 3, maxFrac: 0.2, strokeW: 8, centroid: { x: 5, y: 5 }
+});
+var squareOutset = E.directionOutset(8, 3);
+near(squareOut.outset, squareOutset, 0.01, 'square reports the computed outset');
+near(squareOut.origin.x, squareOut.onTrack.x, 0.2, 'outset is purely lateral');
+assert(squareOut.origin.y < squareOut.onTrack.y - 4, 'square cue sits outside the loop');
+var squareAway = (squareOut.origin.x - 5) * squareOut.outward.x + (squareOut.origin.y - 5) * squareOut.outward.y;
+assert(squareAway > 0, 'outward normal points away from the centroid');
 
 var turned = E.orientClosedOutline(squarePts, 0.25, false);
 near(turned[0].x, 10, 0.05, 'quarter turn starts at the next corner x');
@@ -467,6 +480,8 @@ assert(appSrc.indexOf('makePitBayLayer()') >= 0, 'pit badge is a wrap overlay');
 assert(appSrc.indexOf('paintTrackmapDir') >= 0, 'app paints a race-direction cue');
 assert(appSrc.indexOf('tm-dir-arrow') >= 0, 'app uses the direction-arrow class');
 assert(appSrc.indexOf('比赛方向') >= 0, 'direction cue has a Chinese title');
+assert(appSrc.indexOf('directionOutset') >= 0 && appSrc.indexOf('screenCentroid') >= 0,
+  'app offsets the cue along the outward normal');
 var phaseSrc = appSrc.split('var CIRCUIT_PHASE')[1].split('function circuitPhase')[0];
 var svgSrc = appSrc.split('var CIRCUIT_SVG')[1].split('};')[0];
 function parsePhases(block) {
@@ -840,15 +855,25 @@ var austinLen = Math.max(6.6, Math.min(10.2, austinView.strokeW * 1.12));
 var austinWidth = Math.max(5.1, Math.min(8.0, austinView.strokeW * 0.84));
 var austinMin = austinCell * 2 + austinView.strokeW * 0.72 + austinLen * 0.42;
 var austinScreenCue = E.directionCue(E.buildArc(austinFlipped), austinView.map, {
-  minDist: austinMin, length: austinLen, width: austinWidth, maxFrac: 0.05
+  minDist: austinMin, length: austinLen, width: austinWidth, maxFrac: 0.05,
+  strokeW: austinView.strokeW, centroid: austinView.centroid
 });
 assert(austinScreenCue && austinScreenCue.pts.length === 3, 'Austin default view has a direction cue');
 assert(austinScreenCue.frac > 0.002 && austinScreenCue.frac < 0.05, 'Austin screen cue stays near S/F');
-var austinAlong = Math.hypot(austinScreenCue.origin.x - austinView.origin.x, austinScreenCue.origin.y - austinView.origin.y);
+var austinAlong = Math.hypot(austinScreenCue.onTrack.x - austinView.origin.x, austinScreenCue.onTrack.y - austinView.origin.y);
 assert(austinAlong + 0.4 >= austinMin * 0.85, 'Austin cue clears the finish flag gap ' + austinAlong.toFixed(1));
 var austinTipDir = (austinScreenCue.tip.x - austinScreenCue.origin.x) * austinView.tx +
   (austinScreenCue.tip.y - austinScreenCue.origin.y) * austinView.ty;
 assert(austinTipDir > 0, 'Austin screen arrow follows the mapped race tangent');
+near(austinScreenCue.outset, E.directionOutset(austinView.strokeW, austinWidth), 0.05, 'Austin uses the shared outset');
+var austinOff = Math.hypot(austinScreenCue.origin.x - austinScreenCue.onTrack.x, austinScreenCue.origin.y - austinScreenCue.onTrack.y);
+near(austinOff, austinScreenCue.outset, 0.2, 'Austin arrow center is the outset off the stroke');
+assert(E.minDistPointToPolyline(austinScreenCue.origin.x, austinScreenCue.origin.y, austinView.outline) >
+  austinView.strokeW / 2,
+  'Austin arrow sits outside the grey stroke');
+var austinAway = (austinScreenCue.origin.x - austinView.centroid.x) * austinScreenCue.outward.x +
+  (austinScreenCue.origin.y - austinView.centroid.y) * austinScreenCue.outward.y;
+assert(austinAway > 0, 'Austin outward normal points away from the infield');
 
 var views = [
   { w: 420, h: 280, zoom: 1.05, label: 'preview' },
@@ -880,10 +905,13 @@ files.forEach(function (f) {
       laid.clearance.toFixed(2) + ', need ' + laid.minClear.toFixed(2) + ')');
     var cueLen = Math.max(6.6, Math.min(10.2, view.strokeW * 1.12));
     var orientedArc = E.buildArc(oriented);
+    var cueW = Math.max(5.1, Math.min(8.0, view.strokeW * 0.84));
     var cue = E.directionCue(orientedArc, view.map, {
       minDist: Math.max(2.2, Math.min(3.4, view.strokeW * 0.42)) * 2 + view.strokeW * 0.72 + cueLen * 0.42,
       length: cueLen,
-      width: Math.max(5.1, Math.min(8.0, view.strokeW * 0.84)),
+      width: cueW,
+      strokeW: view.strokeW,
+      centroid: view.centroid,
       maxFrac: 0.05
     });
     assert(cue && cue.pts && cue.pts.length === 3, f + ' ' + vp.label + ' has a direction cue');
@@ -894,9 +922,16 @@ files.forEach(function (f) {
     var pBack = E.pointOnArc(orientedArc, 0.96);
     var sAhead = view.map(pAhead.x, pAhead.y);
     var sBack = view.map(pBack.x, pBack.y);
-    assert(Math.hypot(cue.origin.x - sAhead.x, cue.origin.y - sAhead.y) <
-      Math.hypot(cue.origin.x - sBack.x, cue.origin.y - sBack.y),
+    assert(Math.hypot(cue.onTrack.x - sAhead.x, cue.onTrack.y - sAhead.y) <
+      Math.hypot(cue.onTrack.x - sBack.x, cue.onTrack.y - sBack.y),
       f + ' ' + vp.label + ' cue is on the race-direction side of S/F');
+    var off = Math.hypot(cue.origin.x - cue.onTrack.x, cue.origin.y - cue.onTrack.y);
+    near(off, cue.outset, 0.35, f + ' ' + vp.label + ' lateral offset');
+    assert(E.minDistPointToPolyline(cue.origin.x, cue.origin.y, view.outline) > view.strokeW / 2 - 0.2,
+      f + ' ' + vp.label + ' arrow overlaps the grey stroke');
+    var away = (cue.origin.x - view.centroid.x) * cue.outward.x +
+      (cue.origin.y - view.centroid.y) * cue.outward.y;
+    assert(away > 0, f + ' ' + vp.label + ' points away from the infield');
   });
 });
 
