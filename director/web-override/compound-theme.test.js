@@ -1,6 +1,6 @@
 /*
  * node director/web-override/compound-theme.test.js
- * HARD 白胎：白天描边可见、夜晚保持白描边、徽章不写内联色。
+ * HARD 白胎：白天黑字 H、夜晚保持白描边、徽章不写内联色。
  */
 'use strict';
 
@@ -35,7 +35,8 @@ var dayHard = styleSrc.match(/html\[data-theme="day"\] \.ttyre\.comp-H\s*\{[^}]+
 assert(!!dayHard, 'day HARD rule exists');
 assert(dayHard && /border-color:\s*#3b4a5c/.test(dayHard[0]), 'day HARD has a dark rim');
 assert(dayHard && /background:\s*#ffffff/.test(dayHard[0]), 'day HARD keeps a white-ish fill');
-assert(dayHard && /-webkit-text-stroke/.test(dayHard[0]), 'day HARD letter has a dark stroke');
+assert(dayHard && /color:\s*#111111/.test(dayHard[0]), 'day HARD letter is near-black');
+assert(dayHard && dayHard[0].indexOf('-webkit-text-stroke') < 0, 'day HARD letter is fill, not stroke');
 assert(styleSrc.indexOf('html[data-theme="night"] .ttyre.comp-H') < 0,
   'night HARD is not restyled (outline-only via --comp-H)');
 
