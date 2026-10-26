@@ -166,7 +166,11 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
 - 分支命名：`{base}_{content}`（如 `main_timingWeatherCache`）。
-- 带 JRE 的「解压即用」包请走 GitHub Release 单独 zip；仓库保持苗条（不提交 `share/jre`、`share/web`）。
+- GitHub Releases 同一壳版本可能提供两个 win64 zip：
+  - `F1-Director-vX.Y.Z-with-jre-win64.zip` — 完整 Temurin JRE（体积大）
+  - `F1-Director-vX.Y.Z-with-minijre-win64.zip` — jlink 精简运行时（当前约 `java.base` + `jdk.httpserver` + crypto；体积小很多）
+- mini 足够跑导播台壳（Edge `--app` UI）；若行为异常，再试完整 with-jre zip。
+- 仓库仍不提交 `share/jre`（以及 `share/web`）；带 JRE 的「解压即用」包只走 GitHub Release。
 - Windows 任务栏 / 小尺寸 ICO 条目应保持 BMP/DIB（仅 256 用 PNG），避免 Shell 忽略 PNG 小图后把 256 缩小显示。
 ---
 
