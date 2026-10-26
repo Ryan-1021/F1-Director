@@ -154,13 +154,8 @@
     INTERMEDIATE: 'I', INTER: 'I', I: 'I',
     WET: 'W', FULLWET: 'W', W: 'W'
   };
-  var COMPOUND_COLOR = {
-    S: '#e10600',
-    M: '#ffd12e',
-    H: '#f0f0f0',
-    I: '#43b02a',
-    W: '#0090ff'
-  };
+  /* Compound colors live in CSS (--comp-S/M/H/…). Do not inline them here:
+     HARD is #f0f0f0 and would vanish on day-mode panels. */
 
   function parseCompoundToken(raw) {
     if (raw == null) return null;
@@ -190,9 +185,9 @@
   function compoundInfo(en, cn) {
     var letter = parseCompoundToken(en) || parseCompoundToken(cn);
     if (!letter) {
-      return { letter: '—', key: 'unk', color: '' };
+      return { letter: '—', key: 'unk' };
     }
-    return { letter: letter, key: letter, color: COMPOUND_COLOR[letter] || '' };
+    return { letter: letter, key: letter };
   }
 
   /** Pad tyre lap counts so single digits align under the ones place. */
@@ -203,14 +198,10 @@
     return s.length < 2 ? ('\u2007' + s) : s;
   }
 
-  /** Build a <span class="ttyre comp-S">S</span> badge. */
+  /** Build a <span class="ttyre comp-S">S</span> badge. Colors from CSS. */
   function compoundBadge(en, cn) {
     var info = compoundInfo(en, cn);
     var span = el('span', 'ttyre' + (info.key ? (' comp-' + info.key) : ' comp-unk'), info.letter);
-    if (info.color) {
-      span.style.color = info.color;
-      span.style.borderColor = info.color;
-    }
     span.title = String(en || cn || '').trim() || info.letter;
     return span;
   }
