@@ -14,6 +14,8 @@
 
 `CIRCUIT_SVG` 里除巴林以外的赛道都已写上相位。方格旗仍只画在**进度 0**（`paintTrackmapFinish` + `finishGrid` 的 4×2 小格，大约一条描边那么宽），offset 把进度 0 转到计时线之后，旗就在计时线上，没有第二套旗。
 
+比赛方向用同一条定向弧：`paintTrackmapDir` + `directionCue` 在进度 0 **稍后**画一枚小箭头（大约一条描边那么大），沿切线指向比赛方向。reverse / offset 已经写进轮廓，箭头不再另做一套方向。它压在赛道线上、叠在方格旗和车点之下，跟着平移 / 缩放 / 旋转走。日夜主题用不同的填充和描边，避免和灰线糊在一起。仓库 `docs/trackmap-dir-austin.png` 是奥斯汀默认 zoom 的日夜对照。
+
 相位是离线校准的，不是运行时请求。做法和奥斯汀那次对照一样：用运行时的 `outlineFromSvg`（并像 `loadSvgOutline` 那样把 y 取负），对 [MultiViewer](https://api.multiviewer.app/api/v1/circuits/) 的中心线做相似变换（平移、旋转、均匀缩放；试镜像和反向），再把 `length ≈ 0` 的 marshal light 投到折线上。导播台页面不调用 MultiViewer，也不调用 OpenF1。重算用 `node director/calibrate-circuit-phase.js`（需要事先放好的 JSON 缓存）。键、年份、置信度和取舍记在 `web-override/circuit-phase-notes.md`。
 
 奥斯汀 `austin-1.svg` 逆时针，和比赛方向一致，`reverse` 仍是 **false**。文件起点在 **T11**：原始弧长 0 到大约 0.20 是 T11→T12 的大直线。计时线在另一条直道上，T20（原始约 0.504）和 T1（原始约 0.651）之间、靠近 T20，进度 0 保持原始弧长 **0.522**。这次重投影大约是 **0.537**（先前的对照是 0.536），两点都在 T20–T1 主直道上，所以不改手调值。S1 终点约在 T6 与 T7 之间（相对计时线 **0.311**），S2 终点在 T12 之后（相对计时线 **0.715**）。
@@ -52,7 +54,7 @@
 ## 自测
 
 1. `director/Start.cmd`（或 `Publish-Web.cmd`）发布后打开导播台，加一块「赛道图」。改完前端请 **硬刷新**（Ctrl+F5），否则 iframe 可能还拿着旧的 `app.js`。
-2. 有场次且赛道能对上本地 SVG 时，应看到闭合轮廓和车位。顶栏文字只有「估计」，旁边是旋转控件。有黄旗区段时，对应的一段轮廓变黄；红旗或安全车时整圈变色。计时里有车 `inPit` / 差距含 PIT 时，轮廓上只留在跑的车，左上角 P 徽章只显示人数，不该再看到进站车点或缩写网格。仓库 `docs/pit-bay-austin.png` / `docs/pit-bay-tooltip.png` 和 `docs/trackmap-flags-contact-sheet.png` 是默认 zoom 下的估计图示意，README 效果图一节有拼贴。
+2. 有场次且赛道能对上本地 SVG 时，应看到闭合轮廓和车位。顶栏文字只有「估计」，旁边是旋转控件。进度 0 有一小块方格旗，旗后不远处有一枚指向比赛方向的小箭头。有黄旗区段时，对应的一段轮廓变黄；红旗或安全车时整圈变色。计时里有车 `inPit` / 差距含 PIT 时，轮廓上只留在跑的车，左上角 P 徽章只显示人数，不该再看到进站车点或缩写网格。仓库 `docs/pit-bay-austin.png` / `docs/pit-bay-tooltip.png`、`docs/trackmap-flags-contact-sheet.png` 和 `docs/trackmap-dir-austin.png` 是默认 zoom 下的估计图示意，README 效果图一节有拼贴。
 3. `node director/web-override/trackmap-estimate.test.js`
 4. `node --check director/web-override/app.js`
 

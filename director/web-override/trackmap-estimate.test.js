@@ -302,9 +302,31 @@ near(maxY - minY, 8, 0.01, 'two cells along the tangent');
 near(maxX - minX, 24, 0.01, 'six cells across the track');
 assert(flag[0].light === true && flag[1].light === false, 'checker starts light');
 
+var head = E.directionArrow({ x: 40, y: 20 }, 2, 0, 10, 6);
+assert(head.pts.length === 3, 'direction arrow is a triangle');
+assert(head.tip.x > 40, 'arrow tip is ahead along +x');
+near(head.tip.y, 20, 0.01, 'arrow tip stays on the tangent');
+var headSpan = Math.hypot(head.pts[1].x - head.pts[2].x, head.pts[1].y - head.pts[2].y);
+near(headSpan, 6, 0.05, 'arrow base spans the requested width');
+var headDot = (head.tip.x - 40) * 2 + (head.tip.y - 20) * 0;
+assert(headDot > 0, 'arrow points along the supplied tangent');
+
+var styleSrc = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+assert(styleSrc.indexOf('.tm-dir-arrow') >= 0, 'css paints the direction arrow');
+assert(styleSrc.indexOf('html[data-theme="day"] .tm-dir-arrow') >= 0, 'day theme restyles the arrow');
+
 var squarePts = [
   { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 0, y: 0 }
 ];
+var squareArc = E.buildArc(squarePts);
+function idMap(x, y) { return { x: x, y: y }; }
+var squareCue = E.directionCue(squareArc, idMap, { minDist: 8, length: 4, width: 3, maxFrac: 0.2 });
+assert(squareCue && squareCue.frac > 0 && squareCue.frac <= 0.2, 'cue sits shortly after progress 0');
+assert(squareCue.origin.x > squarePts[0].x + 4, 'cue walks along the first edge');
+near(squareCue.origin.y, 0, 0.4, 'cue stays on the first edge');
+assert(squareCue.tip.x > squareCue.origin.x, 'square cue points toward the next corner');
+assert(E.directionCue(null, idMap) == null, 'missing arc yields no cue');
+
 var turned = E.orientClosedOutline(squarePts, 0.25, false);
 near(turned[0].x, 10, 0.05, 'quarter turn starts at the next corner x');
 near(turned[0].y, 0, 0.05, 'quarter turn starts at the next corner y');
@@ -427,6 +449,12 @@ near(austinZero.y, austinSf.y, 1.5, 'progress 0 y');
 var austinAhead = E.pointOnArc(E.buildArc(austinOriented), 0.04);
 var austinT1 = E.pointOnArc(austinArc, austinPit.f1);
 assert(hyp(austinAhead, austinT1) < hyp(austinZero, austinT1), 'racing direction leaves the line toward Turn 1');
+var austinCue = E.directionCue(E.buildArc(austinOriented), function (x, y) { return { x: x, y: y }; }, {
+  minDist: 12, length: 8, width: 6, maxFrac: 0.05
+});
+assert(austinCue && austinCue.frac > 0.002 && austinCue.frac < 0.05, 'Austin cue is shortly after S/F');
+assert(hyp(austinCue.origin, austinT1) < hyp(austinZero, austinT1), 'Austin arrow leaves the line toward Turn 1');
+assert(hyp(austinCue.tip, austinT1) < hyp(austinCue.origin, austinT1), 'Austin arrow tip is further toward Turn 1');
 
 var appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appSrc.indexOf('multiviewer.app') < 0, 'runtime does not call MultiViewer');
@@ -436,6 +464,9 @@ assert(appSrc.indexOf('data-tip') >= 0 && appSrc.indexOf('进站中的车数') >
 assert(appSrc.indexOf('tabindex') >= 0, 'pit badge is focusable');
 assert(appSrc.indexOf('bay.slots') < 0, 'app no longer paints pit-bay car slots');
 assert(appSrc.indexOf('makePitBayLayer()') >= 0, 'pit badge is a wrap overlay');
+assert(appSrc.indexOf('paintTrackmapDir') >= 0, 'app paints a race-direction cue');
+assert(appSrc.indexOf('tm-dir-arrow') >= 0, 'app uses the direction-arrow class');
+assert(appSrc.indexOf('比赛方向') >= 0, 'direction cue has a Chinese title');
 var phaseSrc = appSrc.split('var CIRCUIT_PHASE')[1].split('function circuitPhase')[0];
 var svgSrc = appSrc.split('var CIRCUIT_SVG')[1].split('};')[0];
 function parsePhases(block) {
@@ -534,6 +565,18 @@ near(E.progressFromTiming(miniCar, monacoPhase.sectors).frac, monacoPhase.sector
 near(E.progressFromTiming(miniCar, monzaPhase.sectors).frac, monzaPhase.sectors[0] * 0.5, 0.001, 'Monza S1 uses the sector end');
 assert(shanghaiPhase.reverse === true, 'Shanghai file direction is opposite the race');
 assert(phases['circuits/austin-1.svg'].offset === 0.522, 'Austin hand offset stays');
+var shanghaiRaw = flipY(E.outlineFromSvg(fs.readFileSync(path.join(__dirname, 'circuits/shanghai-1.svg'), 'utf8'), 4));
+var shanghaiOriented = E.orientClosedOutline(shanghaiRaw, shanghaiPhase.offset, shanghaiPhase.reverse);
+var shanghaiZero = E.pointOnArc(E.buildArc(shanghaiOriented), 0);
+var shanghaiAhead = E.pointOnArc(E.buildArc(shanghaiOriented), 0.04);
+var shanghaiCue = E.directionCue(E.buildArc(shanghaiOriented), function (x, y) { return { x: x, y: y }; }, {
+  minDist: 12, length: 8, width: 6, maxFrac: 0.05
+});
+assert(shanghaiCue && shanghaiCue.frac > 0.002 && shanghaiCue.frac < 0.05, 'Shanghai cue is shortly after S/F');
+assert(hyp(shanghaiCue.origin, shanghaiAhead) < hyp(shanghaiZero, shanghaiAhead),
+  'Shanghai reverse still places the arrow along race direction');
+assert(hyp(shanghaiCue.tip, shanghaiAhead) < hyp(shanghaiCue.origin, shanghaiAhead),
+  'Shanghai arrow tip follows the oriented tangent');
 
 // 弧长：中点大致在线段中间。
 var arc = E.buildArc([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
@@ -768,7 +811,8 @@ function mapOutlineToView(pts, w, h, zoom) {
     tx: ahead.x - sc.x,
     ty: ahead.y - sc.y,
     centroid: mapPoint(sx / pts.length, sy / pts.length),
-    strokeW: trackStrokeW(z)
+    strokeW: trackStrokeW(z),
+    map: mapPoint
   };
 }
 
@@ -790,6 +834,21 @@ assert(austinBay.clearance >= austinBay.minClear,
   'Austin default view bay clears the outline by ' + austinBay.clearance.toFixed(1) +
   ' (need ' + austinBay.minClear + ')');
 assert(!austinBay.slots || austinBay.slots.length === 0, 'Austin badge has no car dots');
+
+var austinCell = Math.max(2.2, Math.min(3.4, austinView.strokeW * 0.42));
+var austinLen = Math.max(6.6, Math.min(10.2, austinView.strokeW * 1.12));
+var austinWidth = Math.max(5.1, Math.min(8.0, austinView.strokeW * 0.84));
+var austinMin = austinCell * 2 + austinView.strokeW * 0.72 + austinLen * 0.42;
+var austinScreenCue = E.directionCue(E.buildArc(austinFlipped), austinView.map, {
+  minDist: austinMin, length: austinLen, width: austinWidth, maxFrac: 0.05
+});
+assert(austinScreenCue && austinScreenCue.pts.length === 3, 'Austin default view has a direction cue');
+assert(austinScreenCue.frac > 0.002 && austinScreenCue.frac < 0.05, 'Austin screen cue stays near S/F');
+var austinAlong = Math.hypot(austinScreenCue.origin.x - austinView.origin.x, austinScreenCue.origin.y - austinView.origin.y);
+assert(austinAlong + 0.4 >= austinMin * 0.85, 'Austin cue clears the finish flag gap ' + austinAlong.toFixed(1));
+var austinTipDir = (austinScreenCue.tip.x - austinScreenCue.origin.x) * austinView.tx +
+  (austinScreenCue.tip.y - austinScreenCue.origin.y) * austinView.ty;
+assert(austinTipDir > 0, 'Austin screen arrow follows the mapped race tangent');
 
 var views = [
   { w: 420, h: 280, zoom: 1.05, label: 'preview' },
@@ -819,6 +878,25 @@ files.forEach(function (f) {
     assert(laid.clearance >= laid.minClear,
       f + ' ' + vp.label + ' pit badge overlaps outline (clearance ' +
       laid.clearance.toFixed(2) + ', need ' + laid.minClear.toFixed(2) + ')');
+    var cueLen = Math.max(6.6, Math.min(10.2, view.strokeW * 1.12));
+    var orientedArc = E.buildArc(oriented);
+    var cue = E.directionCue(orientedArc, view.map, {
+      minDist: Math.max(2.2, Math.min(3.4, view.strokeW * 0.42)) * 2 + view.strokeW * 0.72 + cueLen * 0.42,
+      length: cueLen,
+      width: Math.max(5.1, Math.min(8.0, view.strokeW * 0.84)),
+      maxFrac: 0.05
+    });
+    assert(cue && cue.pts && cue.pts.length === 3, f + ' ' + vp.label + ' has a direction cue');
+    assert(cue.frac > 0 && cue.frac <= 0.05, f + ' ' + vp.label + ' cue frac ' + cue.frac);
+    var localDot = (cue.tip.x - cue.origin.x) * cue.tx + (cue.tip.y - cue.origin.y) * cue.ty;
+    assert(localDot > 0, f + ' ' + vp.label + ' arrow follows its local race tangent');
+    var pAhead = E.pointOnArc(orientedArc, 0.04);
+    var pBack = E.pointOnArc(orientedArc, 0.96);
+    var sAhead = view.map(pAhead.x, pAhead.y);
+    var sBack = view.map(pBack.x, pBack.y);
+    assert(Math.hypot(cue.origin.x - sAhead.x, cue.origin.y - sAhead.y) <
+      Math.hypot(cue.origin.x - sBack.x, cue.origin.y - sBack.y),
+      f + ' ' + vp.label + ' cue is on the race-direction side of S/F');
   });
 });
 
