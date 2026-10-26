@@ -11,6 +11,8 @@
  * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
  * 其它赛道仍相对 SVG 起点。车与车的间距不受这条相位影响。
+ * 比赛方向箭头（directionCue）沿同一条定向弧、在进度 0 稍后画一枚小箭头，
+ * 沿外法向偏到灰线外侧，不压在描边中心。
  *
  * 浏览器：window.TrackmapEstimate
  * Node：module.exports，`node trackmap-estimate.js` 会自检。
@@ -242,9 +244,167 @@
   }
 
   /**
-   * 重叠车标相对弧线的屏幕像素偏移。n 是法向（进站向内），t 是切向。
-   * 第一辆贴在线上；多出来的车只在线旁一小格里挤，避免沿法线排成一串飞出轮廓。
+   * 箭头中心相对赛道中线的外法向像素。半条描边到灰线外沿，再留 2px 空隙，
+   * 再让约半个箭头宽落在线外，整枚三角贴在轮廓旁边而不是压在线上。
    */
+  function directionOutset(strokeW, width) {
+    var lw = Number(strokeW);
+    if (!(lw > 0)) lw = 8;
+    var w = Number(width);
+    if (!(w > 0)) w = 6.4;
+    var out = lw * 0.5 + 2 + w * 0.48;
+    if (out < 6) out = 6;
+    if (out > 14) out = 14;
+    return out;
+  }
+
+  /**
+   * 比赛方向箭头。origin / tx / ty 与 finishGrid 一样，用 mapper 之后的屏幕坐标。
+   * 等腰三角沿切线指向比赛方向，中心压在 origin 上。
+   */
+  function directionArrow(origin, tx, ty, length, width) {
+    var ox = origin && isFinite(origin.x) ? origin.x : 0;
+    var oy = origin && isFinite(origin.y) ? origin.y : 0;
+    var t = unit2(Number(tx) || 0, Number(ty) || 0);
+    var nx = -t.y;
+    var ny = t.x;
+    length = Number(length);
+    if (!(length > 0)) length = 8;
+    width = Number(width);
+    if (!(width > 0)) width = 6.2;
+    var tip = {
+      x: ox + t.x * length * 0.58,
+      y: oy + t.y * length * 0.58
+    };
+    var bx = ox - t.x * length * 0.42;
+    var by = oy - t.y * length * 0.42;
+    var hw = width / 2;
+    return {
+      tip: tip,
+      pts: [
+        tip,
+        { x: bx + nx * hw, y: by + ny * hw },
+        { x: bx - nx * hw, y: by - ny * hw }
+      ]
+    };
+  }
+
+  /**
+   * 沿定向弧从进度 0 往前走，找到与起终点拉开 minDist 屏幕像素的落点，
+   * 再沿外法向（背向质心）偏出灰线。箭头跟着 CIRCUIT_PHASE 的 offset/reverse，
+   * 不另做一套方向。
+   */
+  function directionCue(arc, mapPoint, opts) {
+    opts = opts || {};
+    var minDist = Number(opts.minDist);
+    if (!(minDist > 0)) minDist = 16;
+    var maxFrac = Number(opts.maxFrac);
+    if (!(maxFrac > 0)) maxFrac = 0.055;
+    if (maxFrac > 0.2) maxFrac = 0.2;
+    var length = Number(opts.length);
+    if (!(length > 0)) length = 8.4;
+    var width = Number(opts.width);
+    if (!(width > 0)) width = 6.4;
+    var strokeW = Number(opts.strokeW);
+    var outset = Number(opts.outset);
+    if (!(outset >= 0)) {
+      outset = strokeW > 0 ? directionOutset(strokeW, width) : 0;
+    }
+    if (!arc || typeof mapPoint !== 'function' || !(arc.total > 0)) return null;
+    var p0 = pointOnArc(arc, 0);
+    var s0 = mapPoint(p0.x, p0.y);
+    if (!s0 || !isFinite(s0.x) || !isFinite(s0.y)) return null;
+
+    function screenAt(frac) {
+      var p = pointOnArc(arc, frac);
+      var s = mapPoint(p.x, p.y);
+      if (!s || !isFinite(s.x) || !isFinite(s.y)) return null;
+      var ahead = mapPoint(p.x + p.tx, p.y + p.ty);
+      return {
+        frac: frac,
+        origin: s,
+        tx: ahead && isFinite(ahead.x) ? ahead.x - s.x : p.tx,
+        ty: ahead && isFinite(ahead.y) ? ahead.y - s.y : p.ty
+      };
+    }
+
+    function along(frac) {
+      var n = 10;
+      var acc = 0;
+      var prev = s0;
+      for (var i = 1; i <= n; i++) {
+        var hit = screenAt(frac * i / n);
+        if (!hit) continue;
+        acc += Math.hypot(hit.origin.x - prev.x, hit.origin.y - prev.y);
+        prev = hit.origin;
+      }
+      return acc;
+    }
+
+    var lo = 0.003;
+    var hi = maxFrac;
+    var frac = hi;
+    var far = along(hi);
+    if (far < minDist * 0.55) {
+      frac = hi;
+    } else {
+      for (var i = 0; i < 16; i++) {
+        var mid = (lo + hi) / 2;
+        if (along(mid) < minDist) lo = mid;
+        else {
+          frac = mid;
+          hi = mid;
+        }
+      }
+    }
+    if (frac < 0.004) frac = 0.004;
+    if (frac > maxFrac) frac = maxFrac;
+    var placed = screenAt(frac);
+    if (!placed) return null;
+    var centroid = opts.centroid;
+    if (!centroid || !isFinite(centroid.x) || !isFinite(centroid.y)) {
+      var pts = arc.pts || [];
+      var sx = 0;
+      var sy = 0;
+      var n = 0;
+      var i;
+      for (i = 0; i < pts.length; i++) {
+        var mapped = mapPoint(pts[i].x, pts[i].y);
+        if (!mapped || !isFinite(mapped.x) || !isFinite(mapped.y)) continue;
+        sx += mapped.x;
+        sy += mapped.y;
+        n++;
+      }
+      if (n >= 3) centroid = { x: sx / n, y: sy / n };
+    }
+    var onTrack = placed.origin;
+    var origin = onTrack;
+    var outward = { x: 0, y: 0 };
+    if (outset > 0) {
+      var inn = inwardNormal(placed.tx, placed.ty, onTrack, centroid);
+      outward = { x: -inn.x, y: -inn.y };
+      origin = {
+        x: onTrack.x + outward.x * outset,
+        y: onTrack.y + outward.y * outset
+      };
+    }
+    var arrow = directionArrow(origin, placed.tx, placed.ty, length, width);
+    return {
+      frac: frac,
+      origin: origin,
+      onTrack: onTrack,
+      outward: outward,
+      outset: outset,
+      tx: placed.tx,
+      ty: placed.ty,
+      tip: arrow.tip,
+      pts: arrow.pts,
+      length: length,
+      width: width,
+      minDist: minDist
+    };
+  }
+
   /**
    * 起终点方格。origin 与切向 tx/ty 用和轮廓相同的屏幕坐标（mapper 之后）。
    * 格子沿法线横跨赛道、沿切线两排，中心压在进度 0 上。
@@ -1357,6 +1517,9 @@
     pitBayTip: PIT_BAY_TIP,
     pitLanePaint: pitLanePaint,
     finishGrid: finishGrid,
+    directionOutset: directionOutset,
+    directionArrow: directionArrow,
+    directionCue: directionCue,
     sampleMotion: sampleMotion,
     rebaseMotion: rebaseMotion,
     stepMotion: stepMotion,

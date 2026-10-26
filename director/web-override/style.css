@@ -1419,7 +1419,8 @@ html[data-theme="day"] .svalue.hero {
   display: block;
 }
 .b-trackmap .tm-wrap {
-  background: #080b10;
+  /* 夜间跟圆环板同一套 --ring-bg（中心 #121820），不要再用纯 #080b10 */
+  background: var(--ring-bg);
 }
 html[data-theme="day"] .b-trackmap .tm-wrap {
   background: #d5dee9;
@@ -1449,6 +1450,17 @@ html[data-theme="day"] .tm-line-fg { stroke: rgba(255, 255, 255, 0.94); }
 .tm-finish-sq { stroke-width: 0.4; stroke-linejoin: miter; }
 .tm-finish-sq.light { fill: #f4f4f4; stroke: #141414; }
 .tm-finish-sq.dark { fill: #141414; stroke: #f7f7f7; }
+.tm-dir { pointer-events: none; }
+.tm-dir-arrow {
+  fill: #d5dce2;
+  stroke: #12161c;
+  stroke-width: 0.75;
+  stroke-linejoin: miter;
+}
+html[data-theme="day"] .tm-dir-arrow {
+  fill: #1f2a32;
+  stroke: #f4f7fa;
+}
 .tm-empty {
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-size: 13px;

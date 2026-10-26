@@ -2917,6 +2917,8 @@
     flags.appendChild(fullFlag);
     var finish = svgEl('g', 'tm-finish');
     finish.appendChild(svgEl('title')).textContent = '估计起终点';
+    var dir = svgEl('g', 'tm-dir');
+    dir.appendChild(svgEl('title')).textContent = '比赛方向';
     var cars = svgEl('g', 'tm-cars');
     var empty = svgEl('text', 'tm-empty');
     empty.setAttribute('text-anchor', 'middle');
@@ -2925,6 +2927,7 @@
     svg.appendChild(fg);
     svg.appendChild(flags);
     svg.appendChild(finish);
+    svg.appendChild(dir);
     svg.appendChild(cars);
     svg.appendChild(empty);
     wrap.appendChild(svg);
@@ -2986,6 +2989,7 @@
       if (fg) fg.setAttribute('d', '');
       clearTrackmapFlagGeometry(svg);
       clearTrackmapFinish(svg);
+      clearTrackmapDir(svg);
       paintPitBay(wrap, null, false);
       if (empty) {
         empty.textContent = TRACKMAP.status || '估计 · 正在载入赛道轮廓';
@@ -3061,6 +3065,7 @@
     }
     paintTrackmapFlags(svg);
     paintTrackmapFinish(svg, lw);
+    paintTrackmapDir(svg, lw);
   }
 
   var TM_FLAG_NIGHT = {
@@ -3152,6 +3157,72 @@
       poly.setAttribute('stroke-width', '0.4');
       g.appendChild(poly);
     }
+  }
+
+  function ensureDirLayer(svg) {
+    var g = svg.querySelector('.tm-dir');
+    if (!g) {
+      g = svgEl('g', 'tm-dir');
+      var title = svgEl('title');
+      title.textContent = '比赛方向';
+      g.appendChild(title);
+      var cars = svg.querySelector('.tm-cars');
+      var finish = svg.querySelector('.tm-finish');
+      if (cars) svg.insertBefore(g, cars);
+      else if (finish && finish.nextSibling) svg.insertBefore(g, finish.nextSibling);
+      else svg.appendChild(g);
+    } else {
+      var carsG = svg.querySelector('.tm-cars');
+      if (carsG && g.nextSibling !== carsG) svg.insertBefore(g, carsG);
+    }
+    return g;
+  }
+
+  function clearTrackmapDir(svg) {
+    if (!svg) return;
+    var g = svg.querySelector('.tm-dir');
+    if (!g) return;
+    var nodes = g.querySelectorAll('polygon');
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      nodes[i].parentNode.removeChild(nodes[i]);
+    }
+  }
+
+  function paintTrackmapDir(svg, strokeW) {
+    if (!svg) return;
+    var g = ensureDirLayer(svg);
+    clearTrackmapDir(svg);
+    var E = window.TrackmapEstimate;
+    if (!E || !E.directionCue || !TRACKMAP.mapper || !TRACKMAP.arc || !(TRACKMAP.arc.total > 0)) {
+      return;
+    }
+    var lw = strokeW > 0 ? strokeW : 6;
+    var cell = Math.max(2.2, Math.min(3.4, lw * 0.42));
+    var length = Math.max(6.6, Math.min(10.2, lw * 1.12));
+    var width = Math.max(5.1, Math.min(8.0, lw * 0.84));
+    // 方格旗沿切线约两格，再留一条描边的空隙，箭头落在起终点之后。
+    var minDist = cell * 2 + lw * 0.72 + length * 0.42;
+    var outset = E.directionOutset ? E.directionOutset(lw, width) : (lw * 0.5 + 2 + width * 0.48);
+    var cue = E.directionCue(TRACKMAP.arc, TRACKMAP.mapper, {
+      minDist: minDist,
+      length: length,
+      width: width,
+      strokeW: lw,
+      outset: outset,
+      centroid: TRACKMAP.screenCentroid,
+      maxFrac: 0.05
+    });
+    if (!cue || !cue.pts || cue.pts.length < 3) return;
+    var poly = svgEl('polygon', 'tm-dir-arrow');
+    var pts = '';
+    var ok = true;
+    for (var k = 0; k < cue.pts.length; k++) {
+      if (!isFinite(cue.pts[k].x) || !isFinite(cue.pts[k].y)) { ok = false; break; }
+      pts += (k ? ' ' : '') + cue.pts[k].x.toFixed(2) + ',' + cue.pts[k].y.toFixed(2);
+    }
+    if (!ok) return;
+    poly.setAttribute('points', pts);
+    g.appendChild(poly);
   }
 
   function clearTrackmapFlagGeometry(svg) {
