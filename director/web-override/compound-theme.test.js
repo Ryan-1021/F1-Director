@@ -1,6 +1,6 @@
 /*
  * node director/web-override/compound-theme.test.js
- * HARD 白胎：白天黑字 H、夜晚保持白描边、徽章不写内联色。
+ * HARD 白胎：白天黑字 H、透明底贴合行背景、夜晚保持白描边、徽章不写内联色。
  */
 'use strict';
 
@@ -34,11 +34,20 @@ assert(!/html\[data-theme="day"\][\s\S]*?--comp-M:\s*#854d0e/.test(styleSrc),
 var dayHard = styleSrc.match(/html\[data-theme="day"\] \.ttyre\.comp-H\s*\{[^}]+\}/);
 assert(!!dayHard, 'day HARD rule exists');
 assert(dayHard && /border-color:\s*#3b4a5c/.test(dayHard[0]), 'day HARD has a dark rim');
-assert(dayHard && /background:\s*#ffffff/.test(dayHard[0]), 'day HARD keeps a white-ish fill');
+assert(dayHard && /background:\s*var\(--ttyre-bg\)/.test(dayHard[0]),
+  'day HARD fill inherits --ttyre-bg (transparent, matches the row)');
+assert(dayHard && !/background:\s*#ffffff/.test(dayHard[0]),
+  'day HARD is not a solid white chip');
+assert(dayHard && !/box-shadow/.test(dayHard[0]),
+  'day HARD has no extra chip ring');
 assert(dayHard && /color:\s*#111111/.test(dayHard[0]), 'day HARD letter is near-black');
 assert(dayHard && dayHard[0].indexOf('-webkit-text-stroke') < 0, 'day HARD letter is fill, not stroke');
 assert(styleSrc.indexOf('html[data-theme="night"] .ttyre.comp-H') < 0,
   'night HARD is not restyled (outline-only via --comp-H)');
+assert(!/html\[data-theme="day"\] \.ttyre\.comp-S/.test(styleSrc),
+  'day SOFT is not restyled');
+assert(!/html\[data-theme="day"\] \.ttyre\.comp-M/.test(styleSrc),
+  'day MEDIUM is not restyled');
 
 if (failed) {
   console.error(failed + ' failed');

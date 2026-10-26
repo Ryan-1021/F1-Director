@@ -1114,13 +1114,13 @@ table.kv tr:last-child td { border-bottom: none; }
 .ttyre.comp-I { color: var(--comp-I); border-color: var(--comp-I); }
 .ttyre.comp-W { color: var(--comp-W); border-color: var(--comp-W); }
 .ttyre.comp-unk { color: var(--comp-unk); border-color: var(--ttyre-border); }
-/* Day HARD: black H on a white-ish chip so the glyph reads on light rows.
+/* Day HARD: black H, outline-only fill so the badge matches the row/panel
+   behind it (--panel / zebra --stripe-row / --stripe-solid / --panel-elev).
    Night keeps outline-only --comp-H. */
 html[data-theme="day"] .ttyre.comp-H {
   color: #111111;
-  background: #ffffff;
+  background: var(--ttyre-bg);
   border-color: #3b4a5c;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
 }
 /* Same pattern as td.who .tla + .carno: letter column aligned, laps right-aligned in fixed 2ch. */
 table.timing td.col-tyre .tyre-stint {
