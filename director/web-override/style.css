@@ -1419,7 +1419,8 @@ html[data-theme="day"] .svalue.hero {
   display: block;
 }
 .b-trackmap .tm-wrap {
-  background: #080b10;
+  /* 夜间跟圆环板同一套 --ring-bg（中心 #121820），不要再用纯 #080b10 */
+  background: var(--ring-bg);
 }
 html[data-theme="day"] .b-trackmap .tm-wrap {
   background: #d5dee9;

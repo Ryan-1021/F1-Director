@@ -314,6 +314,10 @@ assert(headDot > 0, 'arrow points along the supplied tangent');
 var styleSrc = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
 assert(styleSrc.indexOf('.tm-dir-arrow') >= 0, 'css paints the direction arrow');
 assert(styleSrc.indexOf('html[data-theme="day"] .tm-dir-arrow') >= 0, 'day theme restyles the arrow');
+assert(/\.b-trackmap \.tm-wrap\s*\{[^}]*background:\s*var\(--ring-bg\)/.test(styleSrc),
+  'night trackmap floor uses --ring-bg');
+assert(/html\[data-theme="day"\] \.b-trackmap \.tm-wrap\s*\{[^}]*background:\s*#d5dee9/.test(styleSrc),
+  'day trackmap floor stays #d5dee9');
 
 var squarePts = [
   { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 0, y: 0 }
