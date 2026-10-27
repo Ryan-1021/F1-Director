@@ -203,15 +203,25 @@ assert(crossing > 0.9, 'finish stays near the line at the tick ' + crossing);
 var crossed = E.sampleMotion(fin, 1700, 90000, false);
 assert(crossed < 0.08, 'finish eases across the line ' + crossed);
 
+near(E.ratchetCap(0.50, 0.425, false), 0.50, 1e-9, 'ratchet keeps previous on tighten');
+near(E.ratchetCap(0.50, 0.55, false), 0.55, 1e-9, 'ratchet takes a forward cap');
+near(E.ratchetCap(0.50, 0.30, false), 0.30, 1e-9, 'ratchet allows a large rewind');
+near(E.ratchetCap(0.95, 0.08, false), 0.08, 1e-9, 'ratchet rolls forward through S/F');
+near(E.ratchetCap(0.10, 0.99, false), 0.10, 1e-9, 'ratchet ignores a backward wrap flicker');
+near(E.ratchetCap(0.50, 0.40, true), 0.40, 1e-9, 'ratchet reset allows a lower cap');
+assert(E.ratchetCap(0.50, null, false) === 0.50, 'null measurement keeps previous cap');
+
 // 外推超前后，新采样略落后或把 cap 收紧：这一拍不能沿轮廓回退。
 var coast = E.stepMotion(null, 0.40, 0.50, 0, 90000, false, { exact: true });
 var coastShown = E.sampleMotion(coast, 3000, 90000, false);
 assert(coastShown > 0.42, 'precondition: coasted past the tighter cap ' + coastShown);
 coast = E.stepMotion(coast, 0.41, 0.425, 3000, 90000, false, { exact: true });
+near(coast.cap, 0.50, 0.001, 'tighter measurement does not lower the ratcheted cap');
 var heldCoast = E.sampleMotion(coast, 3000, 90000, false);
 assert(heldCoast + 1e-6 >= coastShown, 'tighter cap does not yank ' + heldCoast + ' from ' + coastShown);
 var heldLater = E.sampleMotion(coast, 3600, 90000, false);
-assert(E.wrapDelta(heldLater - heldCoast) > -0.001, 'held car does not roll back after the tick ' + heldLater);
+assert(E.wrapDelta(heldLater - heldCoast) > 0.001, 'leftover cap room still moves forward ' + heldLater + ' from ' + heldCoast);
+assert(heldLater < heldCoast + 0.6 / 90 + 0.002, 'does not jump past lap pace after tighten');
 
 // 同一采样反复进来时，车仍应停在官方 cap 附近，不能一层层 bleed 出去。
 var pinned = E.stepMotion(null, 0.20, 0.22, 0, 90000, false, { exact: true });
@@ -272,6 +282,39 @@ var rewindMid = E.sampleMotion(rewind, 1400, 90000, false);
 assert(rewindMid < 0.52 && rewindMid > 0.30, 'large rearward sample still eases back ' + rewindMid);
 var rewindEnd = E.sampleMotion(rewind, 2000, 90000, false);
 near(rewindEnd, 0.30, 0.02, 'large rearward ease lands on the new sample');
+near(rewind.cap, 0.36, 0.001, 'large rewind is allowed to lower the cap');
+
+// 画面已经超过本拍测量 cap：不钉死，按衰减速度继续往前蹭。
+var crawl = E.stepMotion(null, 0.40, null, 0, 90000, false, { exact: true });
+var crawlShown = E.sampleMotion(crawl, 5000, 90000, false);
+assert(crawlShown > 0.45, 'precondition: unbounded coast is ahead of a later cap ' + crawlShown);
+crawl = E.stepMotion(crawl, 0.41, 0.43, 5000, 90000, false, { exact: true });
+var crawlHeld = E.sampleMotion(crawl, 5000, 90000, false);
+assert(crawlHeld + 1e-6 >= crawlShown, 'late cap behind paint does not yank ' + crawlHeld);
+assert(crawl.coasting === true, 'enters coast when measurement sits slightly behind paint');
+var crawlLater = E.sampleMotion(crawl, 6200, 90000, false);
+assert(crawlLater > crawlHeld + 0.0004, 'coasts forward instead of freezing ' + crawlLater + ' from ' + crawlHeld);
+assert(crawlLater < crawlHeld + 1200 / 90000, 'coast is slower than full lap pace ' + crawlLater);
+var crawlLater2 = E.sampleMotion(crawl, 7400, 90000, false);
+assert(crawlLater2 > crawlLater, 'coast keeps crawling on the next tick ' + crawlLater2);
+assert(E.wrapDelta(crawlLater2 - crawlLater) <= E.wrapDelta(crawlLater - crawlHeld) + 1e-6,
+  'coast speed decays ' + crawlLater2 + ' vs ' + crawlLater + ' vs ' + crawlHeld);
+
+// 停车 / 进站仍冻住，不走 coast。
+var stopped = E.stepMotion(null, 0.40, 0.55, 0, 90000, false, { exact: true });
+stopped = E.stepMotion(stopped, 0.42, 0.55, 2000, 90000, false, { exact: true, hold: true });
+var stoppedAt = E.sampleMotion(stopped, 2000, 90000, false);
+var stoppedLater = E.sampleMotion(stopped, 8000, 90000, false);
+near(stoppedLater, stoppedAt, 0.0005, 'hold still freezes');
+assert(stopped.coasting === false, 'hold does not coast');
+
+var wrapCap = E.stepMotion(null, 0.90, 0.95, 0, 90000, false, { exact: true });
+wrapCap = E.stepMotion(wrapCap, 0.91, 0.08, 400, 90000, false, { exact: true });
+near(wrapCap.cap, 0.08, 0.001, 'cap rolls forward through the start/finish');
+
+var flickerCap = E.stepMotion(null, 0.05, 0.10, 0, 90000, false, { exact: true });
+flickerCap = E.stepMotion(flickerCap, 0.05, 0.99, 400, 90000, false, { exact: true });
+near(flickerCap.cap, 0.10, 0.001, 'cap flicker back across S/F does not rewind the bound');
 
 for (var slot = 0; slot < 16; slot++) {
   var pack = E.packOffset(slot, false);
