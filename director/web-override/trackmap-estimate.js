@@ -5,8 +5,10 @@
  * 已经点亮的格子（非 0 都算到达），不拿上一圈残留的赛段时间把车拉回起点。
  * 正赛 / 冲刺赛：领先者仍用赛段；其余车用相对领先者的时间差 ÷ 参考圈速。
  * 被套圈（"1 LAP"）不用时间差，改回各车自己的赛段。
- * 两次计时之间按参考圈速外推。新采样只比画面略靠后时（差距抖动、
- * 迷你赛段 cap 收紧）不沿轮廓回退；进站 / 停车 / 大约 0.12 圈以上的后撤仍收回。
+ * 两次计时之间按参考圈速外推。测量 cap 沿圈只向前收（棘轮），迷你赛段
+ * 闪烁不会把上限拉到已画位置后面。新采样只比画面略靠后时（差距抖动、
+ * cap 仍落后于画面）按最近沿圈速度衰减滑行，不钉死、不回退；进站 / 停车 /
+ * 大约 0.12 圈以上的后撤仍收回。
  * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
  * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
@@ -40,6 +42,33 @@
 
   // 约 0.12 圈（90s 圈速大约 11s）以内的回退，当成外推超前或采样抖动，不往回拽。
   var HOLD_BACK = 0.12;
+  // 测量略落后时：用最近沿圈速度的一部分往前滑，再衰减到最低爬行。
+  var COAST_START = 0.38;
+  var COAST_TAU_MS = 900;
+  var COAST_MIN = 0.12;
+  var COAST_STEP_MAX = 0.0035;
+
+  /**
+   * 沿圈取更靠前的 cap。newCap 略落后时保住 previous；
+   * 越过 HOLD_BACK 的后撤、冲线换圈、进站等 reset 时才允许降低。
+   */
+  function ratchetCap(previous, next, reset) {
+    if (next == null || !isFinite(next)) return previous;
+    next = wrap01(next);
+    if (reset || previous == null || !isFinite(previous)) return next;
+    var d = wrapDelta(next - previous);
+    if (d >= -1e-9 || d <= -HOLD_BACK) return next;
+    return wrap01(previous);
+  }
+
+  function applyMeasuredCap(st, cap, allowLower) {
+    if (allowLower) {
+      st.cap = (cap == null || !isFinite(cap)) ? cap : wrap01(cap);
+      return;
+    }
+    if (cap == null || !isFinite(cap)) return;
+    st.cap = ratchetCap(st.cap, cap, false);
+  }
 
   function timeSeconds(str) {
     if (str == null) return NaN;
@@ -898,6 +927,7 @@
     return {
       anchor: frac,
       at: now,
+      seen: now,
       display: frac,
       cap: null,
       lastTarget: frac,
@@ -908,12 +938,18 @@
       easeFrom: null,
       easeTo: null,
       easeStart: 0,
-      easeMs: 0
+      easeMs: 0,
+      trackSpeed: 0,
+      coastSpeed: 0,
+      coasting: false
     };
   }
 
   function sampleMotion(st, now, lapMs, frozen) {
     if (!st) return 0;
+    var lastSeen = st.seen != null && isFinite(st.seen) ? st.seen : st.at;
+    var frameDt = Math.max(0, now - lastSeen);
+    st.seen = now;
     if (st.easeTo != null) {
       var dur = st.easeMs > 0 ? st.easeMs : 1;
       var u = (now - st.easeStart) / dur;
@@ -923,6 +959,7 @@
         var d = wrapDelta(st.easeTo - st.easeFrom);
         var eased = wrap01(st.easeFrom + d * s);
         st.display = eased;
+        st.coasting = false;
         return eased;
       }
       st.display = st.easeTo;
@@ -930,13 +967,17 @@
       st.at = now;
       st.easeTo = null;
       st.easeFrom = null;
+      st.coasting = false;
     }
     if (frozen || st.hold || st.pit || st.hide) {
       st.display = st.anchor;
+      st.coasting = false;
+      st.coastSpeed = 0;
       return st.anchor;
     }
     var scale = st.lapScale > 0 ? st.lapScale : 1;
     var ms = (lapMs > 1 ? lapMs : 90000) * scale;
+    var fullSpeed = 1 / ms;
     var adv = Math.max(0, now - st.at) / ms;
     if (st.cap != null && isFinite(st.cap)) {
       var room = wrap01(st.cap - st.anchor);
@@ -953,11 +994,35 @@
       }
     }
     var next = wrap01(st.anchor + adv);
-    // 新采样把 cap 收紧时，夹到 cap 会比上一帧画面靠后。停在已画出的点，
-    // 不要把 cap 抬高（否则 1s 重绘会一层层 bleed 出去）。大回撤仍走 ease。
+    // 夹到 cap / 新采样略落后时，不要把已画出的点钉死。按最近沿圈速度
+    // 衰减往前蹭，直到测量追上。大回撤仍走 ease。
     if (st.display != null && isFinite(st.display)) {
       var pull = wrapDelta(next - st.display);
-      if (pull < -0.0005 && pull > -HOLD_BACK) next = st.display;
+      if (pull < -0.0005 && pull > -HOLD_BACK) {
+        var recent = st.trackSpeed > 0 ? st.trackSpeed : fullSpeed;
+        if (!st.coasting) {
+          st.coastSpeed = recent * COAST_START;
+          st.coasting = true;
+        }
+        var step = st.coastSpeed * frameDt;
+        if (step > COAST_STEP_MAX) step = COAST_STEP_MAX;
+        var proposed = wrap01(st.display + step);
+        var maxLead = HOLD_BACK - 0.002;
+        if (wrapDelta(proposed - next) > maxLead) proposed = wrap01(next + maxLead);
+        if (wrapDelta(proposed - st.display) < 0) proposed = st.display;
+        next = proposed;
+        if (frameDt > 0) {
+          st.coastSpeed = Math.max(st.coastSpeed * Math.exp(-frameDt / COAST_TAU_MS), fullSpeed * COAST_MIN);
+        }
+      } else {
+        st.coasting = false;
+        if (frameDt > 1 && pull > 0) {
+          var inst = pull / frameDt;
+          st.trackSpeed = inst > fullSpeed ? fullSpeed : inst;
+        } else if (!(st.trackSpeed > 0)) {
+          st.trackSpeed = fullSpeed;
+        }
+      }
     }
     st.display = next;
     return next;
@@ -967,8 +1032,11 @@
     st.anchor = shown;
     st.display = shown;
     st.at = now;
+    st.seen = now;
     st.easeTo = null;
     st.easeFrom = null;
+    st.coasting = false;
+    st.coastSpeed = 0;
     return st;
   }
 
@@ -979,7 +1047,8 @@
     var err = wrapDelta(target - shown);
     // 小步向前沿弧线滑过去。已经滑过点亮边界的不要为了对齐往回拽。
     // 差了一大截（换圈、数据跳变）仍然沿短弧收回。
-    if (modeChanged || (targetMoved && (err > 0.0008 || err < -HOLD_BACK))) {
+    var bigRewind = err < -HOLD_BACK;
+    if (modeChanged || (targetMoved && (err > 0.0008 || bigRewind))) {
       st.easeFrom = shown;
       st.easeTo = target;
       st.easeStart = now;
@@ -988,8 +1057,9 @@
       st.anchor = target;
       st.at = now;
       st.display = shown;
+      st.coasting = false;
     }
-    st.cap = cap;
+    applyMeasuredCap(st, cap, bigRewind || modeChanged);
     st.lastTarget = target;
     return st;
   }
@@ -1075,8 +1145,9 @@
         st.anchor = raised;
         st.at = now;
         st.display = shown;
+        st.coasting = false;
       }
-      st.cap = cap;
+      applyMeasuredCap(st, cap, false);
       st.lastTarget = target;
       return st;
     }
@@ -1499,6 +1570,8 @@
   return {
     wrap01: wrap01,
     wrapDelta: wrapDelta,
+    HOLD_BACK: HOLD_BACK,
+    ratchetCap: ratchetCap,
     timeSeconds: timeSeconds,
     progressFromTiming: progressFromTiming,
     parseGap: parseGap,
