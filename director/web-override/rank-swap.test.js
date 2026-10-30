@@ -59,6 +59,31 @@ assert(RS.stripeClassForIndex(2) === true, 'P3 stripe');
 
 assert(RS.DURATION_MS >= 280 && RS.DURATION_MS <= 350, 'duration in agreed window');
 
+(function testSkipBoardEmptyRow() {
+  function fakeTr(opts) {
+    opts = opts || {};
+    return {
+      querySelector: function (sel) {
+        return sel === 'th' ? (opts.th || null) : null;
+      },
+      classList: { contains: function (c) { return c === opts.cls; } },
+      getAttribute: function (n) { return n === 'data-car' ? (opts.car || '') : ''; }
+    };
+  }
+  var table = {
+    querySelectorAll: function () {
+      return [
+        fakeTr({ th: {} }),
+        fakeTr({ cls: 'board-empty' }),
+        fakeTr({ car: '1' })
+      ];
+    }
+  };
+  var rows = RS.dataRows(table);
+  assert(rows.length === 1 && rows[0].getAttribute('data-car') === '1',
+    'dataRows skips board-empty placeholder');
+})();
+
 assert(RS.prefersReducedMotion(function () { return { matches: true }; }) === true, 'reduce on');
 assert(RS.prefersReducedMotion(function () { return { matches: false }; }) === false, 'reduce off');
 assert(RS.prefersReducedMotion(function () { throw new Error('no mm'); }) === false, 'reduce throws');
