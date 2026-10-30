@@ -110,6 +110,7 @@
     var rows = table.querySelectorAll('tr');
     for (var i = 0; i < rows.length; i++) {
       if (isHeaderRow(rows[i])) continue;
+      if (rows[i].classList && rows[i].classList.contains('board-empty')) continue;
       out.push(rows[i]);
     }
     return out;

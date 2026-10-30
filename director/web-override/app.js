@@ -752,6 +752,12 @@
       // During drag: no scrollHeight reads. Keep density; only adjust stretch.
       if (prev.t == null) {
         // First paint mid-drag: one light exact later via settle; for now fill.
+        // Empty boards still must not stretch (header would sit in the middle).
+        if (!boardHasCarRows(table)) {
+          setTableHeightPx(table, '');
+          wrap.__boardFit = { avail: avail, t: prev.t, isSectors: !!isSectors, exact: false, stretched: false };
+          return;
+        }
         setTableHeightPx(table, avail);
         wrap.__boardFit = { avail: avail, t: prev.t, isSectors: !!isSectors, exact: false, stretched: true };
         return;
@@ -792,8 +798,63 @@
       return;
     }
     // Spare vertical space: stretch table so leftover distributes across rows.
+    // Skip when empty — a lone header (or placeholder) would absorb the height
+    // and look vertically centered in the panel.
+    if (!boardHasCarRows(table)) {
+      setTableHeightPx(table, '');
+      wrap.__boardFit = { avail: avail, t: 1, isSectors: !!isSectors, exact: true, stretched: false };
+      return;
+    }
     setTableHeightPx(table, avail);
     wrap.__boardFit = { avail: avail, t: 1, isSectors: !!isSectors, exact: true, stretched: true };
+  }
+
+  function boardHasCarRows(table) {
+    if (!table) return false;
+    var rows = table.querySelectorAll('tr');
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].querySelector('th')) continue;
+      if (rows[i].classList.contains('board-empty')) continue;
+      return true;
+    }
+    return false;
+  }
+
+  var BOARD_EMPTY_COPY = '等待成绩数据';
+
+  function boardHeaderColCount(table) {
+    var head = table && table.querySelector('tr');
+    if (!head) return 1;
+    var n = head.querySelectorAll('th').length;
+    return n > 0 ? n : 1;
+  }
+
+  function ensureBoardEmptyRow(table) {
+    if (!table) return;
+    var rows = table.querySelectorAll('tr');
+    var i;
+    var empty = null;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].querySelector('th')) continue;
+      if (rows[i].classList.contains('board-empty')) {
+        empty = rows[i];
+        continue;
+      }
+      if (rows[i].parentNode) rows[i].parentNode.removeChild(rows[i]);
+    }
+    if (empty) return;
+    var tr = el('tr', 'board-empty');
+    var td = el('td', null, BOARD_EMPTY_COPY);
+    td.setAttribute('colspan', String(boardHeaderColCount(table)));
+    tr.appendChild(td);
+    table.appendChild(tr);
+  }
+
+  function removeBoardEmptyRow(table) {
+    if (!table) return;
+    var existing = table.querySelector('tr.board-empty');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
   }
 
   function fitTimingTable(wrap, mode) {
@@ -1190,6 +1251,7 @@
     var table = wrap && wrap.querySelector('table.timing');
     // In-place update: keeps density fit + avoids wipe flicker on every SSE.
     if (wrap && table && table.getAttribute('data-live') === '1') {
+      if (cars.length) removeBoardEmptyRow(table);
       var RS = rankSwapApi();
       if (RS) {
         RS.reconcile(table, cars, {
@@ -1202,7 +1264,9 @@
         var data = [];
         var di;
         for (di = 0; di < rows.length; di++) {
-          if (!rows[di].querySelector('th')) data.push(rows[di]);
+          if (rows[di].querySelector('th')) continue;
+          if (rows[di].classList.contains('board-empty')) continue;
+          data.push(rows[di]);
         }
         while (data.length > cars.length) {
           var extra = data.pop();
@@ -1214,6 +1278,7 @@
           else patchTimingRow(tr, cars[i]);
         }
       }
+      if (!cars.length) ensureBoardEmptyRow(table);
       // Keep existing title + column picker; re-placing would stack .ptitle rows.
       // Prefer exact density fit (early-outs when size stable) so pop-out / first
       // layout after avail=0 still shrinks rows — cheap never recomputes scale.
@@ -1236,8 +1301,12 @@
       head.appendChild(el('th', col.cls || null, col.label));
     });
     table.appendChild(head);
-    for (var j = 0; j < cars.length; j++) {
-      table.appendChild(buildTimingRow(cars[j]));
+    if (!cars.length) {
+      ensureBoardEmptyRow(table);
+    } else {
+      for (var j = 0; j < cars.length; j++) {
+        table.appendChild(buildTimingRow(cars[j]));
+      }
     }
     wrap.appendChild(table);
     box.appendChild(wrap);
@@ -1889,7 +1958,9 @@
     var data = [];
     var i;
     for (i = 0; i < rows.length; i++) {
-      if (!rows[i].querySelector('th')) data.push(rows[i]);
+      if (rows[i].querySelector('th')) continue;
+      if (rows[i].classList.contains('board-empty')) continue;
+      data.push(rows[i]);
     }
     while (data.length > cars.length) {
       var extra = data.pop();
@@ -1912,12 +1983,13 @@
     var wrap = box.querySelector('.sectors-wrap');
     var table = wrap && wrap.querySelector('table.timing');
     if (wrap && table && table.getAttribute('data-live') === '1') {
-      var empty = box.querySelector('.sectors-empty');
+      var overlay = box.querySelector('.sectors-empty');
+      if (overlay) overlay.remove();
       if (!cars.length) {
         syncSectorsTable(table, [], computeSectorFieldBests([]));
-        if (!empty) box.appendChild(el('div', 'sub sectors-empty', '还没有车手数据'));
+        ensureBoardEmptyRow(table);
       } else {
-        if (empty) empty.remove();
+        removeBoardEmptyRow(table);
         var liveBests = computeSectorFieldBests(cars);
         syncSectorsTable(table, cars, liveBests);
         syncSectorsNote(box, liveBests.anySector);
@@ -1933,10 +2005,6 @@
 
     clear(box);
     if (!ONCE) panelTitle(box, '赛段成绩');
-    if (!cars.length) {
-      box.appendChild(el('div', 'sub sectors-empty', '还没有车手数据'));
-      return;
-    }
 
     wrap = el('div', 'sectors-wrap');
     var t = el('table', 'timing sectors');
@@ -1956,13 +2024,17 @@
       head.appendChild(el('th', col.cls, col.label));
     });
     t.appendChild(head);
-    var bests = computeSectorFieldBests(cars);
-    for (var i = 0; i < cars.length; i++) {
-      t.appendChild(buildSectorsRow(cars[i], bests));
+    if (!cars.length) {
+      ensureBoardEmptyRow(t);
+    } else {
+      var bests = computeSectorFieldBests(cars);
+      for (var i = 0; i < cars.length; i++) {
+        t.appendChild(buildSectorsRow(cars[i], bests));
+      }
+      syncSectorsNote(box, bests.anySector);
     }
     wrap.appendChild(t);
     box.appendChild(wrap);
-    syncSectorsNote(box, bests.anySector);
     wrap.__sectorCars = cars.length;
     fitSectorsTable(wrap, 'exact');
     ensureBoardFitObserver(box, 'sectors');
@@ -2117,7 +2189,7 @@
     outlineSource: '',   // svg | ''
     svgRel: '',
     arc: null,
-    status: '估计 · 等待计时',
+    status: '等待场次信息',
     timer: null,
     lastRaceKey: '',
     svgRequested: '',
@@ -2657,6 +2729,11 @@
     return [r.meeting || '', r.circuit || '', r.session || ''].join('|');
   }
 
+  function raceHasSession() {
+    var r = (state && state.race) || {};
+    return !!(r.circuit || r.meeting);
+  }
+
   function stopTrackmapPoll() {
     if (TRACKMAP.timer) {
       clearInterval(TRACKMAP.timer);
@@ -2665,6 +2742,12 @@
   }
 
   function ensureTrackmapPoll() {
+    // 尚无场次时轮询只改本地文案、不拉 SVG，停掉以免和 refreshEstimateStatus 抢 status。
+    if (!raceHasSession()) {
+      stopTrackmapPoll();
+      loadTrackOutline();
+      return;
+    }
     if (TRACKMAP.timer) return;
     if (TRACKMAP.outlineSource === 'svg' && TRACKMAP.outline.length >= 30) return;
     TRACKMAP.timer = setInterval(function () {
@@ -2674,6 +2757,11 @@
   }
 
   function tickTrackmapData() {
+    if (!raceHasSession()) {
+      loadTrackOutline();
+      stopTrackmapPoll();
+      return;
+    }
     loadTrackOutline();
     if (TRACKMAP.unknownCircuit) stopTrackmapPoll();
     else if (TRACKMAP.outlineSource === 'svg' && TRACKMAP.outline.length >= 30) stopTrackmapPoll();
@@ -2780,7 +2868,10 @@
 
   function refreshEstimateStatus() {
     var next;
-    if (!window.TrackmapEstimate) {
+    // 无 circuit / meeting 时只保留「等待场次信息」，不要写成「正在载入赛道轮廓」。
+    if (!raceHasSession()) {
+      next = '等待场次信息';
+    } else if (!window.TrackmapEstimate) {
       next = '估计模块未加载';
     } else if (TRACKMAP.unknownCircuit && TRACKMAP.outline.length < 30) {
       next = (TRACKMAP.status && String(TRACKMAP.status).indexOf('未识别') === 0)
@@ -2956,12 +3047,15 @@
       w, h, zoom, TRACKMAP.viewPanX || 0, TRACKMAP.viewPanY || 0, TRACKMAP.viewRotDeg,
       TRACKMAP.outline.length, TRACKMAP.outlineSource
     ].join('|');
+    if (!TRACKMAP.mapper && TRACKMAP.outline.length < 3) {
+      key += '|empty|' + (TRACKMAP.status || '');
+    }
     svg.setAttribute('width', String(w));
     svg.setAttribute('height', String(h));
     svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
     TRACKMAP.viewW = w;
     TRACKMAP.viewH = h;
-    if (key === TRACKMAP.viewKey && TRACKMAP.mapper) {
+    if (key === TRACKMAP.viewKey && (TRACKMAP.mapper || TRACKMAP.outline.length < 3)) {
       TRACKMAP.viewDirty = false;
       return;
     }
@@ -3547,7 +3641,8 @@
       var wrap = box.querySelector('.tm-wrap');
       var w = wrap ? wrap.clientWidth : 0;
       var h = wrap ? wrap.clientHeight : 0;
-      if (TRACKMAP.viewDirty || !TRACKMAP.mapper || w !== TRACKMAP.viewW || h !== TRACKMAP.viewH) {
+      // 无 mapper/轮廓时不要每帧重建空文案；只在脏标记或尺寸变化时重画。
+      if (TRACKMAP.viewDirty || w !== TRACKMAP.viewW || h !== TRACKMAP.viewH) {
         rebuildTrackmapView(box);
       }
       updateMarkerTransforms(now);
@@ -3577,7 +3672,7 @@
       TRACKMAP.outlineError = false;
       TRACKMAP.unknownCircuit = false;
       TRACKMAP.motion = {};
-      TRACKMAP.status = '估计 · 等待计时';
+      TRACKMAP.status = (raceNow.circuit || raceNow.meeting) ? '估计 · 等待计时' : '等待场次信息';
       TRACKMAP.viewDirty = true;
       TRACKMAP.viewKey = '';
       TRACKMAP.flagGeomKey = '';
@@ -3594,8 +3689,8 @@
     syncEstimatedField();
     ensureTrackmapPoll();
     startTrackmapMotion();
-    if (TRACKMAP.viewDirty || !TRACKMAP.mapper) drawTrackmap(box);
-    else updateMarkerTransforms(Date.now());
+    if (TRACKMAP.viewDirty) drawTrackmap(box);
+    else if (TRACKMAP.mapper) updateMarkerTransforms(Date.now());
     paintTrackmapFlags(box.querySelector('svg.tm-map'));
   }
 

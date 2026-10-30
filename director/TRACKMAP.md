@@ -8,7 +8,7 @@
 
 只读当前场次赛道的本地 SVG：`web-override/circuits/*.svg`（[f1db](https://github.com/f1db/f1db)，CC BY 4.0）。采样成折线，作为估计车位的弧长坐标。
 
-`CIRCUIT_SVG` 里的每条赛道都有对应文件，所以不再用 OpenF1 历史 `/v1/location` 当后备。名字对不上时，画面写「未识别赛道：…」，不联网。SVG 拉取失败时写「估计 · 轮廓加载失败」，并隔几秒再试。
+`CIRCUIT_SVG` 里的每条赛道都有对应文件，所以不再用 OpenF1 历史 `/v1/location` 当后备。还没有 circuit / meeting 时画面只写「等待场次信息」，不轮询轮廓（有场次且仍缺 SVG 时才按约 1.5s 再试）。名字对不上时，画面写「未识别赛道：…」，不联网。SVG 拉取失败时写「估计 · 轮廓加载失败」，并隔几秒再试。
 
 轮廓文件的起点不一定是起跑线。`CIRCUIT_PHASE` 里写 `offset`（沿路径走到计时线的弧长比例）和 `reverse`（比赛方向是否和文件方向相反）。`sectors` 是相对计时线的 `[S1 终点, S2 终点]`；没写的赛道赛段仍三等分。
 
