@@ -308,6 +308,76 @@ var stoppedLater = E.sampleMotion(stopped, 8000, 90000, false);
 near(stoppedLater, stoppedAt, 0.0005, 'hold still freezes');
 assert(stopped.coasting === false, 'hold does not coast');
 
+// Scheme 3：belief 前跳时画面不瞬移，沿圈加速度限制追上。
+var leap = E.stepMotion(null, 0.20, 0.28, 0, 90000, false, { exact: true });
+leap = E.stepMotion(leap, 0.20, 0.28, 3000, 90000, false, { exact: true });
+var leapShown = E.sampleMotion(leap, 3000, 90000, false);
+leap = E.stepMotion(leap, 0.38, 0.46, 3000, 90000, false, { exact: true });
+var leapTick = E.sampleMotion(leap, 3000, 90000, false);
+assert(Math.abs(leapTick - leapShown) < 0.004, 'sector jump does not teleport on the same tick ' + leapTick + ' from ' + leapShown);
+assert(E.wrapDelta(leapTick - leapShown) >= -1e-9, 'same-tick sector jump stays monotonic');
+var leapPrev = leapTick;
+var leapT;
+for (leapT = 3016; leapT <= 3400; leapT += 16) {
+  var leapFrame = E.sampleMotion(leap, leapT, 90000, false);
+  var leapStep = E.wrapDelta(leapFrame - leapPrev);
+  assert(leapStep >= -1e-9, 'chase rolled back at ' + leapT + ' ' + leapFrame);
+  assert(leapStep < 0.006, 'single 16ms frame teleported at ' + leapT + ' d=' + leapStep);
+  leapPrev = leapFrame;
+}
+assert(leapPrev > leapTick + 0.004, 'starts catching the sector jump within 400ms ' + leapPrev);
+assert(leapPrev < leapTick + 0.10, '400ms does not cover the whole 0.18 jump ' + leapPrev);
+var leapCaught = E.sampleMotion(leap, 6500, 90000, false);
+assert(E.wrapDelta(leap.belief - leapCaught) < 0.015, 'caught belief within ~3.5s ' + leapCaught + ' vs ' + leap.belief);
+assert(E.wrapDelta(leapCaught - leapTick) > 0.10, 'actually closed the sector jump ' + leapCaught);
+
+var tiny = E.stepMotion(null, 0.30, 0.42, 0, 90000, false, { exact: true });
+tiny = E.stepMotion(tiny, 0.312, 0.43, 0, 90000, false, { exact: true });
+var tiny0 = E.sampleMotion(tiny, 0, 90000, false);
+near(tiny0, 0.30, 0.004, 'tiny update does not jump on the tick');
+var tiny400 = E.sampleMotion(tiny, 400, 90000, false);
+assert(E.wrapDelta(tiny400 - tiny0) > 0.004, 'small update still moves by 400ms ' + tiny400);
+assert(E.wrapDelta(tiny.belief - tiny400) < 0.004, 'small update caught by 400ms ' + tiny400 + ' vs ' + tiny.belief);
+
+var capLeap = E.stepMotion(null, 0.20, 0.22, 0, 90000, false, { exact: true });
+var capT;
+for (capT = 1000; capT <= 6000; capT += 1000) {
+  capLeap = E.stepMotion(capLeap, 0.20, 0.22, capT, 90000, false, { exact: true });
+}
+var capHeld = E.sampleMotion(capLeap, 6000, 90000, false);
+capLeap = E.stepMotion(capLeap, 0.20, 0.40, 6000, 90000, false, { exact: true });
+var capTick = E.sampleMotion(capLeap, 6000, 90000, false);
+assert(Math.abs(capTick - capHeld) < 0.003, 'cap leap does not teleport on the same tick ' + capTick);
+var capLater = E.sampleMotion(capLeap, 6360, 90000, false);
+assert(E.wrapDelta(capLater - capTick) > 0.001, 'cap leap starts chasing ' + capLater);
+assert(E.wrapDelta(capLater - capTick) < 0.05, 'cap leap chase is accel-limited ' + capLater);
+
+// 重置仍允许不连续：进站冻住；过起终点数值可回绕（沿圈仍向前）。
+var pitReset = E.stepMotion(null, 0.44, 0.55, 0, 90000, false, { exact: true });
+var pitBefore = E.sampleMotion(pitReset, 1500, 90000, false);
+pitReset = E.stepMotion(pitReset, 0.90, 0.95, 1500, 90000, false, { exact: true, pit: true });
+var pitAt = E.sampleMotion(pitReset, 1500, 90000, false);
+near(pitAt, pitBefore, 0.002, 'pit entry freezes instead of chasing the pit sample');
+var pitLater = E.sampleMotion(pitReset, 8000, 90000, false);
+near(pitLater, pitAt, 0.0005, 'pit stays frozen; chase does not keep sliding');
+
+var sf = E.stepMotion(null, 0.97, 0.995, 0, 90000, false, { exact: true });
+sf = E.stepMotion(sf, 0.02, 0.12, 500, 90000, false, { exact: true, freshLap: true });
+var sfTick = E.sampleMotion(sf, 500, 90000, false);
+assert(sfTick > 0.9, 'S/F tick stays near the line ' + sfTick);
+var sfPrev = sfTick;
+var sfN = 0;
+for (var sfT = 516; sfT <= 1400; sfT += 16) {
+  var sfNow = E.sampleMotion(sf, sfT, 90000, false);
+  var sfStep = E.wrapDelta(sfNow - sfPrev);
+  assert(sfStep >= -1e-9, 'S/F chase rolled back at ' + sfT + ' ' + sfNow);
+  assert(sfStep < 0.006, 'S/F single frame teleported at ' + sfT + ' d=' + sfStep);
+  sfPrev = sfNow;
+  sfN++;
+}
+assert(sfPrev < 0.12, 'S/F chase wraps across the line ' + sfPrev);
+assert(sfN > 10, 'S/F catch-up took more than one frame');
+
 var wrapCap = E.stepMotion(null, 0.90, 0.95, 0, 90000, false, { exact: true });
 wrapCap = E.stepMotion(wrapCap, 0.91, 0.08, 400, 90000, false, { exact: true });
 near(wrapCap.cap, 0.08, 0.001, 'cap rolls forward through the start/finish');
