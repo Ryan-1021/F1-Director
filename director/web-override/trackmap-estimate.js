@@ -10,7 +10,8 @@
  * cap 仍落后于画面）按最近沿圈速度衰减滑行，不钉死、不回退。画面进度
  * （display）沿圈严格单调，用加速度限制去追测量信念（belief / PLL）：
  * 赛段或计时突然前跳时平滑加速追上，接近目标提前减速，不瞬移；
- * 小更新仍然跟得上。进站 / 停车 /
+ * 小更新仍然跟得上。追上之后按约 1× 巡航接着走，不把画面钉死在卡住
+ * 的测量上（否则两格之间像停住，下一格再闪过去）。进站 / 停车 /
  * 换圈过线 / 大约 0.12 圈以上的后撤仍允许不连续。
  * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
  * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
@@ -55,6 +56,10 @@
   // 旧的 8× 巡航后单帧掉回 1×（看起来「一顿一顿」）。加速上限加高，
   // 起速不要挖那么久。单帧（16ms）在 13× 下约 0.002 圈，仍远低于瞬移。
   // 小更新（0.01 圈）大约 0.4s 内跟上。
+  // 追上后不要把 display 钉在 belief 上：cap 一卡住点就停死，下一格再
+  // 从近 0 拉到 vmax，看起来像停住再闪过去。已跟上则按 1× 巡航，允许
+  // 略超前 CHASE_CRUISE_LEAD，再交给 #21 coast。非 coast 时 vel 不低于
+  // fullSpeed，小跳不必每次 0→vmax。
   // 额外速度（圈/秒）= CHASE_KP × 误差（圈），再被 VMAX 卡住。
   var CHASE_KP = 5;
   // 追赶最高速度：圈速的倍数。13× ≈ 90s 圈里 7s 跑完一圈的距离。
@@ -62,8 +67,10 @@
   // 加速度：每秒最多加上这么多倍圈速。45 → 从 1× 到 13× 大约 0.27s，
   // 也够从 13× 在 KP 放软后的剩余误差里减速落地。
   var CHASE_ACCEL_X = 45;
-  // 小于这点误差直接咬住 belief，避免最后一截来回蹭。
+  // 小于这点误差视为已跟上，按 1× 巡航继续积，不把画面粘在 belief 上。
   var CHASE_SNAP = 0.0008;
+  // 略超前仍按 1× 巡航的带宽（约 1.6s / 90s 圈）。再拉开才衰减滑行。
+  var CHASE_CRUISE_LEAD = 0.018;
   // 积分步长。单次 sample 可能跨整秒（测试 / 切后台），必须拆开，
   // 否则 13× × 3s 会一次跳 ~0.43 圈。
   var CHASE_DT_MS = 12;
@@ -996,16 +1003,23 @@
   function chaseToward(st, belief, dt, fullSpeed) {
     var shown = (st.display != null && isFinite(st.display)) ? st.display : belief;
     if (!(st.vel > 0) && !st.coasting) st.vel = fullSpeed;
+    var prevBelief = (st.belief != null && isFinite(st.belief)) ? st.belief : shown;
+    var beliefVel = dt > 0 ? wrapDelta(belief - prevBelief) / dt : fullSpeed;
+    // cap 卡住时 belief 几乎不动（含 0.22× bleed）。这时不要把画面粘在
+    // belief 上，否则两格之间停死。belief 仍在按圈速走时，追上就停在
+    // 这一拍的帧末信念，剩下的 dt 不要继续往前跑。
+    var beliefPinned = !(beliefVel > fullSpeed * 0.45);
     var err0 = wrapDelta(belief - shown);
-    if (err0 < -0.0005 && err0 > -HOLD_BACK) {
+    if (err0 < -CHASE_CRUISE_LEAD && err0 > -HOLD_BACK) {
       if (!st.coasting) {
         var recent = st.trackSpeed > 0 ? st.trackSpeed : (st.vel > 0 ? st.vel : fullSpeed);
         if (recent > fullSpeed) recent = fullSpeed;
         st.coastSpeed = recent * COAST_START;
         st.coasting = true;
       }
-    } else if (err0 >= -0.0005) {
+    } else if (err0 >= -CHASE_CRUISE_LEAD) {
       st.coasting = false;
+      if (!(st.vel > fullSpeed)) st.vel = fullSpeed;
     }
     st.belief = belief;
     if (!(dt > 0)) return shown;
@@ -1027,15 +1041,15 @@
         st.coastSpeed = 0;
         break;
       }
-      if (err >= 0 && err <= CHASE_SNAP) {
+      if (!beliefPinned && err >= 0 && err <= CHASE_SNAP) {
         shown = belief;
-        st.vel = fullSpeed;
+        if (!(st.vel > fullSpeed)) st.vel = fullSpeed;
         st.coasting = false;
         st.coastSpeed = 0;
         break;
       }
       var desired;
-      if (err < -0.0005 && err > -HOLD_BACK) {
+      if (err < -CHASE_CRUISE_LEAD && err > -HOLD_BACK) {
         if (!st.coasting) {
           var seed = st.trackSpeed > 0 ? st.trackSpeed : (st.vel > 0 ? st.vel : fullSpeed);
           if (seed > fullSpeed) seed = fullSpeed;
@@ -1046,24 +1060,32 @@
         st.coastSpeed = Math.max(st.coastSpeed * Math.exp(-h / COAST_TAU_MS), fullSpeed * COAST_MIN);
       } else {
         st.coasting = false;
-        desired = fullSpeed + kp * Math.max(0, err);
-        if (desired > vmax) desired = vmax;
-        if (desired < 0) desired = 0;
+        // 已跟上或只略超前：1× 巡航。非 coast 时 vel 不低于 fullSpeed，
+        // 下一格小跳不必从 0 再爬 vmax。
+        if (!(st.vel > fullSpeed)) st.vel = fullSpeed;
+        if (err <= CHASE_SNAP) desired = fullSpeed;
+        else {
+          desired = fullSpeed + kp * err;
+          if (desired > vmax) desired = vmax;
+        }
+        if (desired < fullSpeed) desired = fullSpeed;
       }
       var vel = st.vel;
-      if (!(vel > 0) && !st.coasting) vel = fullSpeed;
+      if (!st.coasting && !(vel > fullSpeed)) vel = fullSpeed;
       var dv = desired - vel;
       var maxDv = aMax * h;
       if (dv > maxDv) dv = maxDv;
       if (dv < -maxDv) dv = -maxDv;
       vel += dv;
       if (vel < 0) vel = 0;
+      if (!st.coasting && vel < fullSpeed) vel = fullSpeed;
       if (err >= 0 && vel > vmax) vel = vmax;
       var step = vel * h;
       if (st.coasting && step > COAST_STEP_MAX) step = COAST_STEP_MAX;
       if (err >= 0) {
-        if (step > err) {
-          step = err;
+        var slack = beliefPinned ? CHASE_CRUISE_LEAD : 0;
+        if (step > err + slack) {
+          step = err + slack;
           vel = fullSpeed;
         }
       } else {
@@ -1685,6 +1707,7 @@
     CHASE_VMAX_X: CHASE_VMAX_X,
     CHASE_ACCEL_X: CHASE_ACCEL_X,
     CHASE_SNAP: CHASE_SNAP,
+    CHASE_CRUISE_LEAD: CHASE_CRUISE_LEAD,
     ratchetCap: ratchetCap,
     beliefOf: beliefOf,
     chaseToward: chaseToward,
