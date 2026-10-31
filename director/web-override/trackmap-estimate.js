@@ -7,8 +7,10 @@
  * 被套圈（"1 LAP"）不用时间差，改回各车自己的赛段。
  * 两次计时之间按参考圈速外推。测量 cap 沿圈只向前收（棘轮），迷你赛段
  * 闪烁不会把上限拉到已画位置后面。新采样只比画面略靠后时（差距抖动、
- * cap 仍落后于画面）按最近沿圈速度衰减滑行，不钉死、不回退；进站 / 停车 /
- * 大约 0.12 圈以上的后撤仍收回。
+ * cap 仍落后于画面）按最近沿圈速度衰减滑行，不钉死、不回退。画面进度
+ * （display）沿圈严格单调，用加速度限制去追测量信念（belief / PLL）：
+ * 赛段或计时突然前跳时加速追上，不瞬移；小更新仍然跟得上。进站 / 停车 /
+ * 换圈过线 / 大约 0.12 圈以上的后撤仍允许不连续。
  * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
  * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
@@ -47,6 +49,20 @@
   var COAST_TAU_MS = 900;
   var COAST_MIN = 0.12;
   var COAST_STEP_MAX = 0.0035;
+  // Scheme 3：画面追 belief。墨西哥站那种赛段/计时一次前跳 0.08–0.12 圈
+  // 时，8× 圈速大约 1.5–2s 追上，单帧（16ms）最多挪 ~0.001 圈，看起来是
+  // 加速而不是瞬移。小更新（0.01 圈）KP 够大，大约 0.3s 内跟上。
+  // 额外速度（圈/秒）= CHASE_KP × 误差（圈），再被 VMAX 卡住。
+  var CHASE_KP = 12;
+  // 追赶最高速度：圈速的倍数。8× ≈ 90s 圈里 11s 跑完一圈的距离。
+  var CHASE_VMAX_X = 8;
+  // 加速度：每秒最多加上这么多倍圈速。22 → 从 1× 到 8× 大约 0.32s。
+  var CHASE_ACCEL_X = 22;
+  // 小于这点误差直接咬住 belief，避免最后一截来回蹭。
+  var CHASE_SNAP = 0.00035;
+  // 积分步长。单次 sample 可能跨整秒（测试 / 切后台），必须拆开，
+  // 否则 8× × 3s 会一次跳 0.27 圈。
+  var CHASE_DT_MS = 12;
 
   /**
    * 沿圈取更靠前的 cap。newCap 略落后时保住 previous；
@@ -929,6 +945,7 @@
       at: now,
       seen: now,
       display: frac,
+      belief: frac,
       cap: null,
       lastTarget: frac,
       pit: false,
@@ -939,10 +956,129 @@
       easeTo: null,
       easeStart: 0,
       easeMs: 0,
+      vel: 0,
       trackSpeed: 0,
       coastSpeed: 0,
       coasting: false
     };
+  }
+
+  /** 这一拍的测量信念：锚点按圈速外推，再夹到棘轮 cap（含少量 bleed）。 */
+  function beliefOf(st, now, lapMs) {
+    var scale = st.lapScale > 0 ? st.lapScale : 1;
+    var ms = (lapMs > 1 ? lapMs : 90000) * scale;
+    var adv = Math.max(0, now - st.at) / ms;
+    if (st.cap != null && isFinite(st.cap)) {
+      var room = wrap01(st.cap - st.anchor);
+      if (room > 0.98) room = 0;
+      else if (room > 0.5) room = null;
+      if (room != null && adv > room) {
+        if (room === 0) adv = 0;
+        else {
+          // 靠近上限时减速，不要在迷你赛段之间突然钉死。
+          var bleed = (adv - room) * 0.22;
+          if (bleed > 0.006) bleed = 0.006;
+          adv = room + bleed;
+        }
+      }
+    }
+    return wrap01(st.anchor + adv);
+  }
+
+  /**
+   * 画面沿圈追 belief：只向前（过起终点按短弧绕），加速度和最高速度封顶。
+   * dt 可能是整秒（测试一次采样 / 页签回前台），按 CHASE_DT_MS 拆开积。
+   */
+  function chaseToward(st, belief, dt, fullSpeed) {
+    var shown = (st.display != null && isFinite(st.display)) ? st.display : belief;
+    if (!(st.vel > 0) && !st.coasting) st.vel = fullSpeed;
+    var err0 = wrapDelta(belief - shown);
+    if (err0 < -0.0005 && err0 > -HOLD_BACK) {
+      if (!st.coasting) {
+        var recent = st.trackSpeed > 0 ? st.trackSpeed : (st.vel > 0 ? st.vel : fullSpeed);
+        if (recent > fullSpeed) recent = fullSpeed;
+        st.coastSpeed = recent * COAST_START;
+        st.coasting = true;
+      }
+    } else if (err0 >= -0.0005) {
+      st.coasting = false;
+    }
+    st.belief = belief;
+    if (!(dt > 0)) return shown;
+
+    var vmax = fullSpeed * CHASE_VMAX_X;
+    var aMax = fullSpeed * (CHASE_ACCEL_X / 1000);
+    var kp = CHASE_KP / 1000;
+    var t = 0;
+    while (t < dt) {
+      var h = dt - t;
+      if (h > CHASE_DT_MS) h = CHASE_DT_MS;
+      t += h;
+      var err = wrapDelta(belief - shown);
+      if (err <= -HOLD_BACK) {
+        // 大后撤不走 chase（换圈误判 / 重置）：允许一次不连续，交给 ease 或直接落到 belief。
+        shown = belief;
+        st.vel = 0;
+        st.coasting = false;
+        st.coastSpeed = 0;
+        break;
+      }
+      if (err >= 0 && err <= CHASE_SNAP) {
+        shown = belief;
+        st.vel = fullSpeed;
+        st.coasting = false;
+        st.coastSpeed = 0;
+        break;
+      }
+      var desired;
+      if (err < -0.0005 && err > -HOLD_BACK) {
+        if (!st.coasting) {
+          var seed = st.trackSpeed > 0 ? st.trackSpeed : (st.vel > 0 ? st.vel : fullSpeed);
+          if (seed > fullSpeed) seed = fullSpeed;
+          st.coastSpeed = seed * COAST_START;
+          st.coasting = true;
+        }
+        desired = st.coastSpeed;
+        st.coastSpeed = Math.max(st.coastSpeed * Math.exp(-h / COAST_TAU_MS), fullSpeed * COAST_MIN);
+      } else {
+        st.coasting = false;
+        desired = fullSpeed + kp * Math.max(0, err);
+        if (desired > vmax) desired = vmax;
+        if (desired < 0) desired = 0;
+      }
+      var vel = st.vel;
+      if (!(vel > 0) && !st.coasting) vel = fullSpeed;
+      var dv = desired - vel;
+      var maxDv = aMax * h;
+      if (dv > maxDv) dv = maxDv;
+      if (dv < -maxDv) dv = -maxDv;
+      vel += dv;
+      if (vel < 0) vel = 0;
+      if (err >= 0 && vel > vmax) vel = vmax;
+      var step = vel * h;
+      if (st.coasting && step > COAST_STEP_MAX) step = COAST_STEP_MAX;
+      if (err >= 0) {
+        if (step > err) {
+          step = err;
+          vel = fullSpeed;
+        }
+      } else {
+        var maxLead = HOLD_BACK - 0.002;
+        var proposed = wrap01(shown + Math.max(0, step));
+        if (wrapDelta(proposed - belief) > maxLead) {
+          step = wrapDelta(wrap01(belief + maxLead) - shown);
+          if (step < 0) step = 0;
+        }
+      }
+      if (step < 0) step = 0;
+      shown = wrap01(shown + step);
+      st.vel = vel;
+    }
+    if (st.vel > fullSpeed) st.trackSpeed = fullSpeed;
+    else if (st.vel > 0) st.trackSpeed = st.vel;
+    else if (!(st.trackSpeed > 0)) st.trackSpeed = fullSpeed;
+    st.belief = belief;
+    return shown;
   }
 
   function sampleMotion(st, now, lapMs, frozen) {
@@ -959,71 +1095,33 @@
         var d = wrapDelta(st.easeTo - st.easeFrom);
         var eased = wrap01(st.easeFrom + d * s);
         st.display = eased;
+        st.belief = st.easeTo;
         st.coasting = false;
+        st.vel = 0;
         return eased;
       }
       st.display = st.easeTo;
       st.anchor = st.easeTo;
+      st.belief = st.easeTo;
       st.at = now;
       st.easeTo = null;
       st.easeFrom = null;
       st.coasting = false;
+      st.vel = 0;
     }
     if (frozen || st.hold || st.pit || st.hide) {
       st.display = st.anchor;
+      st.belief = st.anchor;
       st.coasting = false;
       st.coastSpeed = 0;
+      st.vel = 0;
       return st.anchor;
     }
     var scale = st.lapScale > 0 ? st.lapScale : 1;
     var ms = (lapMs > 1 ? lapMs : 90000) * scale;
     var fullSpeed = 1 / ms;
-    var adv = Math.max(0, now - st.at) / ms;
-    if (st.cap != null && isFinite(st.cap)) {
-      var room = wrap01(st.cap - st.anchor);
-      if (room > 0.98) room = 0;
-      else if (room > 0.5) room = null;
-      if (room != null && adv > room) {
-        if (room === 0) adv = 0;
-        else {
-          // 靠近上限时减速，不要在迷你赛段之间突然钉死。
-          var bleed = (adv - room) * 0.22;
-          if (bleed > 0.006) bleed = 0.006;
-          adv = room + bleed;
-        }
-      }
-    }
-    var next = wrap01(st.anchor + adv);
-    // 夹到 cap / 新采样略落后时，不要把已画出的点钉死。按最近沿圈速度
-    // 衰减往前蹭，直到测量追上。大回撤仍走 ease。
-    if (st.display != null && isFinite(st.display)) {
-      var pull = wrapDelta(next - st.display);
-      if (pull < -0.0005 && pull > -HOLD_BACK) {
-        var recent = st.trackSpeed > 0 ? st.trackSpeed : fullSpeed;
-        if (!st.coasting) {
-          st.coastSpeed = recent * COAST_START;
-          st.coasting = true;
-        }
-        var step = st.coastSpeed * frameDt;
-        if (step > COAST_STEP_MAX) step = COAST_STEP_MAX;
-        var proposed = wrap01(st.display + step);
-        var maxLead = HOLD_BACK - 0.002;
-        if (wrapDelta(proposed - next) > maxLead) proposed = wrap01(next + maxLead);
-        if (wrapDelta(proposed - st.display) < 0) proposed = st.display;
-        next = proposed;
-        if (frameDt > 0) {
-          st.coastSpeed = Math.max(st.coastSpeed * Math.exp(-frameDt / COAST_TAU_MS), fullSpeed * COAST_MIN);
-        }
-      } else {
-        st.coasting = false;
-        if (frameDt > 1 && pull > 0) {
-          var inst = pull / frameDt;
-          st.trackSpeed = inst > fullSpeed ? fullSpeed : inst;
-        } else if (!(st.trackSpeed > 0)) {
-          st.trackSpeed = fullSpeed;
-        }
-      }
-    }
+    var belief = beliefOf(st, now, lapMs);
+    var next = chaseToward(st, belief, frameDt, fullSpeed);
     st.display = next;
     return next;
   }
@@ -1031,12 +1129,14 @@
   function rebaseMotion(st, shown, now) {
     st.anchor = shown;
     st.display = shown;
+    st.belief = shown;
     st.at = now;
     st.seen = now;
     st.easeTo = null;
     st.easeFrom = null;
     st.coasting = false;
     st.coastSpeed = 0;
+    st.vel = 0;
     return st;
   }
 
@@ -1045,10 +1145,10 @@
     var modeChanged = !!st.pit !== !!flags.pit || !!st.hold !== !!flags.hold;
     var targetMoved = st.lastTarget == null || Math.abs(wrapDelta(target - st.lastTarget)) > 0.0005;
     var err = wrapDelta(target - shown);
-    // 小步向前沿弧线滑过去。已经滑过点亮边界的不要为了对齐往回拽。
-    // 差了一大截（换圈、数据跳变）仍然沿短弧收回。
+    // 已经滑过点亮边界的不要为了对齐往回拽。
+    // 差了一大截（换圈、数据跳变）仍然沿短弧收回。前跳交给 chase，不 ease。
     var bigRewind = err < -HOLD_BACK;
-    if (modeChanged || (targetMoved && (err > 0.0008 || bigRewind))) {
+    if (modeChanged || (targetMoved && bigRewind)) {
       st.easeFrom = shown;
       st.easeTo = target;
       st.easeStart = now;
@@ -1057,6 +1157,14 @@
       st.anchor = target;
       st.at = now;
       st.display = shown;
+      st.belief = target;
+      st.coasting = false;
+      st.vel = 0;
+    } else if (targetMoved && err > 0.0008) {
+      st.anchor = target;
+      st.at = now;
+      st.display = shown;
+      st.belief = target;
       st.coasting = false;
     }
     applyMeasuredCap(st, cap, bigRewind || modeChanged);
@@ -1137,14 +1245,12 @@
       var shown = sampleMotion(st, now, lapMs, frozen);
       var behind = wrapDelta(target - shown);
       if (behind > 0.02 && behind < 0.5 && st.easeTo == null) {
+        // 下限抬高：belief 前移，画面仍走加速度限制，不 420ms ease 瞬移。
         var raised = wrap01(shown + behind * 0.85);
-        st.easeFrom = shown;
-        st.easeTo = raised;
-        st.easeStart = now;
-        st.easeMs = 420;
         st.anchor = raised;
         st.at = now;
         st.display = shown;
+        st.belief = raised;
         st.coasting = false;
       }
       applyMeasuredCap(st, cap, false);
@@ -1571,7 +1677,13 @@
     wrap01: wrap01,
     wrapDelta: wrapDelta,
     HOLD_BACK: HOLD_BACK,
+    CHASE_KP: CHASE_KP,
+    CHASE_VMAX_X: CHASE_VMAX_X,
+    CHASE_ACCEL_X: CHASE_ACCEL_X,
+    CHASE_SNAP: CHASE_SNAP,
     ratchetCap: ratchetCap,
+    beliefOf: beliefOf,
+    chaseToward: chaseToward,
     timeSeconds: timeSeconds,
     progressFromTiming: progressFromTiming,
     parseGap: parseGap,
