@@ -318,15 +318,23 @@ assert(Math.abs(leapTick - leapShown) < 0.004, 'sector jump does not teleport on
 assert(E.wrapDelta(leapTick - leapShown) >= -1e-9, 'same-tick sector jump stays monotonic');
 var leapPrev = leapTick;
 var leapT;
-for (leapT = 3016; leapT <= 3400; leapT += 16) {
+var leapPrevX = (leap.vel || 0) * 90000;
+var leapMaxDropX = 0;
+for (leapT = 3016; leapT <= 5000; leapT += 16) {
   var leapFrame = E.sampleMotion(leap, leapT, 90000, false);
   var leapStep = E.wrapDelta(leapFrame - leapPrev);
   assert(leapStep >= -1e-9, 'chase rolled back at ' + leapT + ' ' + leapFrame);
   assert(leapStep < 0.006, 'single 16ms frame teleported at ' + leapT + ' d=' + leapStep);
+  var leapX = (leap.vel || 0) * 90000;
+  if (leapPrevX - leapX > leapMaxDropX) leapMaxDropX = leapPrevX - leapX;
+  if (leapT === 3400) {
+    assert(leapFrame > leapTick + 0.004, 'starts catching the sector jump within 400ms ' + leapFrame);
+    assert(leapFrame < leapTick + 0.10, '400ms does not cover the whole 0.18 jump ' + leapFrame);
+  }
+  leapPrevX = leapX;
   leapPrev = leapFrame;
 }
-assert(leapPrev > leapTick + 0.004, 'starts catching the sector jump within 400ms ' + leapPrev);
-assert(leapPrev < leapTick + 0.10, '400ms does not cover the whole 0.18 jump ' + leapPrev);
+assert(leapMaxDropX < 2.2, 'chase landing slammed from high speed dropX=' + leapMaxDropX);
 var leapCaught = E.sampleMotion(leap, 6500, 90000, false);
 assert(E.wrapDelta(leap.belief - leapCaught) < 0.015, 'caught belief within ~3.5s ' + leapCaught + ' vs ' + leap.belief);
 assert(E.wrapDelta(leapCaught - leapTick) > 0.10, 'actually closed the sector jump ' + leapCaught);
