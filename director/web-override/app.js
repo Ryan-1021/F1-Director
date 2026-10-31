@@ -739,6 +739,19 @@
     if (avail <= 0 && wrap.parentElement) avail = wrap.parentElement.clientHeight || 0;
     if (avail <= 0) return;
 
+    // Empty overlay (no car rows / hidden table): never stretch or density-fit.
+    if (wrap.classList.contains('is-empty') || !boardHasCarRows(table)) {
+      setTableHeightPx(table, '');
+      wrap.__boardFit = {
+        avail: avail,
+        t: 1,
+        isSectors: !!isSectors,
+        exact: mode === 'exact',
+        stretched: false
+      };
+      return;
+    }
+
     var prev = wrap.__boardFit || {};
     if (Math.abs((prev.avail || 0) - avail) < 2 &&
         !!prev.isSectors === !!isSectors &&
@@ -752,12 +765,6 @@
       // During drag: no scrollHeight reads. Keep density; only adjust stretch.
       if (prev.t == null) {
         // First paint mid-drag: one light exact later via settle; for now fill.
-        // Empty boards still must not stretch (header would sit in the middle).
-        if (!boardHasCarRows(table)) {
-          setTableHeightPx(table, '');
-          wrap.__boardFit = { avail: avail, t: prev.t, isSectors: !!isSectors, exact: false, stretched: false };
-          return;
-        }
         setTableHeightPx(table, avail);
         wrap.__boardFit = { avail: avail, t: prev.t, isSectors: !!isSectors, exact: false, stretched: true };
         return;
@@ -798,13 +805,6 @@
       return;
     }
     // Spare vertical space: stretch table so leftover distributes across rows.
-    // Skip when empty — a lone header (or placeholder) would absorb the height
-    // and look vertically centered in the panel.
-    if (!boardHasCarRows(table)) {
-      setTableHeightPx(table, '');
-      wrap.__boardFit = { avail: avail, t: 1, isSectors: !!isSectors, exact: true, stretched: false };
-      return;
-    }
     setTableHeightPx(table, avail);
     wrap.__boardFit = { avail: avail, t: 1, isSectors: !!isSectors, exact: true, stretched: true };
   }
@@ -823,38 +823,42 @@
 
   var BOARD_EMPTY_COPY = '等待成绩数据';
 
-  function boardHeaderColCount(table) {
-    var head = table && table.querySelector('tr');
-    if (!head) return 1;
-    var n = head.querySelectorAll('th').length;
-    return n > 0 ? n : 1;
-  }
-
-  function ensureBoardEmptyRow(table) {
-    if (!table) return;
-    var rows = table.querySelectorAll('tr');
+  function ensureBoardHeader(table, cols) {
+    if (!table || !cols || !cols.length) return;
+    if (table.querySelector('th')) return;
+    var head = el('tr');
     var i;
-    var empty = null;
-    for (i = 0; i < rows.length; i++) {
-      if (rows[i].querySelector('th')) continue;
-      if (rows[i].classList.contains('board-empty')) {
-        empty = rows[i];
-        continue;
-      }
-      if (rows[i].parentNode) rows[i].parentNode.removeChild(rows[i]);
+    for (i = 0; i < cols.length; i++) {
+      head.appendChild(el('th', cols[i].cls || null, cols[i].label));
     }
-    if (empty) return;
-    var tr = el('tr', 'board-empty');
-    var td = el('td', null, BOARD_EMPTY_COPY);
-    td.setAttribute('colspan', String(boardHeaderColCount(table)));
-    tr.appendChild(td);
-    table.appendChild(tr);
+    if (table.firstChild) table.insertBefore(head, table.firstChild);
+    else table.appendChild(head);
   }
 
-  function removeBoardEmptyRow(table) {
+  function clearBoardTable(table) {
     if (!table) return;
-    var existing = table.querySelector('tr.board-empty');
-    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    while (table.firstChild) table.removeChild(table.firstChild);
+  }
+
+  /** Centered 等待成绩数据 overlay; hide table chrome (no header) until cars exist. */
+  function ensureBoardEmpty(wrap) {
+    if (!wrap) return;
+    wrap.classList.add('is-empty');
+    clearBoardTable(wrap.querySelector('table.timing'));
+    var empty = wrap.querySelector('.board-empty');
+    if (!empty) {
+      empty = el('div', 'board-empty tm-empty', BOARD_EMPTY_COPY);
+      wrap.appendChild(empty);
+    } else {
+      empty.textContent = BOARD_EMPTY_COPY;
+    }
+  }
+
+  function removeBoardEmpty(wrap) {
+    if (!wrap) return;
+    wrap.classList.remove('is-empty');
+    var empty = wrap.querySelector('.board-empty');
+    if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
   }
 
   function fitTimingTable(wrap, mode) {
@@ -884,6 +888,16 @@
   var SECTOR_COL_WEIGHTS = {
     pos: 7, who: 14, tyre: 10, best: 13, last: 13, s1: 14, s2: 14, s3: 15
   };
+  var SECTOR_HEAD_COLS = [
+    { label: '#', cls: 'num' },
+    { label: '车手', cls: 'who' },
+    { label: '轮胎', cls: 'col-tyre' },
+    { label: '最快圈', cls: 'col-best' },
+    { label: '本圈', cls: 'col-last' },
+    { label: 'S1', cls: 'col-s1' },
+    { label: 'S2', cls: 'col-s2' },
+    { label: 'S3', cls: 'col-s3' }
+  ];
 
   function applySectorColumnWidths(wrap) {
     if (!wrap) return;
@@ -1251,34 +1265,38 @@
     var table = wrap && wrap.querySelector('table.timing');
     // In-place update: keeps density fit + avoids wipe flicker on every SSE.
     if (wrap && table && table.getAttribute('data-live') === '1') {
-      if (cars.length) removeBoardEmptyRow(table);
-      var RS = rankSwapApi();
-      if (RS) {
-        RS.reconcile(table, cars, {
-          buildRow: buildTimingRow,
-          patchRow: patchTimingRow,
-          applyPlace: applyTimingPlace
-        });
+      if (!cars.length) {
+        ensureBoardEmpty(wrap);
       } else {
-        var rows = table.querySelectorAll('tr');
-        var data = [];
-        var di;
-        for (di = 0; di < rows.length; di++) {
-          if (rows[di].querySelector('th')) continue;
-          if (rows[di].classList.contains('board-empty')) continue;
-          data.push(rows[di]);
-        }
-        while (data.length > cars.length) {
-          var extra = data.pop();
-          if (extra && extra.parentNode) extra.parentNode.removeChild(extra);
-        }
-        for (var i = 0; i < cars.length; i++) {
-          var tr = data[i];
-          if (!tr) table.appendChild(buildTimingRow(cars[i]));
-          else patchTimingRow(tr, cars[i]);
+        removeBoardEmpty(wrap);
+        ensureBoardHeader(table, TIMING_COLS);
+        var RS = rankSwapApi();
+        if (RS) {
+          RS.reconcile(table, cars, {
+            buildRow: buildTimingRow,
+            patchRow: patchTimingRow,
+            applyPlace: applyTimingPlace
+          });
+        } else {
+          var rows = table.querySelectorAll('tr');
+          var data = [];
+          var di;
+          for (di = 0; di < rows.length; di++) {
+            if (rows[di].querySelector('th')) continue;
+            if (rows[di].classList.contains('board-empty')) continue;
+            data.push(rows[di]);
+          }
+          while (data.length > cars.length) {
+            var extra = data.pop();
+            if (extra && extra.parentNode) extra.parentNode.removeChild(extra);
+          }
+          for (var i = 0; i < cars.length; i++) {
+            var tr = data[i];
+            if (!tr) table.appendChild(buildTimingRow(cars[i]));
+            else patchTimingRow(tr, cars[i]);
+          }
         }
       }
-      if (!cars.length) ensureBoardEmptyRow(table);
       // Keep existing title + column picker; re-placing would stack .ptitle rows.
       // Prefer exact density fit (early-outs when size stable) so pop-out / first
       // layout after avail=0 still shrinks rows — cheap never recomputes scale.
@@ -1296,20 +1314,16 @@
     placeTimingColsControl(box, wrap);
     table = el('table', 'timing');
     table.setAttribute('data-live', '1');
-    var head = el('tr');
-    TIMING_COLS.forEach(function (col) {
-      head.appendChild(el('th', col.cls || null, col.label));
-    });
-    table.appendChild(head);
+    wrap.appendChild(table);
+    box.appendChild(wrap);
     if (!cars.length) {
-      ensureBoardEmptyRow(table);
+      ensureBoardEmpty(wrap);
     } else {
+      ensureBoardHeader(table, TIMING_COLS);
       for (var j = 0; j < cars.length; j++) {
         table.appendChild(buildTimingRow(cars[j]));
       }
     }
-    wrap.appendChild(table);
-    box.appendChild(wrap);
     fitTimingTable(wrap, 'exact');
     ensureBoardFitObserver(box, 'timing');
   }
@@ -1983,13 +1997,13 @@
     var wrap = box.querySelector('.sectors-wrap');
     var table = wrap && wrap.querySelector('table.timing');
     if (wrap && table && table.getAttribute('data-live') === '1') {
-      var overlay = box.querySelector('.sectors-empty');
-      if (overlay) overlay.remove();
       if (!cars.length) {
-        syncSectorsTable(table, [], computeSectorFieldBests([]));
-        ensureBoardEmptyRow(table);
+        var emptyNote = box.querySelector('.sectors-note');
+        if (emptyNote) emptyNote.remove();
+        ensureBoardEmpty(wrap);
       } else {
-        removeBoardEmptyRow(table);
+        removeBoardEmpty(wrap);
+        ensureBoardHeader(table, SECTOR_HEAD_COLS);
         var liveBests = computeSectorFieldBests(cars);
         syncSectorsTable(table, cars, liveBests);
         syncSectorsNote(box, liveBests.anySector);
@@ -2009,32 +2023,18 @@
     wrap = el('div', 'sectors-wrap');
     var t = el('table', 'timing sectors');
     t.setAttribute('data-live', '1');
-    var head = el('tr');
-    var headCols = [
-      { label: '#', cls: 'num' },
-      { label: '车手', cls: 'who' },
-      { label: '轮胎', cls: 'col-tyre' },
-      { label: '最快圈', cls: 'col-best' },
-      { label: '本圈', cls: 'col-last' },
-      { label: 'S1', cls: 'col-s1' },
-      { label: 'S2', cls: 'col-s2' },
-      { label: 'S3', cls: 'col-s3' }
-    ];
-    headCols.forEach(function (col) {
-      head.appendChild(el('th', col.cls, col.label));
-    });
-    t.appendChild(head);
+    wrap.appendChild(t);
+    box.appendChild(wrap);
     if (!cars.length) {
-      ensureBoardEmptyRow(t);
+      ensureBoardEmpty(wrap);
     } else {
+      ensureBoardHeader(t, SECTOR_HEAD_COLS);
       var bests = computeSectorFieldBests(cars);
       for (var i = 0; i < cars.length; i++) {
         t.appendChild(buildSectorsRow(cars[i], bests));
       }
       syncSectorsNote(box, bests.anySector);
     }
-    wrap.appendChild(t);
-    box.appendChild(wrap);
     wrap.__sectorCars = cars.length;
     fitSectorsTable(wrap, 'exact');
     ensureBoardFitObserver(box, 'sectors');
