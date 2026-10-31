@@ -1,9 +1,11 @@
 # Launch F1 Director (upstream jar + shell) in Edge/Chrome app mode (--app=).
-# Lifecycle: director.html pings a local heartbeat port. Closing the tab sends
-# /goodbye; if no heartbeat returns within GoodbyeGraceSec, Java is stopped.
+# Lifecycle: director.html pings a local heartbeat port every 4s. Closing the
+# tab/window sends /goodbye (fetchLater + visibility hidden + pagehide);
+# if no heartbeat returns within GoodbyeGraceSec, Java is stopped.
 # MissGraceSec is a longer safety net for crash/kill-tab without beacon.
 # Enter / console close / Stop.cmd remain as backups. F5 is safe: reload
-# heartbeats cancel a pending goodbye within a few seconds.
+# heartbeats cancel a pending goodbye within a few seconds. Tab switch /
+# minimize may arm goodbye but a still-alive pulse cancels it.
 param(
     [Parameter(Mandatory = $true)][string]$JavaExe,
     [Parameter(Mandatory = $true)][string]$Jar,
@@ -16,13 +18,13 @@ $DirectorUrl = 'http://127.0.0.1:8720/director.html'
 $HeartbeatPort = 8721
 $HeartbeatPrefix = "http://127.0.0.1:$HeartbeatPort/"
 $LaunchCmd = Join-Path $env:TEMP 'F1-Director-Server-Launch.cmd'
-# After /goodbye from pagehide: if no heartbeat within this window, stop Java.
-# Short enough to feel "close page => stop soon"; long enough that F5 reload
-# can reconnect and cancel the pending stop.
+# After /goodbye (visibility hidden / pagehide / fetchLater): if no heartbeat
+# within this window, stop Java. Short enough to feel "close page => stop soon";
+# long enough that F5 reload can reconnect and cancel the pending stop.
 $GoodbyeGraceSec = 3
 # Safety net if the tab dies without a goodbye beacon (crash / force-kill).
-# Worker + setInterval keep pings alive in background tabs; 10s (~1–2 missed 6s beats) is enough.
-$MissGraceSec = 10
+# Worker + setInterval keep pings alive in background tabs; 5s (~1 missed 4s beat) is enough.
+$MissGraceSec = 5
 # How long to wait for the first heartbeat after opening the browser.
 $FirstBeatWaitSec = 90
 
@@ -97,6 +99,7 @@ function Start-HeartbeatListener {
         LastBeatUtc    = $null
         SeenBeat       = $false
         PendingStopUtc = $null
+        GoodbyeLogged  = $false
         Ok             = $false
         Error          = $null
     }
@@ -132,22 +135,39 @@ function Pump-HeartbeatListener {
             $res.AddHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
             $res.AddHeader('Access-Control-Allow-Headers', 'Content-Type')
             $res.AddHeader('Cache-Control', 'no-store')
+            # Drain POST bodies (sendBeacon / fetchLater / keepalive) so the
+            # client connection can complete instead of stalling on Close().
+            if ($req.HasEntityBody) {
+                try {
+                    $drain = New-Object byte[] 1024
+                    while ($req.InputStream.Read($drain, 0, $drain.Length) -gt 0) { }
+                } catch {}
+            }
             if ($req.HttpMethod -eq 'OPTIONS') {
                 $res.StatusCode = 204
             } else {
                 $path = $req.Url.AbsolutePath.TrimEnd('/')
                 if ($path -eq '' -or $path -eq '/heartbeat' -or $path -eq '/ping') {
-                    # Any fresh heartbeat cancels a pending goodbye (covers F5).
+                    # Any fresh heartbeat cancels a pending goodbye (covers F5
+                    # and the still-alive pulse after a tab-switch hide).
+                    if ($State.PendingStopUtc) {
+                        Write-Host 'Heartbeat resumed; pending goodbye cancelled.'
+                    }
                     $State.LastBeatUtc = [DateTime]::UtcNow
                     $State.SeenBeat = $true
                     $State.PendingStopUtc = $null
+                    $State.GoodbyeLogged = $false
                     $res.StatusCode = 200
                     $buf = [System.Text.Encoding]::UTF8.GetBytes('ok')
                     $res.ContentType = 'text/plain; charset=utf-8'
                     $res.OutputStream.Write($buf, 0, $buf.Length)
                 } elseif ($path -eq '/goodbye' -or $path -eq '/stop') {
-                    # pagehide beacon: arm a short timer; kill only if no beat returns.
+                    # Arm a short timer; kill only if no beat returns.
                     $State.PendingStopUtc = [DateTime]::UtcNow
+                    if (-not $State.GoodbyeLogged) {
+                        $State.GoodbyeLogged = $true
+                        Write-Host 'Director sent goodbye; stopping in ~3s unless a heartbeat returns...'
+                    }
                     $res.StatusCode = 200
                     $buf = [System.Text.Encoding]::UTF8.GetBytes('bye')
                     $res.ContentType = 'text/plain; charset=utf-8'
@@ -233,11 +253,13 @@ if ($browser) {
 
 Write-Host ''
 Write-Host 'Director opened in app mode (no address bar / browser chrome).'
-Write-Host '- Close the director tab/window  => server stops in ~3s (goodbye + heartbeat)'
+Write-Host '- Close the director tab/window  => server stops in ~3s (goodbye); ~5s miss is backup'
+Write-Host '- Heartbeat every 4s'
 Write-Host '- Press Enter here               => stop the Director server'
 Write-Host '- Or close this console window   => server stops'
 Write-Host '- Or run Stop.cmd'
 Write-Host '- F5 refresh is safe             => reload cancels a pending goodbye'
+Write-Host '- Switching tabs / minimizing    => does not stop the server'
 Write-Host ''
 
 # Ensure cleanup if this PowerShell host is closed while waiting.
@@ -269,7 +291,7 @@ try {
             }
         } catch {}
 
-        # Explicit goodbye from pagehide: stop soon unless a heartbeat cancels it.
+        # Explicit goodbye: stop soon unless a heartbeat cancels it.
         if ($hb.Ok -and $hb.PendingStopUtc) {
             $byeAge = ([DateTime]::UtcNow - $hb.PendingStopUtc).TotalSeconds
             if ($byeAge -ge $GoodbyeGraceSec) {
@@ -308,9 +330,9 @@ try {
 }
 
 if ($stopReason -eq 'goodbye') {
-    Write-Host 'Director tab closed (goodbye). Stopping Director server...'
+    Write-Host 'Director tab closed (goodbye, ~3s). Stopping Director server...'
 } elseif ($stopReason -eq 'heartbeat') {
-    Write-Host 'Director tab closed (heartbeat lost). Stopping Director server...'
+    Write-Host 'Director tab closed (heartbeat lost, ~5s miss grace). Stopping Director server...'
 } elseif ($stopReason -eq 'enter') {
     Write-Host 'Stopping Director server...'
 } else {
