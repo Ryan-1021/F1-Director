@@ -4727,73 +4727,151 @@
   });
 
   // ---- lifecycle heartbeat (Run-Director.ps1 listens on :8721) ----
-  // Close tab → pagehide sends /goodbye; PS waits ~3s then kills Java unless a
-  // fresh heartbeat arrives (F5 reload cancels). MissGraceSec (~10s) is backup
-  // if the tab dies without a beacon. Enter / Stop.cmd still work.
-  // Prefer a Worker timer: main-thread setInterval is heavily throttled in
-  // background tabs and used to miss a short grace → false "server died".
-  function sendDirectorHeartbeat() {
+  // Close window/tab → /goodbye. PS waits GoodbyeGraceSec (~3s) then kills Java
+  // unless a fresh heartbeat arrives (F5 reload cancels). MissGraceSec (~5s) is
+  // backup if the tab dies without a beacon. Enter / Stop.cmd still work.
+  //
+  // Edge/Chrome --app hard-close often skips pagehide/beforeunload, so we:
+  //   1) queue fetchLater('/goodbye') while the page is alive (browser sends it
+  //      on document destroy even if JS does not run at close);
+  //   2) also beacon on visibilitychange→hidden (last reliable Chromium event)
+  //      and on pagehide;
+  //   3) if JS is still running ~1.2s later, pulse a heartbeat to cancel —
+  //      tab switch / minimize must NOT stop the jar.
+  // Do not heartbeat from beforeunload: that race can cancel a real goodbye
+  // when --app tears down. Prefer a Worker timer: main-thread setInterval is
+  // throttled in background tabs and used to miss a short grace.
+  var HB_INTERVAL_MS = 4000;
+  var HB_ALIVE_PULSE_MS = 1200;
+  var hbAlivePulseId = null;
+  var hbLaterAbort = null;
+
+  function directorBeacon(url, body) {
+    var payload = body == null ? 'ok' : String(body);
     try {
       if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-        navigator.sendBeacon(HB);
+        navigator.sendBeacon(url, new Blob([payload], { type: 'text/plain;charset=UTF-8' }));
       }
     } catch (e) {}
     try {
-      fetch(HB + '?t=' + Date.now(), {
-        method: 'GET',
-        cache: 'no-store',
-        mode: 'cors',
-        keepalive: true
-      }).catch(function () {});
-    } catch (e) {}
-  }
-  function sendDirectorGoodbye() {
-    // Arm a short pending-stop on the PS host. Do not use for visibility alone.
-    try {
-      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-        navigator.sendBeacon(HB_GOODBYE);
-      }
-    } catch (e) {}
-    try {
-      fetch(HB_GOODBYE + '?t=' + Date.now(), {
+      fetch(url + '?t=' + Date.now(), {
         method: 'POST',
         cache: 'no-store',
         mode: 'cors',
-        keepalive: true
+        keepalive: true,
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: payload
       }).catch(function () {});
     } catch (e) {}
   }
+
+  function sendDirectorHeartbeat() {
+    directorBeacon(HB, 'ok');
+  }
+
+  function sendDirectorGoodbye() {
+    // Arm a short pending-stop on the PS host. Pair with pulseIfStillAlive
+    // when this is fired from visibility hidden (tab may still be alive).
+    directorBeacon(HB_GOODBYE, 'bye');
+    try {
+      var img = new Image();
+      img.src = HB_GOODBYE + '?t=' + Date.now() + '&via=img';
+    } catch (e) {}
+  }
+
+  function armDeferredGoodbye() {
+    // Queue /goodbye in the browser so --app hard-close still delivers it.
+    // Tab hide alone does not send this (no activateAfter).
+    if (typeof fetchLater !== 'function') return;
+    try {
+      if (hbLaterAbort) hbLaterAbort.abort();
+    } catch (e) {}
+    hbLaterAbort = null;
+    try {
+      hbLaterAbort = new AbortController();
+      fetchLater(HB_GOODBYE, {
+        method: 'POST',
+        cache: 'no-store',
+        keepalive: true,
+        signal: hbLaterAbort.signal,
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: 'bye'
+      });
+    } catch (e) {
+      hbLaterAbort = null;
+    }
+  }
+
+  function cancelDeferredGoodbye() {
+    try {
+      if (hbLaterAbort) hbLaterAbort.abort();
+    } catch (e) {}
+    hbLaterAbort = null;
+  }
+
+  function pulseIfStillAlive() {
+    if (hbAlivePulseId) {
+      try { clearTimeout(hbAlivePulseId); } catch (e) {}
+      hbAlivePulseId = null;
+    }
+    hbAlivePulseId = setTimeout(function () {
+      hbAlivePulseId = null;
+      // JS still running => hidden, not destroyed. Cancel pending goodbye.
+      sendDirectorHeartbeat();
+    }, HB_ALIVE_PULSE_MS);
+  }
+
   sendDirectorHeartbeat();
+  armDeferredGoodbye();
   var hbIntervalId = null;
   try {
-    var hbBlob = new Blob(
-      ['setInterval(function () { postMessage(1); }, 6000);'],
-      { type: 'application/javascript' }
-    );
-    var hbWorker = new Worker(URL.createObjectURL(hbBlob));
+    var hbWorkerSrc = [
+      'var u = ' + JSON.stringify(HB) + ';',
+      'function beat() {',
+      '  try {',
+      '    fetch(u + "?t=" + Date.now(), {',
+      '      method: "POST", cache: "no-store", mode: "cors", keepalive: true,',
+      '      headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: "ok"',
+      '    }).catch(function () {});',
+      '  } catch (e) {}',
+      '}',
+      'beat();',
+      'setInterval(function () { beat(); postMessage(1); }, ' + HB_INTERVAL_MS + ');'
+    ].join('\n');
+    var hbWorker = new Worker(URL.createObjectURL(new Blob([hbWorkerSrc], { type: 'application/javascript' })));
     hbWorker.onmessage = function () { sendDirectorHeartbeat(); };
   } catch (e) {
-    hbIntervalId = setInterval(sendDirectorHeartbeat, 6000);
+    hbIntervalId = setInterval(sendDirectorHeartbeat, HB_INTERVAL_MS);
   }
   // Fallback / belt-and-suspenders if Worker is also throttled.
   if (!hbIntervalId) {
-    hbIntervalId = setInterval(sendDirectorHeartbeat, 6000);
+    hbIntervalId = setInterval(sendDirectorHeartbeat, HB_INTERVAL_MS);
   }
   window.addEventListener('pagehide', function (ev) {
     // bfcache freeze (persisted): keep the server; page may come back.
     // Real close / navigate / F5: goodbye. F5 reconnects within GoodbyeGrace.
     if (ev && ev.persisted) {
+      cancelDeferredGoodbye();
       sendDirectorHeartbeat();
       return;
     }
     sendDirectorGoodbye();
   });
-  // beforeunload: keep a heartbeat so soft navigations stay alive until
-  // pagehide decides goodbye; do not arm stop here (F5 fires this too).
-  window.addEventListener('beforeunload', sendDirectorHeartbeat);
-  document.addEventListener('visibilitychange', function () {
-    // Tab switch must NOT goodbye — only refresh the beat.
+  window.addEventListener('pageshow', function (ev) {
     sendDirectorHeartbeat();
+    if (ev && ev.persisted) armDeferredGoodbye();
+  });
+  // beforeunload: do not heartbeat here — on Edge --app close it can race
+  // and cancel a real goodbye if pagehide never follows.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      // Last reliable event on Chromium window close. Tab switch also fires
+      // this; pulseIfStillAlive + Worker beats cancel within GoodbyeGrace.
+      sendDirectorGoodbye();
+      pulseIfStillAlive();
+    } else {
+      sendDirectorHeartbeat();
+    }
   });
 
   connectFeed();

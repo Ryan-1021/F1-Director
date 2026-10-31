@@ -103,7 +103,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
    - 浏览器导播台标签 / Edge 应用窗也会用同一套 favicon（`director/assets/`）
 2. 也可以双击 `director\Start.cmd`（无自定义图标）。
 3. 脚本会：停掉旧实例 → 把 `director/` UI 发布到 `share/web/` → 用 `share/jre` 拉起 jar（端口 **8720**）→ 用 Edge/Chrome `--app=` 打开导播台。
-4. **关掉导播台标签/窗口后约 3 秒**会停 jar（`pagehide` → `/goodbye`）。F5 刷新不会误杀。若标签异常消失，约 **10 秒**无心跳也会停服（心跳间隔 **6 秒**）。也可随时 `director\Stop.cmd`。
+4. **关掉导播台标签/窗口后约 3 秒**会停 jar（`visibilitychange` hidden / `pagehide` / `fetchLater` → `/goodbye`）。F5 刷新不会误杀。切标签或最小化不会停服。若标签异常消失，约 **5 秒**无心跳也会停服（心跳间隔 **4 秒**）。也可随时 `director\Stop.cmd`。
 
 端口：
 
@@ -155,13 +155,14 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 正赛预设种子：成绩榜略增高、赛道图略减矮（`director/layouts.json`）
 - 天气顶栏：气温、赛道温、湿度、风速风向（中文方位）、气压 hPa、降雨文案；悬停分项提示
 - 状态列 SVG：进站 / 出站 / 停止 / 退赛 / 出局等
-- 页面关闭自动停服；心跳 **6s**，告别宽限约 **3s**，失联兜底约 **10s**
+- 页面关闭自动停服；心跳 **4s**，告别宽限约 **3s**，失联兜底约 **5s**
 ---
 
 ## 开发与发布备注
 
 - 改 `director/web-override/` 或 `director.html` 后跑一次 `director\Publish-Web.cmd`，或直接再开 `启动导播台.exe`（启动流程会发布）。
 - 排名换行自测：`node director/web-override/rank-swap.test.js`；界面上换位成绩榜或赛段成绩里任意两车的 POS 应看到整行滑动。
+- 关页停服时序自测：`node director/lifecycle-heartbeat.test.js`（心跳 4s / 告别 ~3s / 失联 ~5s）。
 - `share/web/` 为生成物，以 `director/` 为源。
 - 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
