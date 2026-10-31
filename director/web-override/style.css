@@ -704,21 +704,24 @@ table.timing tbody tr.retired:nth-child(even) > td {
   background: var(--stripe-row);
 }
 
-/* Empty timing / sector board: muted placeholder, no stripe or hover fill. */
-table.timing tr.board-empty > td {
-  color: var(--muted);
-  text-align: center;
-  font-weight: 500;
-  letter-spacing: .02em;
-  white-space: normal;
-  border-bottom: none;
-  padding: 14px 8px;
+/* Empty timing / sector board: overlay in the wrap (no table header / chrome).
+   Type matches SVG .tm-empty; .board-empty only positions the HTML copy. */
+.timing-wrap.is-empty > table.timing,
+.sectors-wrap.is-empty > table.timing {
+  display: none;
 }
-table.timing tr.board-empty:hover > td,
-table.timing tr.board-empty:nth-child(even) > td,
-table.timing tbody tr.board-empty:nth-child(even) > td,
-table.timing tr.board-empty:hover:nth-child(even) > td {
-  background: transparent;
+.timing-wrap > .board-empty,
+.sectors-wrap > .board-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* Rank-row swap (FLIP / translateY). Not the jar drop5/drop10/flash blink. */
@@ -1489,8 +1492,12 @@ html[data-theme="day"] .tm-dir-arrow {
   font-size: 13px;
   font-weight: 600;
   fill: rgba(176, 190, 197, 0.92);
+  color: rgba(176, 190, 197, 0.92);
 }
-html[data-theme="day"] .tm-empty { fill: rgba(69, 90, 100, 0.95); }
+html[data-theme="day"] .tm-empty {
+  fill: rgba(69, 90, 100, 0.95);
+  color: rgba(69, 90, 100, 0.95);
+}
 .tm-tla {
   font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-size: 10px;

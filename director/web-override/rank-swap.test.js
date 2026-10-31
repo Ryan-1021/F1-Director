@@ -81,7 +81,17 @@ assert(RS.DURATION_MS >= 280 && RS.DURATION_MS <= 350, 'duration in agreed windo
   };
   var rows = RS.dataRows(table);
   assert(rows.length === 1 && rows[0].getAttribute('data-car') === '1',
-    'dataRows skips board-empty placeholder');
+    'dataRows skips leftover board-empty tr');
+
+  var headerOnly = {
+    querySelectorAll: function () { return [fakeTr({ th: {} })]; }
+  };
+  assert(RS.dataRows(headerOnly).length === 0,
+    'dataRows header-only (empty overlay is outside the table)');
+
+  var noRows = { querySelectorAll: function () { return []; } };
+  assert(RS.dataRows(noRows).length === 0,
+    'dataRows empty table with no header');
 })();
 
 assert(RS.prefersReducedMotion(function () { return { matches: true }; }) === true, 'reduce on');
