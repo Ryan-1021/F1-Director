@@ -2104,8 +2104,10 @@
     syncTrackmapHead(el, boardId);
   }
 
-  /** Prefer in-place board switch (keeps the iframe and its trackmap cache). Fall back to iframe recreate. */
-  function applyBoardToPanel(el, boardId) {
+  /** Prefer in-place board switch (keeps the iframe and its trackmap cache).
+   *  Pass force=true to skip that path and recreate the iframe with a
+   *  cache-bust — used by 「刷新看板」 so a wedged trackmap recovers. */
+  function applyBoardToPanel(el, boardId, force) {
     var body = el.querySelector('.p-body');
     if (!body) return;
     el.classList.toggle('board-flags', boardId === 'flags');
@@ -2119,13 +2121,13 @@
       syncBoardChrome(el, boardId);
     }
 
-    if (oldFrame && oldFrame.getAttribute('data-board') === boardId) {
+    if (!force && oldFrame && oldFrame.getAttribute('data-board') === boardId) {
       finishLive(oldFrame);
       return;
     }
 
     // Same iframe document: switch renderer without reload (fast path for 赛道图).
-    if (oldFrame) {
+    if (!force && oldFrame) {
       try {
         var w = oldFrame.contentWindow;
         if (w && w.F1 && typeof w.F1.setBoard === 'function' && w.F1.setBoard(boardId)) {
@@ -4104,7 +4106,9 @@
   document.getElementById('btnReloadAll').addEventListener('click', function () {
     Object.keys(panels).forEach(function (id) {
       var p = panels[id];
-      if (p.type === 'board' && p.el) applyBoardToPanel(p.el, p.board || 'timing');
+      // Hard-recreate board iframes only. Live (and any other non-board
+      // panel) is skipped so the livestream keeps playing.
+      if (p.type === 'board' && p.el) applyBoardToPanel(p.el, p.board || 'timing', true);
     });
     checkHealth();
   });
