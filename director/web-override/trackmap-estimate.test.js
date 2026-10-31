@@ -230,7 +230,8 @@ for (pinT = 1000; pinT <= 8000; pinT += 1000) {
   pinned = E.stepMotion(pinned, 0.20, 0.22, pinT, 90000, false, { exact: true });
 }
 var pinShown = E.sampleMotion(pinned, 8000, 90000, false);
-assert(pinShown < 0.23, 'repeated samples do not creep past the mini-sector cap ' + pinShown);
+assert(pinShown < 0.22 + E.CHASE_CRUISE_LEAD + 0.03,
+  'repeated samples stay bounded past the mini-sector cap ' + pinShown);
 assert(pinShown > 0.215, 'still allowed a little bleed at the cap ' + pinShown);
 
 // 迷你赛段褪了再点亮：exact 目标回到旧格子，cap 收紧，也不回退。
@@ -338,6 +339,48 @@ assert(leapMaxDropX < 2.2, 'chase landing slammed from high speed dropX=' + leap
 var leapCaught = E.sampleMotion(leap, 6500, 90000, false);
 assert(E.wrapDelta(leap.belief - leapCaught) < 0.015, 'caught belief within ~3.5s ' + leapCaught + ' vs ' + leap.belief);
 assert(E.wrapDelta(leapCaught - leapTick) > 0.10, 'actually closed the sector jump ' + leapCaught);
+var leapCruisePrev = leapCaught;
+var leapCruiseX = 1 / 90000;
+for (var leapCruiseT = 6516; leapCruiseT <= 8500; leapCruiseT += 16) {
+  var leapCruisePos = E.sampleMotion(leap, leapCruiseT, 90000, false);
+  var leapCruiseStep = E.wrapDelta(leapCruisePos - leapCruisePrev);
+  assert(leapCruiseStep >= -1e-9, 'post-catch rolled back at ' + leapCruiseT);
+  assert(leapCruiseStep < 0.006, 'post-catch frame teleported at ' + leapCruiseT + ' d=' + leapCruiseStep);
+  var leapVisX = (leapCruiseStep / 16) / leapCruiseX;
+  var leapVelX = (leap.vel || 0) / leapCruiseX;
+  assert(leapVelX > 0.7, 'after catching a sector jump, vel collapsed at ' + leapCruiseT + ' velX=' + leapVelX);
+  assert(leapVisX > 0.45, 'after catching a sector jump, visual speed near 0 at ' + leapCruiseT + ' visX=' + leapVisX);
+  leapCruisePrev = leapCruisePos;
+}
+
+var miniCruise = E.stepMotion(null, 0.20, 0.22, 0, 90000, false, { exact: true });
+var miniPrev = E.sampleMotion(miniCruise, 0, 90000, false);
+var miniNow = 0;
+var miniFracs = [0.22, 0.24, 0.26, 0.28, 0.30, 0.32];
+var miniCaps = [0.24, 0.26, 0.28, 0.30, 0.32, 0.34];
+for (var mi = 0; mi < miniFracs.length; mi++) {
+  var mt;
+  for (mt = miniNow + 16; mt < miniNow + 2000; mt += 16) {
+    var miniPos = E.sampleMotion(miniCruise, mt, 90000, false);
+    var miniStep = E.wrapDelta(miniPos - miniPrev);
+    assert(miniStep >= -1e-9, 'mini-sector between steps rolled back at ' + mt);
+    assert(miniStep < 0.006, 'mini-sector between steps teleported at ' + mt + ' d=' + miniStep);
+    if (mt > miniNow + 480) {
+      var miniVisX = (miniStep / 16) / leapCruiseX;
+      var miniVelX = (miniCruise.vel || 0) / leapCruiseX;
+      assert(miniVelX > 0.7, 'mini-sector between steps vel collapsed at ' + mt + ' velX=' + miniVelX);
+      assert(miniVisX > 0.45, 'mini-sector between steps parked at ' + mt + ' visX=' + miniVisX);
+    }
+    miniPrev = miniPos;
+  }
+  miniNow += 2000;
+  miniCruise = E.stepMotion(miniCruise, miniFracs[mi], miniCaps[mi], miniNow, 90000, false, { exact: true });
+  var miniTick = E.sampleMotion(miniCruise, miniNow, 90000, false);
+  var miniJump = E.wrapDelta(miniTick - miniPrev);
+  assert(miniJump >= -1e-9, 'mini-sector tick rolled back d=' + miniJump);
+  assert(Math.abs(miniJump) < 0.006, 'mini-sector tick teleported d=' + miniJump);
+  miniPrev = miniTick;
+}
 
 var tiny = E.stepMotion(null, 0.30, 0.42, 0, 90000, false, { exact: true });
 tiny = E.stepMotion(tiny, 0.312, 0.43, 0, 90000, false, { exact: true });
