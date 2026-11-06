@@ -18,6 +18,7 @@ node director/calibrate-circuit-phase.js --cache /tmp/mv
 2. MultiViewer 折线按弧长重采样成 400 点。在 flipY、反向、圆周移位上做 Umeyama 相似变换（平移、旋转、均匀缩放）。
 3. `marshalLights` 里 `length ≈ 0` 的点投到 SVG 折线上，最近点的弧长比例就是原始 offset。`reverse` 表示比赛方向和文件方向相反；为 true 时 offset 在掉头之后再量。
 4. 赛段：优先用 FIA 比赛笔记里的赛段中心线公里数，沿 MultiViewer 中心线走到对应比例，再投回 SVG。没有公里数、但图例写了「弯前/弯后多少米」时，用弯心在中心线上的位置加减这段距离。投影和距离比例差过 0.03，或者落点离开折线，就不写 `sectors`，运行时仍三等分。
+5. 旗语区段：把 `marshalSectors[].trackPosition` 投到同一条运行时折线，得到相对计时线的中点，再取相邻中点的前向中点当内部分界。写入 `flagCount` + `flagBounds`（n−1 个切点），**不要**写进计时 `sectors`。对齐还能用时取最新 `yearField`（因特拉戈斯起终点仍用 2019，旗语用 2023）。投影离开折线，或和 `length/周长` 差太远，就不写，运行时等分。
 
 「year」是选中那条轨迹 JSON 里的 `year` 字段。较新的 URL 年份经常回落到同一条轨迹；同一条赛道有多条轨迹时，取得和 SVG 残差最小的一条。
 
@@ -88,6 +89,14 @@ offset / reverse / sectors 是运行时用的值。奥斯汀的 offset 不是这
 - **marina-bay.svg**：和 `marina-bay-4.svg` 字节相同，`CIRCUIT_SVG` 只用带版本号的那份。
 - **spielberg-3.svg**：起终点可用（反向，offset 0.182），但示意图比中心线拉得开，残差 2.2%。FIA 2026 的 S1/S2 距离比例是 0.281 / 0.673，投到 SVG 上变成大约 0.332 / 0.699，差了一截，所以不写 sectors。
 - **jeddah-1.svg、imola-3.svg、interlagos-2.svg**：起终点贴合（残差 0.51%、0.14%、0.10%）。没有找到能对上当前布局的 FIA 赛段公里数或弯心计时环，sectors 留空，赛段三等分。2026 年「巴林站在马来西亚」是雪邦，不能用来标萨基尔；2026 西班牙站是马德里，巴塞罗那用的是 2025 年笔记。
+
+## 旗语区段（flagBounds）
+
+`sectors` 仍是计时 S1/S2。旗语区段另存 `flagCount` + `flagBounds`（相对进度 0 的 n−1 个内部分界）。运行时只有 `ring.count === flagCount` 才用，否则等分。其它赛道尚未写入，保持等分。
+
+| 赛道 | key | flag yearField | flagCount | 来源 | 备注 |
+| --- | ---: | ---: | ---: | --- | --- |
+| interlagos-2.svg | 14 | 2023 | 16 | MV marshalSectors 投影 | 圣保罗先落地。offset 仍是 2019 的 0.205；区段 9/10 约 `[0.5248, 0.5673)` / `[0.5673, 0.6213)` |
 
 ## 奥斯汀
 

@@ -640,6 +640,8 @@ assert(hyp(austinCue.tip, austinT1) < hyp(austinCue.origin, austinT1), 'Austin a
 var appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appSrc.indexOf('multiviewer.app') < 0, 'runtime does not call MultiViewer');
 assert(appSrc.indexOf('openf1') < 0 && appSrc.indexOf('OpenF1') < 0, 'runtime does not call OpenF1');
+assert(appSrc.indexOf('flagPaintCuts') >= 0, 'app slices flags with flagPaintCuts');
+assert(appSrc.indexOf('marshalSectors') < 0, 'runtime does not read MultiViewer marshalSectors');
 assert(appSrc.indexOf('tm-pit-count') >= 0, 'app paints a pit count');
 assert(appSrc.indexOf('data-tip') >= 0 && appSrc.indexOf('进站中的车数') >= 0, 'app wires a pit-count tooltip');
 assert(appSrc.indexOf('tabindex') >= 0, 'pit badge is focusable');
@@ -659,10 +661,14 @@ function parsePhases(block) {
   while ((m = re.exec(block))) {
     var body = m[2];
     var sectors = /sectors:\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\]/.exec(body);
+    var fc = /flagCount:\s*(\d+)/.exec(body);
+    var fb = /flagBounds:\s*\[([^\]]*)\]/.exec(body);
     out[m[1]] = {
       offset: +/offset:\s*([0-9.]+)/.exec(body)[1],
       reverse: /reverse:\s*true/.test(body),
-      sectors: sectors ? [+sectors[1], +sectors[2]] : null
+      sectors: sectors ? [+sectors[1], +sectors[2]] : null,
+      flagCount: fc ? +fc[1] : null,
+      flagBounds: fb ? fb[1].split(',').map(function (s) { return +s.trim(); }).filter(function (x) { return isFinite(x); }) : null
     };
   }
   return out;
@@ -748,6 +754,35 @@ near(E.progressFromTiming(miniCar, monacoPhase.sectors).frac, monacoPhase.sector
 near(E.progressFromTiming(miniCar, monzaPhase.sectors).frac, monzaPhase.sectors[0] * 0.5, 0.001, 'Monza S1 uses the sector end');
 assert(shanghaiPhase.reverse === true, 'Shanghai file direction is opposite the race');
 assert(phases['circuits/austin-1.svg'].offset === 0.522, 'Austin hand offset stays');
+assert(phases['circuits/austin-1.svg'].flagBounds == null, 'Austin flags stay equal-arc');
+var ilgPhase = phases['circuits/interlagos-2.svg'];
+assert(ilgPhase.offset === 0.205 && ilgPhase.reverse === false, 'Interlagos S/F phase stays');
+assert(ilgPhase.sectors == null, 'Interlagos timing sectors stay empty');
+assert(ilgPhase.flagCount === 16 && ilgPhase.flagBounds && ilgPhase.flagBounds.length === 15,
+  'Interlagos has 16 marshal flag bounds');
+var ilgCuts = E.flagPaintCuts(16, ilgPhase);
+near(ilgCuts[8], 0.5248, 0.00015, 'Interlagos sector 9 start');
+near(ilgCuts[9], 0.5673, 0.00015, 'Interlagos sector 9/10 cut');
+near(ilgCuts[10], 0.6213, 0.00015, 'Interlagos sector 10 end');
+near(ilgCuts[9] - ilgCuts[8], 0.0425, 0.0002, 'Interlagos sector 9 width');
+near(ilgCuts[10] - ilgCuts[9], 0.054, 0.0002, 'Interlagos sector 10 width');
+var ilgFallback = E.flagPaintCuts(19, ilgPhase);
+near(ilgFallback[1], 1 / 19, 1e-9, 'Interlagos falls back when ring.count differs');
+var ilgOrientedFlags = E.orientClosedOutline(
+  flipY(E.outlineFromSvg(fs.readFileSync(path.join(__dirname, 'circuits/interlagos-2.svg'), 'utf8'), 4)),
+  ilgPhase.offset, ilgPhase.reverse
+);
+var ilgArcFlags = E.buildArc(ilgOrientedFlags);
+var ilgSec9 = E.sliceArc(ilgArcFlags, ilgCuts[8], ilgCuts[9]);
+var ilgSec10 = E.sliceArc(ilgArcFlags, ilgCuts[9], ilgCuts[10]);
+assert(ilgSec9.length >= 2 && ilgSec10.length >= 2, 'Interlagos sectors 9/10 slice the outline');
+var ilgEq9 = E.sliceArc(ilgArcFlags, 8 / 16, 9 / 16);
+assert(Math.abs(ilgSec9[0].x - ilgEq9[0].x) + Math.abs(ilgSec9[0].y - ilgEq9[0].y) > 1,
+  'Interlagos sector 9 is not the equal-arc slice');
+Object.keys(phases).forEach(function (rel) {
+  if (rel === 'circuits/interlagos-2.svg') return;
+  assert(phases[rel].flagBounds == null, rel + ' has no flagBounds yet');
+});
 var shanghaiRaw = flipY(E.outlineFromSvg(fs.readFileSync(path.join(__dirname, 'circuits/shanghai-1.svg'), 'utf8'), 4));
 var shanghaiOriented = E.orientClosedOutline(shanghaiRaw, shanghaiPhase.offset, shanghaiPhase.reverse);
 var shanghaiZero = E.pointOnArc(E.buildArc(shanghaiOriented), 0);
@@ -815,6 +850,27 @@ var whole = E.sliceArc(square, 0, 1);
 near(whole[0].x, 0, 0.1, 'whole start');
 near(whole[whole.length - 1].x, 0, 0.1, 'whole end x');
 near(whole[whole.length - 1].y, 0, 0.1, 'whole end does not wrap early');
+
+var eqMids = [0.125, 0.375, 0.625, 0.875];
+var eqBounds = E.flagBoundsFromMids(eqMids);
+assert(eqBounds && eqBounds.length === 3, 'equal mids make 3 cuts');
+near(eqBounds[0], 0.25, 1e-9, 'equal cut 1');
+near(eqBounds[1], 0.5, 1e-9, 'equal cut 2');
+near(eqBounds[2], 0.75, 1e-9, 'equal cut 3');
+assert(E.flagBoundsFromMids([0.8, 0.1, 0.3]) == null, 'out-of-order mids rejected');
+assert(E.flagPaintCuts(0, null) == null, 'no cuts when count is 0');
+var eqCuts = E.flagPaintCuts(4, null);
+assert(eqCuts && eqCuts.length === 5 && eqCuts[0] === 0 && eqCuts[4] === 1, 'equal-arc ends');
+near(eqCuts[1], 0.25, 1e-9, 'equal-arc first cut');
+var realCuts = E.flagPaintCuts(4, { flagCount: 4, flagBounds: [0.2, 0.55, 0.8] });
+near(realCuts[1], 0.2, 1e-9, 'calibrated first cut');
+near(realCuts[2], 0.55, 1e-9, 'calibrated mid cut');
+var mismatchCuts = E.flagPaintCuts(16, { flagCount: 16, flagBounds: [0.2, 0.55, 0.8] });
+near(mismatchCuts[1], 1 / 16, 1e-9, 'wrong bound length falls back to equal-arc');
+var countMismatch = E.flagPaintCuts(19, { flagCount: 16, flagBounds: eqBounds.concat([0.9]) });
+near(countMismatch[1], 1 / 19, 1e-9, 'ring.count mismatch falls back to equal-arc');
+var badCuts = E.flagPaintCuts(4, { flagCount: 4, flagBounds: [0.8, 0.2, 0.9] });
+near(badCuts[1], 0.25, 1e-9, 'unsorted bounds fall back to equal-arc');
 
 var localY = E.marshalFlagPlan({
   level: 2, globalLevel: 2, yellowSectors: [10, '3'], doubleYellowSectors: [3]

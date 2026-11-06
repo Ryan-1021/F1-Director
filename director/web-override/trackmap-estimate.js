@@ -1304,7 +1304,8 @@
    * 裁判区段旗语 → 沿轮廓的涂色计划。
    * 数据是 TrackState：yellowSectors / doubleYellowSectors 是 1 起的区段号，
    * globalLevel 4/5/6 是虚拟安全车 / 安全车 / 红旗（整圈）。
-   * 没有弯道实测桩，调用方按 count 把圈程等分。
+   * 只决定哪一段是什么颜色。弧长边界由调用方用 flagPaintCuts 切：
+   * 有 CIRCUIT_PHASE.flagBounds 且 count 对齐时用真实裁判区段，否则等分。
    */
   function marshalFlagPlan(track, ringCount) {
     var t = track || {};
@@ -1340,6 +1341,67 @@
       }
     }
     return { full: full, sectors: sectors, count: n };
+  }
+
+  function equalFlagCuts(n) {
+    var out = [0];
+    for (var i = 1; i < n; i++) out.push(i / n);
+    out.push(1);
+    return out;
+  }
+
+  /**
+   * 由各旗语区段中点（相对进度 0、沿比赛方向）生成 n-1 个内部分界。
+   * 区段 1 从计时线 0 起，区段 n 在 1 结束；相邻中点取前向中点。
+   * 中点必须按区段号沿圈严格递增（只允许最后一段绕回起点）。
+   */
+  function flagBoundsFromMids(mids) {
+    if (!mids || mids.length < 2) return null;
+    var n = mids.length;
+    var phases = [];
+    var i;
+    for (i = 0; i < n; i++) {
+      var m = wrap01(+mids[i]);
+      if (!isFinite(m)) return null;
+      phases.push(m);
+    }
+    for (i = 1; i < n; i++) {
+      var step = wrap01(phases[i] - phases[i - 1]);
+      if (step < 1e-4 || step > 0.5) return null;
+    }
+    var wrapStep = wrap01(phases[0] - phases[n - 1]);
+    if (wrapStep < 1e-4 || wrapStep > 0.5) return null;
+    var bounds = [];
+    for (i = 0; i < n - 1; i++) {
+      var cut = wrap01(phases[i] + wrap01(phases[i + 1] - phases[i]) / 2);
+      if (!(cut > 0 && cut < 1)) return null;
+      if (bounds.length && !(cut > bounds[bounds.length - 1])) return null;
+      bounds.push(cut);
+    }
+    return bounds;
+  }
+
+  /**
+   * 旗语区段在定向弧上的切割点（n+1 个，从 0 到 1）。
+   * CIRCUIT_PHASE.flagBounds 是 n-1 个严格递增的内部分界（相对进度 0）。
+   * 区段 k 占 [cuts[k-1], cuts[k])。flagCount 与 n 对不上、或缺边界时，退回等分。
+   */
+  function flagPaintCuts(n, phase) {
+    n = parseInt(n, 10);
+    if (!isFinite(n) || n < 1) return null;
+    if (n > 64) n = 64;
+    var eq = equalFlagCuts(n);
+    var count = phase && phase.flagCount;
+    var bounds = phase && phase.flagBounds;
+    if (count !== n || !bounds || bounds.length !== n - 1) return eq;
+    var out = [0];
+    for (var i = 0; i < bounds.length; i++) {
+      var v = +bounds[i];
+      if (!(v > out[out.length - 1] && v < 1)) return eq;
+      out.push(v);
+    }
+    out.push(1);
+    return out;
   }
 
   /** 弧长区间 [frac0, frac1] 上的折线点。frac1 = 1 取路径终点，不绕回起点。 */
@@ -1739,6 +1801,8 @@
     pointOnArc: pointOnArc,
     sliceArc: sliceArc,
     marshalFlagPlan: marshalFlagPlan,
+    flagBoundsFromMids: flagBoundsFromMids,
+    flagPaintCuts: flagPaintCuts,
     sampleSvgPath: sampleSvgPath,
     longestPathD: longestPathD,
     outlineFromSvg: outlineFromSvg,

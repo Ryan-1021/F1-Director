@@ -2231,6 +2231,10 @@
   // （reverse 为 true 时先掉头再量）。sectors 是 [S1 终点, S2 终点]，相对计时线，沿比赛方向。
   // 没写 sectors 的赛道，赛段仍三等分。进度 0 就是方格旗（paintTrackmapFinish），不要另画一面旗。
   //
+  // flagCount / flagBounds 是旗语区段几何（离线把 MultiViewer 裁判区段投到轮廓），
+  // 不要和计时 sectors 混用。flagBounds 是 n-1 个内部分界，区段 1 从进度 0 起；
+  // ring.count 对不上或没写时，layoutTrackmapFlags 仍按 1/n 等分。目前只写入因特拉戈斯。
+  //
   // 这些数是离线对出来的：用和运行时一样的 outlineFromSvg（y 取负），
   // 对 MultiViewer 中心线做相似变换，把计时线投到折线上。运行时不请求 MultiViewer。
   // 重算脚本：director/calibrate-circuit-phase.js。对照表：circuit-phase-notes.md。
@@ -2239,7 +2243,7 @@
   // 和旧的 0.536 一样，都在 T20–T1 主直道上，不改。
   // 巴林 bahrain-3.svg 的轮廓对不上萨基尔大奖赛中心线，没有写相位。
   // 斯皮尔伯格只写了起终点：示意图拉得比较开，赛段终点没有稳稳落在折线上。
-  // 吉达、伊莫拉、因特拉戈斯没有对上可靠的赛段里程，赛段仍三等分。
+  // 吉达、伊莫拉、因特拉戈斯没有对上可靠的赛段里程，计时赛段仍三等分。
   var CIRCUIT_PHASE = {
     'circuits/jeddah-1.svg': { offset: 0.071, reverse: false },
     'circuits/melbourne-2.svg': { offset: 0.083, reverse: false, sectors: [0.335, 0.602] },
@@ -2264,7 +2268,12 @@
       sectors: [0.311, 0.715]
     },
     'circuits/mexico-city-3.svg': { offset: 0.014, reverse: false, sectors: [0.432, 0.792] },
-    'circuits/interlagos-2.svg': { offset: 0.205, reverse: false },
+    'circuits/interlagos-2.svg': {
+      offset: 0.205,
+      reverse: false,
+      flagCount: 16,
+      flagBounds: [0.0416, 0.1041, 0.1886, 0.267, 0.3511, 0.4332, 0.4874, 0.5248, 0.5673, 0.6213, 0.6818, 0.7402, 0.7974, 0.852, 0.9171]
+    },
     'circuits/las-vegas-1.svg': { offset: 0.475, reverse: false, sectors: [0.262, 0.539] },
     'circuits/lusail-1.svg': { offset: 0.004, reverse: false, sectors: [0.341, 0.633] },
     'circuits/yas-marina-2.svg': { offset: 0.623, reverse: true, sectors: [0.233, 0.684] }
@@ -3329,11 +3338,15 @@
     var n = parseInt(ring.count, 10) || 0;
     if (n < 0) n = 0;
     if (n > 64) n = 64;
+    var E = window.TrackmapEstimate;
+    var phase = circuitPhase(TRACKMAP.svgRel);
+    var cuts = (E && E.flagPaintCuts) ? E.flagPaintCuts(n, phase) : null;
     var geom = [
       TRACKMAP.viewKey || '',
       n,
       TRACKMAP.outline.length,
-      TRACKMAP.mapper ? 1 : 0
+      TRACKMAP.mapper ? 1 : 0,
+      cuts ? cuts.join(',') : 'eq'
     ].join('|');
     if (geom === TRACKMAP.flagGeomKey) return;
     TRACKMAP.flagGeomKey = geom;
@@ -3343,7 +3356,6 @@
     var fg = svg.querySelector('.tm-line-fg');
     var baseD = (fg && fg.getAttribute('d')) || '';
     if (full && full.getAttribute('d') !== baseD) full.setAttribute('d', baseD);
-    var E = window.TrackmapEstimate;
     var canSlice = !!(E && E.sliceArc && TRACKMAP.mapper && TRACKMAP.arc &&
       TRACKMAP.arc.total > 0 && n > 0 && baseD);
     var keep = {};
@@ -3357,7 +3369,9 @@
           node.style.display = 'none';
           g.appendChild(node);
         }
-        var pts = E.sliceArc(TRACKMAP.arc, (i - 1) / n, i / n);
+        var a = cuts ? cuts[i - 1] : (i - 1) / n;
+        var b = cuts ? cuts[i] : i / n;
+        var pts = E.sliceArc(TRACKMAP.arc, a, b);
         var d = '';
         for (var p = 0; p < pts.length; p++) {
           var mp = TRACKMAP.mapper(pts[p].x, pts[p].y);
