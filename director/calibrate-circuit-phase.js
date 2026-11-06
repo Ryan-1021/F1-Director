@@ -6,6 +6,9 @@
  * 在 flipY × 反向 × 圆周移位上做 Umeyama 相似变换（平移、旋转、均匀缩放），
  * 再把 length≈0 的 marshal light 投到 director 的 outlineFromSvg 折线上，
  * 最近点的弧长比例就是原始 offset。
+ * marshalSectors 用同一套变换投到进度 0，得到 flagCount / flagBounds
+ * （给 CIRCUIT_PHASE 用，不要写进计时 sectors）。区段 1 起点靠近计时线时
+ * 写成 n-1 个内部分界；否则写 n 个起点，允许跨过进度 0。
  *
  *   node director/calibrate-circuit-phase.js --cache /tmp/mv
  *   node director/calibrate-circuit-phase.js --cache /tmp/mv --only austin-1.svg
@@ -488,6 +491,110 @@ function round3(x) {
   return Math.round(x * 1000) / 1000;
 }
 
+function round4(x) {
+  return Math.round(x * 10000) / 10000;
+}
+
+function roundFlagBounds(bounds, asStarts) {
+  if (!bounds || !bounds.length) return null;
+  var out = [];
+  var seen = {};
+  var i;
+  for (i = 0; i < bounds.length; i++) {
+    var v = round4(bounds[i]);
+    if (asStarts) {
+      if (v >= 1) v = 0;
+      if (!(v >= 0 && v < 1)) return null;
+      var key = v.toFixed(4);
+      if (seen[key]) return null;
+      seen[key] = 1;
+    } else {
+      if (!(v > 0 && v < 1)) return null;
+      if (out.length && !(v > out[out.length - 1])) return null;
+    }
+    out.push(v);
+  }
+  return out;
+}
+
+/**
+ * 把 MultiViewer marshalSectors 的 trackPosition 投到运行时折线（curveSteps 4），
+ * 相对计时线得到各区段中点，再取相邻中点的前向中点当内部分界。
+ * 不写 CIRCUIT_PHASE.sectors（那是 FIA 计时 S1/S2）。
+ */
+function flagGeomFromMarshal(align, prodGeom, prodRaw, data) {
+  var sectors = data.marshalSectors || [];
+  var rows = [];
+  var i;
+  for (i = 0; i < sectors.length; i++) {
+    var s = sectors[i];
+    if (!s || !s.trackPosition || !isFinite(+s.number)) continue;
+    var p = { x: +s.trackPosition.x, y: +s.trackPosition.y };
+    if (!isFinite(p.x) || !isFinite(p.y)) continue;
+    var proj = phaseOnProd(align, prodGeom, prodRaw, p);
+    var len = isFinite(+s.length) ? +s.length : null;
+    var mvFrac = (len != null && align.mvGeom.per > 0) ? wrap01(len / align.mvGeom.per) : null;
+    rows.push({
+      n: +s.number,
+      phase: proj.phase,
+      distPct: proj.distPct,
+      mvFrac: mvFrac,
+      delta: mvFrac != null ? Math.abs(wrapDelta(proj.phase - mvFrac)) : null
+    });
+  }
+  rows.sort(function (a, b) { return a.n - b.n; });
+  if (rows.length < 4) return { reject: 'few' };
+  if (rows.length > 64) return { reject: 'too-many' };
+  for (i = 0; i < rows.length; i++) {
+    if (rows[i].n !== i + 1) return { reject: 'not-contiguous' };
+  }
+  var mids = rows.map(function (r) { return r.phase; });
+  var starts = E.flagBoundsFromMids(mids);
+  if (!starts) {
+    return {
+      reject: 'mids',
+      flagCount: rows.length,
+      mids: mids.map(function (v) { return +v.toFixed(4); })
+    };
+  }
+  var rawBounds = E.flagBoundsForPhase(starts);
+  var asStarts = !!(rawBounds && rawBounds.length === starts.length);
+  var bounds = roundFlagBounds(rawBounds, asStarts);
+  if (!bounds) {
+    return {
+      reject: 'mids',
+      flagCount: rows.length,
+      mids: mids.map(function (v) { return +v.toFixed(4); })
+    };
+  }
+  var maxDist = 0;
+  var maxDelta = 0;
+  var meanDelta = 0;
+  var deltaN = 0;
+  for (i = 0; i < rows.length; i++) {
+    if (rows[i].distPct > maxDist) maxDist = rows[i].distPct;
+    if (rows[i].delta != null) {
+      if (rows[i].delta > maxDelta) maxDelta = rows[i].delta;
+      meanDelta += rows[i].delta;
+      deltaN++;
+    }
+  }
+  if (deltaN) meanDelta /= deltaN;
+  // 旗语画在 SVG 上，只信投影离折线的距离。length/周长差是示意图拉伸
+  // （和计时 sectors 的 0.03 门闩同类），不拿来否决旗语边界。
+  var reject = null;
+  if (maxDist > 0.8) reject = 'proj';
+  return {
+    flagCount: rows.length,
+    flagBounds: reject ? null : bounds,
+    mids: mids.map(function (v) { return +v.toFixed(4); }),
+    maxDistPct: +maxDist.toFixed(4),
+    maxDelta: +maxDelta.toFixed(4),
+    meanDelta: +meanDelta.toFixed(4),
+    reject: reject
+  };
+}
+
 function phaseFromAlign(align) {
   var raw = align.rawOffset;
   var offset = align.reverseMv ? wrap01(1 - raw) : raw;
@@ -705,6 +812,7 @@ function main() {
       var sectorRaw = null;
       if (SECTOR_KM[c.svg]) sectorRaw = sectorFromKm(align, prodGeom, prodRaw, SECTOR_KM[c.svg]);
       else if (SECTOR_TURN[c.svg]) sectorRaw = sectorFromTurn(align, prodGeom, prodRaw, data.corners || [], SECTOR_TURN[c.svg]);
+      var flags = flagGeomFromMarshal(align, prodGeom, prodRaw, data);
       scored.push({
         requestYear: years[y].year,
         yearField: data.year,
@@ -716,7 +824,8 @@ function main() {
         prodProjDist: prod.dist,
         confidence: confidenceOf(align),
         sectors: acceptSectors(sectorRaw),
-        sectorRaw: sectorRaw
+        sectorRaw: sectorRaw,
+        flags: flags
       });
     }
     if (!scored.length) {
@@ -728,6 +837,16 @@ function main() {
     var pool = scored.filter(function (s) { return s.align.rms <= bestRms * 1.12; });
     pool.sort(function (a, b) { return (b.yearField || 0) - (a.yearField || 0); });
     var pick = pool[0];
+    // 旗语区段跟当前裁判岗，不跟残差最小的旧年轨迹。对齐还能用时取最新 yearField。
+    var flagCandidates = scored.filter(function (s) {
+      return s.flags && s.flags.flagBounds && s.confidence !== 'poor';
+    });
+    flagCandidates.sort(function (a, b) {
+      var dy = (b.yearField || 0) - (a.yearField || 0);
+      if (dy) return dy;
+      return (b.requestYear || 0) - (a.requestYear || 0);
+    });
+    var flagPick = flagCandidates.length ? flagCandidates[0] : null;
     results.push({
       svg: 'circuits/' + c.svg,
       file: c.svg,
@@ -765,6 +884,15 @@ function main() {
       sectorDistPct: pick.sectors ? pick.sectors.distPct : (pick.sectorRaw && pick.sectorRaw.distPct) || null,
       sectorSvgFull: pick.sectorRaw && pick.sectorRaw.svg ? pick.sectorRaw.svg.map(function (v) { return +v.toFixed(4); }) : null,
       sectorRejected: !pick.sectors && !!pick.sectorRaw,
+      flagCount: flagPick ? flagPick.flags.flagCount : null,
+      flagBounds: flagPick ? flagPick.flags.flagBounds : null,
+      flagYearField: flagPick ? flagPick.yearField : null,
+      flagRequestYear: flagPick ? flagPick.requestYear : null,
+      flagMaxDistPct: flagPick ? flagPick.flags.maxDistPct : (pick.flags && pick.flags.maxDistPct) || null,
+      flagMaxDelta: flagPick ? flagPick.flags.maxDelta : (pick.flags && pick.flags.maxDelta) || null,
+      flagMeanDelta: flagPick ? flagPick.flags.meanDelta : (pick.flags && pick.flags.meanDelta) || null,
+      flagMids: flagPick ? flagPick.flags.mids : (pick.flags && pick.flags.mids) || null,
+      flagReject: flagPick ? null : ((pick.flags && pick.flags.reject) || 'none'),
       svgPerim: +pick.align.svgPerim.toFixed(2),
       yearsTried: scored.map(function (s) {
         return {
@@ -773,7 +901,10 @@ function main() {
           rmsPct: +s.align.rmsPct.toFixed(3),
           offset: s.prodOffset,
           reverse: s.phase.reverse,
-          confidence: s.confidence
+          confidence: s.confidence,
+          flagCount: (s.flags && s.flags.flagCount) || null,
+          flagOk: !!(s.flags && s.flags.flagBounds),
+          flagReject: (s.flags && s.flags.reject) || null
         };
       })
     });
@@ -818,7 +949,8 @@ function main() {
       ' rms%=' + row.rmsPct + ' cerr=' + row.cornerMeanAbsErr +
       ' proj=' + row.projDist + ' ' + row.confidence +
       ' flipY=' + row.flipY + ' shift=' + row.shift +
-      (row.sectors ? ' sectors=' + row.sectors.join(',') : (row.sectorRejected ? ' sectors-rejected' : ''))
+      (row.sectors ? ' sectors=' + row.sectors.join(',') : (row.sectorRejected ? ' sectors-rejected' : '')) +
+      (row.flagBounds ? ' flags=' + row.flagCount + '@' + row.flagYearField : (row.flagReject ? ' flags-' + row.flagReject : ''))
     );
   }
   var slim = results.map(function (r) {

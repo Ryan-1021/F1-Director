@@ -10,7 +10,7 @@
 
 `CIRCUIT_SVG` 里的每条赛道都有对应文件，所以不再用 OpenF1 历史 `/v1/location` 当后备。还没有 circuit / meeting 时画面只写「等待场次信息」，不轮询轮廓（有场次且仍缺 SVG 时才按约 1.5s 再试）。名字对不上时，画面写「未识别赛道：…」，不联网。SVG 拉取失败时写「估计 · 轮廓加载失败」，并隔几秒再试。
 
-轮廓文件的起点不一定是起跑线。`CIRCUIT_PHASE` 里写 `offset`（沿路径走到计时线的弧长比例）和 `reverse`（比赛方向是否和文件方向相反）。`sectors` 是相对计时线的 `[S1 终点, S2 终点]`；没写的赛道赛段仍三等分。
+轮廓文件的起点不一定是起跑线。`CIRCUIT_PHASE` 里写 `offset`（沿路径走到计时线的弧长比例）和 `reverse`（比赛方向是否和文件方向相反）。`sectors` 是相对计时线的 `[S1 终点, S2 终点]`；没写的赛道赛段仍三等分。`flagCount` / `flagBounds` 是旗语区段几何，不是计时赛段。
 
 `CIRCUIT_SVG` 里除巴林以外的赛道都已写上相位。方格旗仍只画在**进度 0**（`paintTrackmapFinish` + `finishGrid` 的 4×2 小格，大约一条描边那么宽），offset 把进度 0 转到计时线之后，旗就在计时线上，没有第二套旗。
 
@@ -18,7 +18,7 @@
 
 比赛方向用同一条定向弧：`paintTrackmapDir` + `directionCue` 在进度 0 **稍后**画一枚小箭头（大约一条描边那么大），沿切线指向比赛方向。reverse / offset 已经写进轮廓，箭头不再另做一套方向。箭头沿外法向偏出灰线（默认 zoom 大约半条描边 + 2px 空隙 + 半个箭头宽，奥斯汀约 9px），不压在描边中心；叠在方格旗和车点之下，跟着平移 / 缩放 / 旋转走。日夜主题用不同的填充和描边，避免和灰线糊在一起。夜间底板跟圆环板同一套 `--ring-bg`（中心 `#121820`），不再是纯 `#080b10`。仓库 `docs/trackmap-dir-austin.png` 是奥斯汀默认 zoom 的日夜对照。
 
-相位是离线校准的，不是运行时请求。做法和奥斯汀那次对照一样：用运行时的 `outlineFromSvg`（并像 `loadSvgOutline` 那样把 y 取负），对 [MultiViewer](https://api.multiviewer.app/api/v1/circuits/) 的中心线做相似变换（平移、旋转、均匀缩放；试镜像和反向），再把 `length ≈ 0` 的 marshal light 投到折线上。导播台页面不调用 MultiViewer，也不调用 OpenF1。重算用 `node director/calibrate-circuit-phase.js`（需要事先放好的 JSON 缓存）。键、年份、置信度和取舍记在 `web-override/circuit-phase-notes.md`。
+相位是离线校准的，不是运行时请求。做法和奥斯汀那次对照一样：用运行时的 `outlineFromSvg`（并像 `loadSvgOutline` 那样把 y 取负），对 [MultiViewer](https://api.multiviewer.app/api/v1/circuits/) 的中心线做相似变换（平移、旋转、均匀缩放；试镜像和反向），再把 `length ≈ 0` 的 marshal light 投到折线上。同一套变换也会把 `marshalSectors` 投成 `flagBounds`。导播台页面不调用 MultiViewer，也不调用 OpenF1。重算用 `node director/calibrate-circuit-phase.js`（需要事先放好的 JSON 缓存）。键、年份、置信度和取舍记在 `web-override/circuit-phase-notes.md`。
 
 奥斯汀 `austin-1.svg` 逆时针，和比赛方向一致，`reverse` 仍是 **false**。文件起点在 **T11**：原始弧长 0 到大约 0.20 是 T11→T12 的大直线。计时线在另一条直道上，T20（原始约 0.504）和 T1（原始约 0.651）之间、靠近 T20，进度 0 保持原始弧长 **0.522**。这次重投影大约是 **0.537**（先前的对照是 0.536），两点都在 T20–T1 主直道上，所以不改手调值。S1 终点约在 T6 与 T7 之间（相对计时线 **0.311**），S2 终点在 T12 之后（相对计时线 **0.715**）。
 
@@ -51,7 +51,9 @@
 | `globalLevel` ≥ 6 红旗 | 整圈红 `#e10600`。官方红旗会清掉分区，没有「某一段红旗」 |
 | `globalLevel` 2 且两个区段列表都空 | 整圈黄（只有「有黄旗」、没有区段号时） |
 
-区段数用 `ring.count`（与圆环相同）。每一段占圈程的 `1/count`，区段 1 从**进度 0**起，沿估计车位的同一方向排下去。写了相位的赛道，进度 0 是计时线；巴林仍是 SVG 文件起点。这是等分，不是弯道 GPS，也不是计时用的 S1–S3。相位和真实裁判岗可能差一截；相对顺序与圆环一致。
+区段数用 `ring.count`（与圆环相同），沿估计车位的同一方向排下去。写了相位的赛道，进度 0 是计时线；巴林仍是 SVG 文件起点。这不是计时用的 S1–S3。等分时区段 1 仍从进度 0 起。
+
+有离线写入的 `CIRCUIT_PHASE.flagBounds`、且 `flagCount === ring.count` 时，按那些弧长边界上色（MultiViewer `marshalSectors` 投到 SVG 轮廓）。区段 1 起点靠近计时线时用 n−1 个内部分界；否则用 n 个起点，允许某一段跨过进度 0。对不上或没写边界的赛道仍按 `1/count` 等分（巴林无相位；斯皮尔伯格投影离线；巴库中点不沿圈递增）。相对顺序与圆环一致。
 
 ## 自测
 
@@ -63,6 +65,7 @@
 ## 还不准的地方
 
 - 写了 `sectors` 的赛道用 FIA 赛段里程（或图例里相对弯心的计时环）投到示意图上。没写的仍按圈程三等分，不是官方测距桩。斯皮尔伯格的示意图拉得比较开，赛段终点没有采用。
+- 旗语区段：有 `flagBounds` 的赛道用 MultiViewer 裁判岗投影，切点是相邻岗的中点，不是现场实测边界。`ring.count` 对不上、或巴林 / 斯皮尔伯格 / 巴库没有可用边界时仍等分。
 - 没有 GPS，统一 P 区、进站弯、安全车列车都对不齐真实赛道。
 - 巴林的本地轮廓对不上大奖赛中心线，起跑线仍是文件起点。其余已校准赛道的进度 0 在计时线附近，示意图本身仍有拉伸。
 - 正赛时间差在进站、被套圈、虚拟安全车时会漂；数据一更新会再靠拢。

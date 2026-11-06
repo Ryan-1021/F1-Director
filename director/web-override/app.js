@@ -2232,6 +2232,11 @@
   // （reverse 为 true 时先掉头再量）。sectors 是 [S1 终点, S2 终点]，相对计时线，沿比赛方向。
   // 没写 sectors 的赛道，赛段仍三等分。进度 0 就是方格旗（paintTrackmapFinish），不要另画一面旗。
   //
+  // flagCount / flagBounds 是旗语区段几何（离线把 MultiViewer 裁判区段投到轮廓），
+  // 不要和计时 sectors 混用。n-1 个内部分界 = 区段 1 从进度 0 起；n 个起点 = 允许跨过 0。
+  // ring.count 对不上或没写时，layoutTrackmapFlags 仍按 1/n 等分。
+  // 巴林无相位。斯皮尔伯格投影离线、巴库中点乱序，旗语仍等分。
+  //
   // 这些数是离线对出来的：用和运行时一样的 outlineFromSvg（y 取负），
   // 对 MultiViewer 中心线做相似变换，把计时线投到折线上。运行时不请求 MultiViewer。
   // 重算脚本：director/calibrate-circuit-phase.js。对照表：circuit-phase-notes.md。
@@ -2240,35 +2245,31 @@
   // 和旧的 0.536 一样，都在 T20–T1 主直道上，不改。
   // 巴林 bahrain-3.svg 的轮廓对不上萨基尔大奖赛中心线，没有写相位。
   // 斯皮尔伯格只写了起终点：示意图拉得比较开，赛段终点没有稳稳落在折线上。
-  // 吉达、伊莫拉、因特拉戈斯没有对上可靠的赛段里程，赛段仍三等分。
+  // 吉达、伊莫拉、因特拉戈斯没有对上可靠的赛段里程，计时赛段仍三等分。
   var CIRCUIT_PHASE = {
-    'circuits/jeddah-1.svg': { offset: 0.071, reverse: false },
-    'circuits/melbourne-2.svg': { offset: 0.083, reverse: false, sectors: [0.335, 0.602] },
-    'circuits/suzuka-2.svg': { offset: 0.591, reverse: false, sectors: [0.375, 0.810] },
-    'circuits/shanghai-1.svg': { offset: 0.436, reverse: true, sectors: [0.278, 0.558] },
-    'circuits/miami-1.svg': { offset: 0.040, reverse: false, sectors: [0.342, 0.664] },
-    'circuits/imola-3.svg': { offset: 0.887, reverse: false },
-    'circuits/monaco-6.svg': { offset: 0.335, reverse: false, sectors: [0.317, 0.739] },
-    'circuits/montreal-6.svg': { offset: 0.415, reverse: false, sectors: [0.251, 0.572] },
-    'circuits/catalunya-6.svg': { offset: 0.185, reverse: false, sectors: [0.230, 0.599] },
+    'circuits/jeddah-1.svg': { offset: 0.071, reverse: false, flagCount: 21, flagBounds: [0.0415, 0.1007, 0.1387, 0.1791, 0.2254, 0.2817, 0.3414, 0.4009, 0.455, 0.5047, 0.5526, 0.6004, 0.6648, 0.7203, 0.7443, 0.7737, 0.8262, 0.8787, 0.9141, 0.9517] },
+    'circuits/melbourne-2.svg': { offset: 0.083, reverse: false, sectors: [0.335, 0.602], flagCount: 20, flagBounds: [0.9482, 0.0218, 0.072, 0.1189, 0.1645, 0.2087, 0.2468, 0.2845, 0.3169, 0.3645, 0.4261, 0.4843, 0.5335, 0.582, 0.6276, 0.6786, 0.7326, 0.7836, 0.8424, 0.8836] },
+    'circuits/suzuka-2.svg': { offset: 0.591, reverse: false, sectors: [0.375, 0.810], flagCount: 22, flagBounds: [0.0566, 0.1296, 0.1648, 0.2065, 0.2453, 0.2776, 0.314, 0.3633, 0.4065, 0.4445, 0.4848, 0.5215, 0.5727, 0.6282, 0.67, 0.7033, 0.7418, 0.7879, 0.8366, 0.8911, 0.9422] },
+    'circuits/shanghai-1.svg': { offset: 0.436, reverse: true, sectors: [0.278, 0.558], flagCount: 20, flagBounds: [0.9696, 0.0292, 0.0675, 0.0896, 0.1216, 0.1783, 0.2386, 0.2817, 0.3245, 0.3629, 0.4038, 0.4514, 0.4957, 0.53, 0.5562, 0.6164, 0.7252, 0.8141, 0.8644, 0.9133] },
+    'circuits/miami-1.svg': { offset: 0.040, reverse: false, sectors: [0.342, 0.664], flagCount: 20, flagBounds: [0.924, 0.9714, 0.0062, 0.0385, 0.0724, 0.1087, 0.1593, 0.2135, 0.2519, 0.2956, 0.3603, 0.4408, 0.5006, 0.5308, 0.5575, 0.58, 0.6686, 0.7869, 0.8422, 0.8767] },
+    'circuits/imola-3.svg': { offset: 0.887, reverse: false, flagCount: 19, flagBounds: [0.9694, 0.0236, 0.074, 0.1257, 0.1873, 0.2559, 0.3104, 0.3505, 0.4151, 0.4839, 0.5279, 0.5699, 0.6193, 0.6749, 0.7323, 0.7879, 0.8395, 0.8862, 0.9221] },
+    'circuits/monaco-6.svg': { offset: 0.335, reverse: false, sectors: [0.317, 0.739], flagCount: 19, flagBounds: [0.9343, 0.9791, 0.0441, 0.1108, 0.1623, 0.2103, 0.2587, 0.3088, 0.3468, 0.3705, 0.3957, 0.4466, 0.5189, 0.5894, 0.6621, 0.7338, 0.7902, 0.8348, 0.8831] },
+    'circuits/montreal-6.svg': { offset: 0.415, reverse: false, sectors: [0.251, 0.572], flagCount: 15, flagBounds: [0.9593, 0.0441, 0.1109, 0.1592, 0.2094, 0.2496, 0.291, 0.3503, 0.4093, 0.462, 0.5345, 0.6172, 0.6944, 0.7949, 0.8872] },
+    'circuits/catalunya-6.svg': { offset: 0.185, reverse: false, sectors: [0.230, 0.599], flagCount: 16, flagBounds: [0.8189, 0.9337, 0.042, 0.0958, 0.1522, 0.2208, 0.2681, 0.3377, 0.4079, 0.449, 0.4912, 0.5495, 0.6204, 0.6692, 0.7023, 0.7474] },
     'circuits/spielberg-3.svg': { offset: 0.182, reverse: true },
-    'circuits/silverstone-8.svg': { offset: 0.939, reverse: false, sectors: [0.309, 0.730] },
-    'circuits/hungaroring-3.svg': { offset: 0.868, reverse: false, sectors: [0.396, 0.748] },
-    'circuits/spa-francorchamps-4.svg': { offset: 0.980, reverse: false, sectors: [0.322, 0.724] },
-    'circuits/zandvoort-5.svg': { offset: 0.135, reverse: false, sectors: [0.352, 0.693] },
-    'circuits/monza-7.svg': { offset: 0.692, reverse: false, sectors: [0.330, 0.644] },
+    'circuits/silverstone-8.svg': { offset: 0.939, reverse: false, sectors: [0.309, 0.730], flagCount: 16, flagBounds: [0.0202, 0.0877, 0.1532, 0.1877, 0.2324, 0.2848, 0.3391, 0.3956, 0.4595, 0.5455, 0.6277, 0.7007, 0.7733, 0.8568, 0.9338] },
+    'circuits/hungaroring-3.svg': { offset: 0.868, reverse: false, sectors: [0.396, 0.748], flagCount: 19, flagBounds: [0.973, 0.0186, 0.0754, 0.1373, 0.2026, 0.257, 0.3108, 0.3696, 0.4198, 0.48, 0.543, 0.5906, 0.6333, 0.6764, 0.724, 0.7965, 0.8595, 0.8925, 0.9284] },
+    'circuits/spa-francorchamps-4.svg': { offset: 0.980, reverse: false, sectors: [0.322, 0.724], flagCount: 21, flagBounds: [0.9702, 0.0097, 0.0547, 0.1033, 0.151, 0.2082, 0.282, 0.3384, 0.3814, 0.4376, 0.4921, 0.5412, 0.592, 0.6343, 0.6666, 0.7086, 0.7577, 0.8079, 0.8586, 0.9001, 0.9355] },
+    'circuits/zandvoort-5.svg': { offset: 0.135, reverse: false, sectors: [0.352, 0.693], flagCount: 19, flagBounds: [0.9009, 0.9707, 0.0352, 0.0847, 0.112, 0.1488, 0.2003, 0.2588, 0.2999, 0.3349, 0.3793, 0.4253, 0.4782, 0.5421, 0.6145, 0.6804, 0.7312, 0.7826, 0.8349] },
+    'circuits/monza-7.svg': { offset: 0.692, reverse: false, sectors: [0.330, 0.644], flagCount: 17, flagBounds: [0.9677, 0.036, 0.1035, 0.1583, 0.2075, 0.2494, 0.3053, 0.3741, 0.4455, 0.5079, 0.5592, 0.6011, 0.6364, 0.7101, 0.8124, 0.8861, 0.9261] },
     'circuits/baku-1.svg': { offset: 0.938, reverse: false, sectors: [0.354, 0.675] },
-    'circuits/marina-bay-4.svg': { offset: 0.056, reverse: false, sectors: [0.327, 0.694] },
-    'circuits/austin-1.svg': {
-      offset: 0.522,
-      reverse: false,
-      sectors: [0.311, 0.715]
-    },
-    'circuits/mexico-city-3.svg': { offset: 0.014, reverse: false, sectors: [0.432, 0.792] },
-    'circuits/interlagos-2.svg': { offset: 0.205, reverse: false },
-    'circuits/las-vegas-1.svg': { offset: 0.475, reverse: false, sectors: [0.262, 0.539] },
-    'circuits/lusail-1.svg': { offset: 0.004, reverse: false, sectors: [0.341, 0.633] },
-    'circuits/yas-marina-2.svg': { offset: 0.623, reverse: true, sectors: [0.233, 0.684] }
+    'circuits/marina-bay-4.svg': { offset: 0.056, reverse: false, sectors: [0.327, 0.694], flagCount: 16, flagBounds: [0.9619, 0.028, 0.0902, 0.1449, 0.2059, 0.2851, 0.3609, 0.4091, 0.4686, 0.5294, 0.5685, 0.6176, 0.6675, 0.7283, 0.8124, 0.8936] },
+    'circuits/austin-1.svg': { offset: 0.522, reverse: false, sectors: [0.311, 0.715], flagCount: 20, flagBounds: [0.9759, 0.0249, 0.0685, 0.1107, 0.1594, 0.2271, 0.2789, 0.3112, 0.3489, 0.4004, 0.4653, 0.5111, 0.5515, 0.609, 0.6732, 0.7233, 0.7795, 0.8284, 0.8726, 0.9275] },
+    'circuits/mexico-city-3.svg': { offset: 0.014, reverse: false, sectors: [0.432, 0.792], flagCount: 16, flagBounds: [0.0612, 0.1748, 0.2684, 0.342, 0.4017, 0.4653, 0.5251, 0.5654, 0.6082, 0.6526, 0.7101, 0.7857, 0.8463, 0.894, 0.9398] },
+    'circuits/interlagos-2.svg': { offset: 0.205, reverse: false, flagCount: 16, flagBounds: [0.0416, 0.1041, 0.1886, 0.267, 0.3511, 0.4332, 0.4874, 0.5248, 0.5673, 0.6213, 0.6818, 0.7402, 0.7974, 0.852, 0.9171] },
+    'circuits/las-vegas-1.svg': { offset: 0.475, reverse: false, sectors: [0.262, 0.539], flagCount: 21, flagBounds: [0.9779, 0.0169, 0.0562, 0.0999, 0.1539, 0.2044, 0.2512, 0.2899, 0.311, 0.3356, 0.374, 0.4147, 0.4494, 0.4862, 0.5339, 0.5942, 0.6663, 0.7623, 0.8386, 0.8845, 0.9335] },
+    'circuits/lusail-1.svg': { offset: 0.004, reverse: false, sectors: [0.341, 0.633], flagCount: 20, flagBounds: [0.9465, 0.9959, 0.0578, 0.1217, 0.1765, 0.2351, 0.2855, 0.3293, 0.3932, 0.4521, 0.49, 0.5248, 0.569, 0.6243, 0.6764, 0.7226, 0.7698, 0.8146, 0.8557, 0.9] },
+    'circuits/yas-marina-2.svg': { offset: 0.623, reverse: true, sectors: [0.233, 0.684], flagCount: 20, flagBounds: [0.0266, 0.0858, 0.1343, 0.1833, 0.2251, 0.2757, 0.3698, 0.4612, 0.5178, 0.5738, 0.6443, 0.6971, 0.7377, 0.7793, 0.8071, 0.8317, 0.8541, 0.8925, 0.9444] }
   };
 
   function circuitPhase(rel) {
@@ -3352,11 +3353,15 @@
     var n = parseInt(ring.count, 10) || 0;
     if (n < 0) n = 0;
     if (n > 64) n = 64;
+    var E = window.TrackmapEstimate;
+    var phase = circuitPhase(TRACKMAP.svgRel);
+    var ranges = (E && E.flagSectorRanges) ? E.flagSectorRanges(n, phase) : null;
     var geom = [
       TRACKMAP.viewKey || '',
       n,
       TRACKMAP.outline.length,
-      TRACKMAP.mapper ? 1 : 0
+      TRACKMAP.mapper ? 1 : 0,
+      ranges ? JSON.stringify(ranges) : 'eq'
     ].join('|');
     if (geom === TRACKMAP.flagGeomKey) return;
     TRACKMAP.flagGeomKey = geom;
@@ -3366,7 +3371,6 @@
     var fg = svg.querySelector('.tm-line-fg');
     var baseD = (fg && fg.getAttribute('d')) || '';
     if (full && full.getAttribute('d') !== baseD) full.setAttribute('d', baseD);
-    var E = window.TrackmapEstimate;
     var canSlice = !!(E && E.sliceArc && TRACKMAP.mapper && TRACKMAP.arc &&
       TRACKMAP.arc.total > 0 && n > 0 && baseD);
     var keep = {};
@@ -3380,11 +3384,14 @@
           node.style.display = 'none';
           g.appendChild(node);
         }
-        var pts = E.sliceArc(TRACKMAP.arc, (i - 1) / n, i / n);
+        var parts = ranges && ranges[i - 1] ? ranges[i - 1] : [[(i - 1) / n, i / n]];
         var d = '';
-        for (var p = 0; p < pts.length; p++) {
-          var mp = TRACKMAP.mapper(pts[p].x, pts[p].y);
-          d += (p ? 'L' : 'M') + mp.x.toFixed(1) + ' ' + mp.y.toFixed(1);
+        for (var r = 0; r < parts.length; r++) {
+          var pts = E.sliceArc(TRACKMAP.arc, parts[r][0], parts[r][1]);
+          for (var p = 0; p < pts.length; p++) {
+            var mp = TRACKMAP.mapper(pts[p].x, pts[p].y);
+            d += ((p || r) ? (p ? 'L' : 'M') : 'M') + mp.x.toFixed(1) + ' ' + mp.y.toFixed(1);
+          }
         }
         if (node.getAttribute('d') !== d) node.setAttribute('d', d);
         keep[i] = 1;
