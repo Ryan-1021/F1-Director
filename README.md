@@ -147,7 +147,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
 - 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta；白天黄/绿/紫与夜间同亮，格子描边更浅
 - 赛段成绩有「最快圈」列：各车个人最快（`TimingData.BestLapTime` / TimingStats），全场最快紫、其余绿；「本圈」同色规则
-- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）不画在轮廓上，只计入视口左上角「P + 人数」徽章；出站后回线。顶栏只有红色「估计」和旋转。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线（巴林仍是文件起点），并画一小块方格旗（估计起终点）；旗后沿比赛方向有一枚小箭头。新计时若只比外推略靠后，车位保持不回退；真后撤 / 进站仍收回。P 徽章、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
+- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）不画在轮廓上，只计入视口左上角「P + 人数」徽章；出站后回线。顶栏只有红色「估计」和旋转。竖向轮廓（H/W ≥ 1.20）默认先转 +90° 再适配，让长轴横铺；横向 / 近方保持 0°。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线（巴林仍是文件起点），并画一小块方格旗（估计起终点）；旗后沿比赛方向有一枚小箭头。新计时若只比外推略靠后，车位保持不回退；真后撤 / 进站仍收回。P 徽章、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
 - 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位。预览见上方效果图
 - 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
 - 成绩榜 / 赛段成绩排名换行：名次变了时按车号 FLIP 滑动（约 320ms），POS 落位后再改；`prefers-reduced-motion` 跳过。不是 jar 的 drop/flash 掉位闪烁
