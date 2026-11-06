@@ -18,7 +18,7 @@ node director/calibrate-circuit-phase.js --cache /tmp/mv
 2. MultiViewer 折线按弧长重采样成 400 点。在 flipY、反向、圆周移位上做 Umeyama 相似变换（平移、旋转、均匀缩放）。
 3. `marshalLights` 里 `length ≈ 0` 的点投到 SVG 折线上，最近点的弧长比例就是原始 offset。`reverse` 表示比赛方向和文件方向相反；为 true 时 offset 在掉头之后再量。
 4. 赛段：优先用 FIA 比赛笔记里的赛段中心线公里数，沿 MultiViewer 中心线走到对应比例，再投回 SVG。没有公里数、但图例写了「弯前/弯后多少米」时，用弯心在中心线上的位置加减这段距离。投影和距离比例差过 0.03，或者落点离开折线，就不写 `sectors`，运行时仍三等分。
-5. 旗语区段：把 `marshalSectors[].trackPosition` 投到同一条运行时折线，得到相对计时线的中点，再取相邻中点的前向中点当内部分界。写入 `flagCount` + `flagBounds`（n−1 个切点），**不要**写进计时 `sectors`。对齐还能用时取最新 `yearField`（因特拉戈斯起终点仍用 2019，旗语用 2023）。投影离开折线，或和 `length/周长` 差太远，就不写，运行时等分。
+5. 旗语区段：把 `marshalSectors[].trackPosition` 投到同一条运行时折线，得到相对计时线的中点，再取相邻中点的前向中点当区段起点。写入 `flagCount` + `flagBounds`，**不要**写进计时 `sectors`。对齐还能用时取最新 `yearField`（再比 `requestYear`）。区段 1 起点靠近计时线（±0.02）时收成 n−1 个内部分界（隐式 0/1）；否则保留 n 个起点，允许跨过进度 0。投影离开折线（distPct > 0.8）或中点不沿圈递增，就不写，运行时等分。不拿 MV `length/周长` 否决（那是示意图拉伸，计时 sectors 才用 0.03 门闩）。
 
 「year」是选中那条轨迹 JSON 里的 `year` 字段。较新的 URL 年份经常回落到同一条轨迹；同一条赛道有多条轨迹时，取得和 SVG 残差最小的一条。
 
@@ -92,11 +92,34 @@ offset / reverse / sectors 是运行时用的值。奥斯汀的 offset 不是这
 
 ## 旗语区段（flagBounds）
 
-`sectors` 仍是计时 S1/S2。旗语区段另存 `flagCount` + `flagBounds`（相对进度 0 的 n−1 个内部分界）。运行时只有 `ring.count === flagCount` 才用，否则等分。其它赛道尚未写入，保持等分。
+`sectors` 仍是计时 S1/S2。旗语区段另存 `flagCount` + `flagBounds`。`flagBounds` 长度 n−1 = 内部分界（区段 1 从进度 0 起）；长度 n = 各区段起点（可跨过 0）。运行时只有 `ring.count === flagCount` 才用，否则等分。
 
-| 赛道 | key | flag yearField | flagCount | 来源 | 备注 |
-| --- | ---: | ---: | ---: | --- | --- |
-| interlagos-2.svg | 14 | 2023 | 16 | MV marshalSectors 投影 | 圣保罗先落地。offset 仍是 2019 的 0.205；区段 9/10 约 `[0.5248, 0.5673)` / `[0.5673, 0.6213)` |
+| 赛道 | key | S/F year | flag year | n | 写法 | 备注 |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| jeddah-1.svg | 149 | 2022 | 2022 | 21 | n−1 | |
+| melbourne-2.svg | 10 | 2022 | 2022 | 20 | n 起点 | 区段 1 跨过计时线 |
+| suzuka-2.svg | 46 | 2019 | 2025 | 22 | n−1 | 旗语用 2025 布局（22 段），S/F 仍 2019 |
+| shanghai-1.svg | 49 | 2019 | 2019 | 20 | n 起点 | reverse；示意图拉伸，XY 投影仍贴线 |
+| miami-1.svg | 151 | 2022 | 2022 | 20 | n 起点 | |
+| imola-3.svg | 6 | 2022 | 2022 | 19 | n 起点 | |
+| monaco-6.svg | 22 | 2019 | 2022 | 19 | n 起点 | 2019 中点乱序，改用 2022 |
+| montreal-6.svg | 23 | 2019 | 2022 | 15 | n 起点 | |
+| catalunya-6.svg | 15 | 2023 | 2023 | 16 | n 起点 | 旧年 17 段投影离线 |
+| spielberg-3.svg | 19 | 2022 | — | — | 等分 | 投影 distPct 1.28%，不写 |
+| silverstone-8.svg | 2 | 2022 | 2022 | 16 | n−1 | |
+| hungaroring-3.svg | 4 | 2019 | 2021 | 19 | n 起点 | |
+| spa-francorchamps-4.svg | 7 | 2021 | 2021 | 21 | n 起点 | 同年轨迹里较新的请求是 21 段 |
+| zandvoort-5.svg | 55 | 2021 | 2021 | 19 | n 起点 | |
+| monza-7.svg | 39 | 2019 | 2021 | 17 | n 起点 | |
+| baku-1.svg | 144 | 2022 | — | — | 等分 | 中点不沿圈递增（城堡段最近点吸偏） |
+| marina-bay-4.svg | 61 | 2023 | 2023 | 16 | n 起点 | |
+| austin-1.svg | 9 | 2021 | 2021 | 20 | n 起点 | offset 仍手调 0.522 |
+| mexico-city-3.svg | 65 | 2021 | 2021 | 16 | n−1 | |
+| interlagos-2.svg | 14 | 2019 | 2023 | 16 | n−1 | offset 仍 2019 的 0.205；区段 9/10 约 `[0.5248, 0.5673)` / `[0.5673, 0.6213)` |
+| las-vegas-1.svg | 152 | 2023 | 2023 | 21 | n 起点 | |
+| lusail-1.svg | 150 | 2023 | 2023 | 20 | n 起点 | |
+| yas-marina-2.svg | 70 | 2021 | 2021 | 20 | n−1 | reverse |
+| bahrain-3.svg | 63 | — | — | — | 等分 | 无 CIRCUIT_PHASE |
 
 ## 奥斯汀
 

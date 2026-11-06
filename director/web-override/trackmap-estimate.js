@@ -1350,9 +1350,13 @@
     return out;
   }
 
+  function forwardMid(a, b) {
+    return wrap01(a + wrap01(b - a) / 2);
+  }
+
   /**
-   * 由各旗语区段中点（相对进度 0、沿比赛方向）生成 n-1 个内部分界。
-   * 区段 1 从计时线 0 起，区段 n 在 1 结束；相邻中点取前向中点。
+   * 由各旗语区段中点（相对进度 0、沿比赛方向）生成 n 个区段起点。
+   * 起点 k 是区段 k 与上一区段中点的前向中点（区段 1 的上一区段是 n，可跨过计时线）。
    * 中点必须按区段号沿圈严格递增（只允许最后一段绕回起点）。
    */
   function flagBoundsFromMids(mids) {
@@ -1371,37 +1375,112 @@
     }
     var wrapStep = wrap01(phases[0] - phases[n - 1]);
     if (wrapStep < 1e-4 || wrapStep > 0.5) return null;
-    var bounds = [];
-    for (i = 0; i < n - 1; i++) {
-      var cut = wrap01(phases[i] + wrap01(phases[i + 1] - phases[i]) / 2);
-      if (!(cut > 0 && cut < 1)) return null;
-      if (bounds.length && !(cut > bounds[bounds.length - 1])) return null;
-      bounds.push(cut);
+    var starts = [];
+    for (i = 0; i < n; i++) {
+      var prev = phases[(i + n - 1) % n];
+      starts.push(forwardMid(prev, phases[i]));
     }
-    return bounds;
+    return starts;
+  }
+
+  /**
+   * 写入 CIRCUIT_PHASE 的 flagBounds：
+   * 区段 1 起点靠近计时线时收成 n-1 个内部分界（隐式 0 和 1，与因特拉戈斯相同）；
+   * 否则保留 n 个起点，允许某一段跨过进度 0。
+   */
+  function flagBoundsForPhase(starts) {
+    if (!starts || starts.length < 2) return null;
+    var n = starts.length;
+    var s0 = wrap01(+starts[0]);
+    if (!isFinite(s0)) return null;
+    if (s0 < 0.02 || s0 > 0.98) return starts.slice(1);
+    return starts.slice();
+  }
+
+  function equalFlagRanges(n) {
+    var out = [];
+    for (var i = 0; i < n; i++) out.push([[i / n, (i + 1) / n]]);
+    return out;
+  }
+
+  /**
+   * 每个旗语区段在定向弧上的 [from, to] 片段（from < to）。
+   * flagBounds 两种写法：
+   *   n-1 个内部分界 → 区段 1 从 0 起、区段 n 在 1 结束；
+   *   n 个起点 → 某一段可以跨过进度 0（拆成两截）。
+   * flagCount 与 n 对不上、或缺边界时，退回等分。
+   */
+  function flagSectorRanges(n, phase) {
+    n = parseInt(n, 10);
+    if (!isFinite(n) || n < 1) return null;
+    if (n > 64) n = 64;
+    var eq = equalFlagRanges(n);
+    var count = phase && phase.flagCount;
+    var bounds = phase && phase.flagBounds;
+    if (count !== n || !bounds || !bounds.length) return eq;
+    var i;
+    var v;
+    if (bounds.length === n - 1) {
+      var cuts = [0];
+      for (i = 0; i < bounds.length; i++) {
+        v = +bounds[i];
+        if (!(v > cuts[cuts.length - 1] && v < 1)) return eq;
+        cuts.push(v);
+      }
+      cuts.push(1);
+      var interiors = [];
+      for (i = 0; i < n; i++) interiors.push([[cuts[i], cuts[i + 1]]]);
+      return interiors;
+    }
+    if (bounds.length !== n) return eq;
+    var starts = [];
+    for (i = 0; i < n; i++) {
+      v = +bounds[i];
+      if (!(v >= 0 && v < 1)) return eq;
+      starts.push(v);
+    }
+    var out = [];
+    for (i = 0; i < n; i++) {
+      var a = starts[i];
+      var b = starts[(i + 1) % n];
+      if (a < b) out.push([[a, b]]);
+      else if (a > b) {
+        var parts = [];
+        if (a < 1) parts.push([a, 1]);
+        if (b > 0) parts.push([0, b]);
+        if (!parts.length) return eq;
+        out.push(parts);
+      } else return eq;
+    }
+    return out;
   }
 
   /**
    * 旗语区段在定向弧上的切割点（n+1 个，从 0 到 1）。
-   * CIRCUIT_PHASE.flagBounds 是 n-1 个严格递增的内部分界（相对进度 0）。
-   * 区段 k 占 [cuts[k-1], cuts[k])。flagCount 与 n 对不上、或缺边界时，退回等分。
+   * 只适用于不跨计时线的 n-1 内部分界；需要绕圈时请用 flagSectorRanges。
+   * flagCount 与 n 对不上、或缺边界时，退回等分。
    */
   function flagPaintCuts(n, phase) {
     n = parseInt(n, 10);
     if (!isFinite(n) || n < 1) return null;
     if (n > 64) n = 64;
-    var eq = equalFlagCuts(n);
-    var count = phase && phase.flagCount;
-    var bounds = phase && phase.flagBounds;
-    if (count !== n || !bounds || bounds.length !== n - 1) return eq;
-    var out = [0];
-    for (var i = 0; i < bounds.length; i++) {
-      var v = +bounds[i];
-      if (!(v > out[out.length - 1] && v < 1)) return eq;
-      out.push(v);
+    var ranges = flagSectorRanges(n, phase);
+    if (!ranges || ranges.length !== n) return equalFlagCuts(n);
+    var cuts = [0];
+    var i;
+    for (i = 0; i < n; i++) {
+      if (!ranges[i] || ranges[i].length !== 1) return equalFlagCuts(n);
+      var a = ranges[i][0][0];
+      var b = ranges[i][0][1];
+      if (i === 0) {
+        if (a > 1e-9) return equalFlagCuts(n);
+        cuts[0] = 0;
+      } else if (Math.abs(a - cuts[i]) > 1e-9) return equalFlagCuts(n);
+      cuts.push(b);
     }
-    out.push(1);
-    return out;
+    if (Math.abs(cuts[n] - 1) > 1e-9) return equalFlagCuts(n);
+    cuts[n] = 1;
+    return cuts;
   }
 
   /** 弧长区间 [frac0, frac1] 上的折线点。frac1 = 1 取路径终点，不绕回起点。 */
@@ -1802,6 +1881,8 @@
     sliceArc: sliceArc,
     marshalFlagPlan: marshalFlagPlan,
     flagBoundsFromMids: flagBoundsFromMids,
+    flagBoundsForPhase: flagBoundsForPhase,
+    flagSectorRanges: flagSectorRanges,
     flagPaintCuts: flagPaintCuts,
     sampleSvgPath: sampleSvgPath,
     longestPathD: longestPathD,

@@ -640,7 +640,7 @@ assert(hyp(austinCue.tip, austinT1) < hyp(austinCue.origin, austinT1), 'Austin a
 var appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appSrc.indexOf('multiviewer.app') < 0, 'runtime does not call MultiViewer');
 assert(appSrc.indexOf('openf1') < 0 && appSrc.indexOf('OpenF1') < 0, 'runtime does not call OpenF1');
-assert(appSrc.indexOf('flagPaintCuts') >= 0, 'app slices flags with flagPaintCuts');
+assert(appSrc.indexOf('flagSectorRanges') >= 0, 'app slices flags with flagSectorRanges');
 assert(appSrc.indexOf('marshalSectors') < 0, 'runtime does not read MultiViewer marshalSectors');
 assert(appSrc.indexOf('tm-pit-count') >= 0, 'app paints a pit count');
 assert(appSrc.indexOf('data-tip') >= 0 && appSrc.indexOf('进站中的车数') >= 0, 'app wires a pit-count tooltip');
@@ -754,35 +754,64 @@ near(E.progressFromTiming(miniCar, monacoPhase.sectors).frac, monacoPhase.sector
 near(E.progressFromTiming(miniCar, monzaPhase.sectors).frac, monzaPhase.sectors[0] * 0.5, 0.001, 'Monza S1 uses the sector end');
 assert(shanghaiPhase.reverse === true, 'Shanghai file direction is opposite the race');
 assert(phases['circuits/austin-1.svg'].offset === 0.522, 'Austin hand offset stays');
-assert(phases['circuits/austin-1.svg'].flagBounds == null, 'Austin flags stay equal-arc');
+function assertFlagPhase(rel, count) {
+  var phase = phases[rel];
+  assert(phase && phase.flagCount === count, rel + ' flagCount ' + (phase && phase.flagCount));
+  assert(phase.flagBounds && (phase.flagBounds.length === count || phase.flagBounds.length === count - 1),
+    rel + ' flagBounds length ' + (phase.flagBounds && phase.flagBounds.length));
+  var ranges = E.flagSectorRanges(count, phase);
+  assert(ranges && ranges.length === count, rel + ' ranges ' + (ranges && ranges.length));
+  var i;
+  for (i = 0; i < count; i++) {
+    assert(ranges[i] && ranges[i].length >= 1, rel + ' sector ' + (i + 1) + ' empty');
+    var p;
+    for (p = 0; p < ranges[i].length; p++) {
+      assert(ranges[i][p][1] > ranges[i][p][0], rel + ' sector ' + (i + 1) + ' inverted');
+    }
+  }
+  var miss = E.flagSectorRanges(count + 3, phase);
+  near(miss[0][0][0], 0, 1e-9, rel + ' count mismatch start');
+  near(miss[0][0][1], 1 / (count + 3), 1e-9, rel + ' count mismatch falls back to equal-arc');
+}
+var flagged = Object.keys(phases).filter(function (rel) {
+  return phases[rel].flagBounds && phases[rel].flagBounds.length;
+});
+assert(flagged.length >= 20, 'calibrated flag circuits ' + flagged.length);
+flagged.forEach(function (rel) {
+  assertFlagPhase(rel, phases[rel].flagCount);
+});
 var ilgPhase = phases['circuits/interlagos-2.svg'];
 assert(ilgPhase.offset === 0.205 && ilgPhase.reverse === false, 'Interlagos S/F phase stays');
 assert(ilgPhase.sectors == null, 'Interlagos timing sectors stay empty');
-assert(ilgPhase.flagCount === 16 && ilgPhase.flagBounds && ilgPhase.flagBounds.length === 15,
-  'Interlagos has 16 marshal flag bounds');
+assert(ilgPhase.flagBounds.length === 15, 'Interlagos keeps n-1 interior cuts');
 var ilgCuts = E.flagPaintCuts(16, ilgPhase);
 near(ilgCuts[8], 0.5248, 0.00015, 'Interlagos sector 9 start');
 near(ilgCuts[9], 0.5673, 0.00015, 'Interlagos sector 9/10 cut');
 near(ilgCuts[10], 0.6213, 0.00015, 'Interlagos sector 10 end');
-near(ilgCuts[9] - ilgCuts[8], 0.0425, 0.0002, 'Interlagos sector 9 width');
-near(ilgCuts[10] - ilgCuts[9], 0.054, 0.0002, 'Interlagos sector 10 width');
-var ilgFallback = E.flagPaintCuts(19, ilgPhase);
-near(ilgFallback[1], 1 / 19, 1e-9, 'Interlagos falls back when ring.count differs');
 var ilgOrientedFlags = E.orientClosedOutline(
   flipY(E.outlineFromSvg(fs.readFileSync(path.join(__dirname, 'circuits/interlagos-2.svg'), 'utf8'), 4)),
   ilgPhase.offset, ilgPhase.reverse
 );
 var ilgArcFlags = E.buildArc(ilgOrientedFlags);
 var ilgSec9 = E.sliceArc(ilgArcFlags, ilgCuts[8], ilgCuts[9]);
-var ilgSec10 = E.sliceArc(ilgArcFlags, ilgCuts[9], ilgCuts[10]);
-assert(ilgSec9.length >= 2 && ilgSec10.length >= 2, 'Interlagos sectors 9/10 slice the outline');
 var ilgEq9 = E.sliceArc(ilgArcFlags, 8 / 16, 9 / 16);
+assert(ilgSec9.length >= 2, 'Interlagos sector 9 slices the outline');
 assert(Math.abs(ilgSec9[0].x - ilgEq9[0].x) + Math.abs(ilgSec9[0].y - ilgEq9[0].y) > 1,
   'Interlagos sector 9 is not the equal-arc slice');
-Object.keys(phases).forEach(function (rel) {
-  if (rel === 'circuits/interlagos-2.svg') return;
-  assert(phases[rel].flagBounds == null, rel + ' has no flagBounds yet');
-});
+assert(phases['circuits/spielberg-3.svg'].flagBounds == null, 'Spielberg flags stay equal-arc');
+assert(phases['circuits/baku-1.svg'].flagBounds == null, 'Baku flags stay equal-arc');
+var spielEq = E.flagSectorRanges(16, phases['circuits/spielberg-3.svg']);
+near(spielEq[8][0][0], 0.5, 1e-9, 'Spielberg fallback sector 9 start');
+near(spielEq[8][0][1], 0.5625, 1e-9, 'Spielberg fallback sector 9 end');
+var silPhase = phases['circuits/silverstone-8.svg'];
+assert(silPhase.sectors && silPhase.sectors[0] === 0.309, 'Silverstone timing sectors unchanged');
+assert(silPhase.flagCount === 16 && silPhase.flagBounds.length === 15, 'Silverstone n-1 flag bounds');
+var melPhase = phases['circuits/melbourne-2.svg'];
+assert(melPhase.flagCount === 20 && melPhase.flagBounds.length === 20, 'Melbourne n-start flag bounds');
+var melRanges = E.flagSectorRanges(20, melPhase);
+assert(melRanges[0].length === 2, 'Melbourne sector 1 wraps past S/F');
+near(melRanges[0][0][0], 0.9482, 0.0002, 'Melbourne wrap first half');
+near(melRanges[0][1][1], 0.0218, 0.0002, 'Melbourne wrap second half');
 var shanghaiRaw = flipY(E.outlineFromSvg(fs.readFileSync(path.join(__dirname, 'circuits/shanghai-1.svg'), 'utf8'), 4));
 var shanghaiOriented = E.orientClosedOutline(shanghaiRaw, shanghaiPhase.offset, shanghaiPhase.reverse);
 var shanghaiZero = E.pointOnArc(E.buildArc(shanghaiOriented), 0);
@@ -852,12 +881,16 @@ near(whole[whole.length - 1].x, 0, 0.1, 'whole end x');
 near(whole[whole.length - 1].y, 0, 0.1, 'whole end does not wrap early');
 
 var eqMids = [0.125, 0.375, 0.625, 0.875];
-var eqBounds = E.flagBoundsFromMids(eqMids);
-assert(eqBounds && eqBounds.length === 3, 'equal mids make 3 cuts');
-near(eqBounds[0], 0.25, 1e-9, 'equal cut 1');
-near(eqBounds[1], 0.5, 1e-9, 'equal cut 2');
-near(eqBounds[2], 0.75, 1e-9, 'equal cut 3');
-assert(E.flagBoundsFromMids([0.8, 0.1, 0.3]) == null, 'out-of-order mids rejected');
+var eqStarts = E.flagBoundsFromMids(eqMids);
+assert(eqStarts && eqStarts.length === 4, 'equal mids make 4 starts');
+near(eqStarts[0], 0, 1e-9, 'equal start 1 at S/F');
+near(eqStarts[1], 0.25, 1e-9, 'equal start 2');
+near(eqStarts[2], 0.5, 1e-9, 'equal start 3');
+near(eqStarts[3], 0.75, 1e-9, 'equal start 4');
+var snapped = E.flagBoundsForPhase(eqStarts);
+assert(snapped && snapped.length === 3, 'near-S/F start snaps to n-1 interiors');
+near(snapped[0], 0.25, 1e-9, 'snapped first interior');
+assert(E.flagBoundsFromMids([0.1, 0.8, 0.3]) == null, 'out-of-order mids rejected');
 assert(E.flagPaintCuts(0, null) == null, 'no cuts when count is 0');
 var eqCuts = E.flagPaintCuts(4, null);
 assert(eqCuts && eqCuts.length === 5 && eqCuts[0] === 0 && eqCuts[4] === 1, 'equal-arc ends');
@@ -867,10 +900,18 @@ near(realCuts[1], 0.2, 1e-9, 'calibrated first cut');
 near(realCuts[2], 0.55, 1e-9, 'calibrated mid cut');
 var mismatchCuts = E.flagPaintCuts(16, { flagCount: 16, flagBounds: [0.2, 0.55, 0.8] });
 near(mismatchCuts[1], 1 / 16, 1e-9, 'wrong bound length falls back to equal-arc');
-var countMismatch = E.flagPaintCuts(19, { flagCount: 16, flagBounds: eqBounds.concat([0.9]) });
-near(countMismatch[1], 1 / 19, 1e-9, 'ring.count mismatch falls back to equal-arc');
+var countMismatch = E.flagSectorRanges(19, { flagCount: 16, flagBounds: [0.2, 0.55, 0.8] });
+near(countMismatch[1][0][1], 2 / 19, 1e-9, 'ring.count mismatch falls back to equal-arc');
 var badCuts = E.flagPaintCuts(4, { flagCount: 4, flagBounds: [0.8, 0.2, 0.9] });
-near(badCuts[1], 0.25, 1e-9, 'unsorted bounds fall back to equal-arc');
+near(badCuts[1], 0.25, 1e-9, 'unsorted interiors fall back to equal-arc');
+var wrapPhase = { flagCount: 4, flagBounds: [0.9, 0.96, 0.08, 0.45] };
+var wrapRanges = E.flagSectorRanges(4, wrapPhase);
+assert(wrapRanges[1].length === 2, 'wrapping sector splits at S/F');
+near(wrapRanges[1][0][0], 0.96, 1e-9, 'wrap first half start');
+near(wrapRanges[1][0][1], 1, 1e-9, 'wrap first half end');
+near(wrapRanges[1][1][0], 0, 1e-9, 'wrap second half start');
+near(wrapRanges[1][1][1], 0.08, 1e-9, 'wrap second half end');
+assert(wrapRanges[0].length === 1 && wrapRanges[2].length === 1, 'non-wrap sectors stay one piece');
 
 var localY = E.marshalFlagPlan({
   level: 2, globalLevel: 2, yellowSectors: [10, '3'], doubleYellowSectors: [3]

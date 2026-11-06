@@ -7,7 +7,8 @@
  * 再把 length≈0 的 marshal light 投到 director 的 outlineFromSvg 折线上，
  * 最近点的弧长比例就是原始 offset。
  * marshalSectors 用同一套变换投到进度 0，得到 flagCount / flagBounds
- * （给 CIRCUIT_PHASE 用，不要写进计时 sectors）。
+ * （给 CIRCUIT_PHASE 用，不要写进计时 sectors）。区段 1 起点靠近计时线时
+ * 写成 n-1 个内部分界；否则写 n 个起点，允许跨过进度 0。
  *
  *   node director/calibrate-circuit-phase.js --cache /tmp/mv
  *   node director/calibrate-circuit-phase.js --cache /tmp/mv --only austin-1.svg
@@ -494,13 +495,23 @@ function round4(x) {
   return Math.round(x * 10000) / 10000;
 }
 
-function roundFlagBounds(bounds) {
+function roundFlagBounds(bounds, asStarts) {
   if (!bounds || !bounds.length) return null;
   var out = [];
-  for (var i = 0; i < bounds.length; i++) {
+  var seen = {};
+  var i;
+  for (i = 0; i < bounds.length; i++) {
     var v = round4(bounds[i]);
-    if (!(v > 0 && v < 1)) return null;
-    if (out.length && !(v > out[out.length - 1])) return null;
+    if (asStarts) {
+      if (v >= 1) v = 0;
+      if (!(v >= 0 && v < 1)) return null;
+      var key = v.toFixed(4);
+      if (seen[key]) return null;
+      seen[key] = 1;
+    } else {
+      if (!(v > 0 && v < 1)) return null;
+      if (out.length && !(v > out[out.length - 1])) return null;
+    }
     out.push(v);
   }
   return out;
@@ -538,9 +549,24 @@ function flagGeomFromMarshal(align, prodGeom, prodRaw, data) {
     if (rows[i].n !== i + 1) return { reject: 'not-contiguous' };
   }
   var mids = rows.map(function (r) { return r.phase; });
-  var rawBounds = E.flagBoundsFromMids(mids);
-  var bounds = roundFlagBounds(rawBounds);
-  if (!bounds) return { reject: 'mids', mids: mids.map(function (v) { return +v.toFixed(4); }) };
+  var starts = E.flagBoundsFromMids(mids);
+  if (!starts) {
+    return {
+      reject: 'mids',
+      flagCount: rows.length,
+      mids: mids.map(function (v) { return +v.toFixed(4); })
+    };
+  }
+  var rawBounds = E.flagBoundsForPhase(starts);
+  var asStarts = !!(rawBounds && rawBounds.length === starts.length);
+  var bounds = roundFlagBounds(rawBounds, asStarts);
+  if (!bounds) {
+    return {
+      reject: 'mids',
+      flagCount: rows.length,
+      mids: mids.map(function (v) { return +v.toFixed(4); })
+    };
+  }
   var maxDist = 0;
   var maxDelta = 0;
   var meanDelta = 0;
@@ -554,9 +580,10 @@ function flagGeomFromMarshal(align, prodGeom, prodRaw, data) {
     }
   }
   if (deltaN) meanDelta /= deltaN;
+  // 旗语画在 SVG 上，只信投影离折线的距离。length/周长差是示意图拉伸
+  // （和计时 sectors 的 0.03 门闩同类），不拿来否决旗语边界。
   var reject = null;
   if (maxDist > 0.8) reject = 'proj';
-  else if (deltaN && (maxDelta > 0.05 || meanDelta > 0.03)) reject = 'length-disagree';
   return {
     flagCount: rows.length,
     flagBounds: reject ? null : bounds,
@@ -814,7 +841,11 @@ function main() {
     var flagCandidates = scored.filter(function (s) {
       return s.flags && s.flags.flagBounds && s.confidence !== 'poor';
     });
-    flagCandidates.sort(function (a, b) { return (b.yearField || 0) - (a.yearField || 0); });
+    flagCandidates.sort(function (a, b) {
+      var dy = (b.yearField || 0) - (a.yearField || 0);
+      if (dy) return dy;
+      return (b.requestYear || 0) - (a.requestYear || 0);
+    });
     var flagPick = flagCandidates.length ? flagCandidates[0] : null;
     results.push({
       svg: 'circuits/' + c.svg,
