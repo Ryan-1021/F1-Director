@@ -230,9 +230,11 @@ for (pinT = 1000; pinT <= 8000; pinT += 1000) {
   pinned = E.stepMotion(pinned, 0.20, 0.22, pinT, 90000, false, { exact: true });
 }
 var pinShown = E.sampleMotion(pinned, 8000, 90000, false);
-assert(pinShown < 0.22 + E.CHASE_CRUISE_LEAD + 0.03,
-  'repeated samples stay bounded past the mini-sector cap ' + pinShown);
-assert(pinShown > 0.215, 'still allowed a little bleed at the cap ' + pinShown);
+assert(pinShown < 0.22 + E.HOLD_BACK,
+  'repeated samples stay inside HOLD_BACK ' + pinShown);
+assert(pinShown > 0.20 + 8 / 90 - 0.025,
+  'kept ~1× cruise for 8s at pinned cap ' + pinShown);
+assert(pinned.coasting === false, 'waiting at cap does not enter deep coast');
 
 // 迷你赛段褪了再点亮：exact 目标回到旧格子，cap 收紧，也不回退。
 var fade = E.stepMotion(null, 0.50, 0.515, 0, 90000, false, { exact: true });
@@ -381,6 +383,66 @@ for (var mi = 0; mi < miniFracs.length; mi++) {
   assert(Math.abs(miniJump) < 0.006, 'mini-sector tick teleported d=' + miniJump);
   miniPrev = miniTick;
 }
+
+// 圣保罗 S2 ~4.7s / FP1 ~6s：卡在 cap 上应保持 ~1×，不能掉到 0.12× 再 vmax 补上。
+function assertHoldCruise(st, t0, t1, lapMs, label) {
+  var x1 = 1 / lapMs;
+  var prev = E.sampleMotion(st, t0, lapMs, false);
+  var t;
+  for (t = t0 + 16; t <= t1; t += 16) {
+    var pos = E.sampleMotion(st, t, lapMs, false);
+    var step = E.wrapDelta(pos - prev);
+    assert(step >= -1e-9, label + ' rolled back at ' + t);
+    assert(step < 0.006, label + ' frame teleported at ' + t + ' d=' + step);
+    if (t > t0 + 480) {
+      var visX = (step / 16) / x1;
+      var velX = (st.vel || 0) / x1;
+      assert(st.coasting === false, label + ' entered coast at ' + t);
+      assert(velX > 0.7, label + ' vel collapsed at ' + t + ' velX=' + velX);
+      assert(visX > 0.5, label + ' dropped toward 0.12× at ' + t + ' visX=' + visX);
+      assert(visX < 2.5, label + ' visX spiked while waiting at cap at ' + t + ' visX=' + visX);
+    }
+    prev = pos;
+  }
+  return prev;
+}
+
+var s2Wait = E.stepMotion(null, 0.20, 0.22, 0, 90000, false, { exact: true });
+var s2Held = assertHoldCruise(s2Wait, 0, 4700, 90000, 'S2 4.7s wait');
+assert(s2Wait.coasting === false, 'S2 wait never entered coast');
+near(s2Held, 0.20 + 4700 / 90000, 0.025, 'S2 wait stayed near 1×');
+assert(s2Held < 0.22 + E.HOLD_BACK, 'S2 wait stayed inside HOLD_BACK ' + s2Held);
+
+s2Wait = E.stepMotion(s2Wait, 0.28, 0.36, 4700, 90000, false, { exact: true });
+var s2Tick = E.sampleMotion(s2Wait, 4700, 90000, false);
+assert(Math.abs(s2Tick - s2Held) < 0.004, 'S2 next tick does not teleport ' + s2Tick + ' from ' + s2Held);
+var s2Prev = s2Tick;
+var s2CatchN = 0;
+var s2CatchT;
+for (s2CatchT = 4716; s2CatchT <= 6500; s2CatchT += 16) {
+  var s2Pos = E.sampleMotion(s2Wait, s2CatchT, 90000, false);
+  var s2Step = E.wrapDelta(s2Pos - s2Prev);
+  assert(s2Step >= -1e-9, 'S2 catch rolled back at ' + s2CatchT);
+  assert(s2Step < 0.006, 'S2 catch frame teleported at ' + s2CatchT + ' d=' + s2Step);
+  s2Prev = s2Pos;
+  s2CatchN++;
+}
+assert(s2CatchN > 10, 'S2 catch-up took more than one frame');
+assert(E.wrapDelta(s2Wait.belief - s2Prev) < 0.02, 'S2 catch landed near belief ' + s2Prev + ' vs ' + s2Wait.belief);
+
+var fpWait = E.stepMotion(null, 0.20, 0.22, 0, 90000, false, { exact: true });
+var fpHeld = assertHoldCruise(fpWait, 0, 6000, 90000, 'FP1 6s wait');
+assert(fpWait.coasting === false, 'FP1 wait never entered coast');
+near(fpHeld, 0.20 + 6000 / 90000, 0.03, 'FP1 wait stayed near 1×');
+assert(fpHeld < 0.22 + E.HOLD_BACK, 'FP1 wait stayed inside HOLD_BACK ' + fpHeld);
+
+var s2Pit = E.stepMotion(null, 0.20, 0.22, 0, 90000, false, { exact: true });
+assertHoldCruise(s2Pit, 0, 4700, 90000, 'S2 wait before pit');
+s2Pit = E.stepMotion(s2Pit, 0.90, 0.95, 4700, 90000, false, { exact: true, pit: true });
+var s2PitAt = E.sampleMotion(s2Pit, 4700, 90000, false);
+var s2PitLater = E.sampleMotion(s2Pit, 9000, 90000, false);
+near(s2PitLater, s2PitAt, 0.0005, 'pit still freezes after a long cap wait');
+assert(s2Pit.coasting === false, 'pit does not coast');
 
 var tiny = E.stepMotion(null, 0.30, 0.42, 0, 90000, false, { exact: true });
 tiny = E.stepMotion(tiny, 0.312, 0.43, 0, 90000, false, { exact: true });
