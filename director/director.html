@@ -3698,56 +3698,94 @@
     return (raw && raw.type) || (raw && raw.id === 'live' ? 'live' : 'board');
   }
 
-  function findLivePanel() {
+  function isTrackmapBoard(p) {
+    return !!(p && (p.type === 'board' || !p.type) && p.board === 'trackmap');
+  }
+
+  function findConnectedPanel(pred) {
     var ids = Object.keys(panels);
     for (var i = 0; i < ids.length; i++) {
       var p = panels[ids[i]];
-      if (p && p.type === 'live' && p.el && p.el.isConnected) return p;
+      if (p && p.el && p.el.isConnected && pred(p)) return p;
     }
     return null;
   }
 
+  function findLivePanel() {
+    return findConnectedPanel(function (p) { return p.type === 'live'; });
+  }
+
+  function findTrackmapPanel() {
+    return findConnectedPanel(isTrackmapBoard);
+  }
+
+  /** Copy geometry onto a kept panel; iframe / player stay mounted. */
+  function applyKeptPanel(oldP, raw, fields, opts) {
+    oldP.id = raw.id || oldP.id;
+    if (fields) {
+      if (fields.type != null) oldP.type = fields.type;
+      if (fields.board != null) oldP.board = fields.board;
+    }
+    oldP.x = raw.x;
+    oldP.y = raw.y;
+    oldP.w = raw.w;
+    oldP.h = raw.h;
+    oldP.z = raw.z || oldP.z || 10;
+    oldP.minimized = !!raw.minimized;
+    if (raw._prevH) oldP._prevH = raw._prevH;
+    oldP.el.dataset.panelId = oldP.id;
+    panels[oldP.id] = oldP;
+    applyGeom(oldP.el, oldP, opts);
+  }
+
   function mountLayout(list, opts) {
     // Chrome reloads an iframe when it is reparented. Keep the live panel
-    // element (and the player inside it) and only rebuild the other panels.
+    // (player) and the estimated trackmap board iframe when they still appear
+    // in the new layout; only rebuild the other boards. 「刷新看板」 still
+    // force-recreates board iframes via applyBoardToPanel(..., true).
     var oldLive = findLivePanel();
+    var oldTm = findTrackmapPanel();
     var liveRaw = null;
+    var tmRaw = null;
     for (var i = 0; i < list.length; i++) {
-      if (panelTypeOf(list[i]) === 'live') { liveRaw = list[i]; break; }
+      if (!liveRaw && panelTypeOf(list[i]) === 'live') liveRaw = list[i];
+      if (!tmRaw && isTrackmapBoard(list[i])) tmRaw = list[i];
     }
 
     Object.keys(panels).forEach(function (id) {
       var p = panels[id];
-      if (!p || p === oldLive) return;
+      if (!p || p === oldLive || p === oldTm) return;
       if (p.el) p.el.remove();
       delete panels[id];
     });
     if (oldLive) delete panels[oldLive.id];
+    if (oldTm) delete panels[oldTm.id];
 
     var maxZ = 10;
     var reusedLive = false;
     if (liveRaw && oldLive) {
       reusedLive = true;
-      oldLive.id = liveRaw.id || oldLive.id;
-      oldLive.type = 'live';
-      oldLive.x = liveRaw.x;
-      oldLive.y = liveRaw.y;
-      oldLive.w = liveRaw.w;
-      oldLive.h = liveRaw.h;
-      oldLive.z = liveRaw.z || oldLive.z || 10;
-      oldLive.minimized = !!liveRaw.minimized;
-      if (liveRaw._prevH) oldLive._prevH = liveRaw._prevH;
-      oldLive.el.dataset.panelId = oldLive.id;
-      panels[oldLive.id] = oldLive;
-      applyGeom(oldLive.el, oldLive, opts);
+      applyKeptPanel(oldLive, liveRaw, { type: 'live' }, opts);
       if (oldLive.z > maxZ) maxZ = oldLive.z;
     } else if (oldLive && oldLive.el) {
       oldLive.el.remove();
       oldLive = null;
     }
 
+    var reusedTm = false;
+    if (tmRaw && oldTm) {
+      reusedTm = true;
+      applyKeptPanel(oldTm, tmRaw, { type: 'board', board: 'trackmap' }, opts);
+      notifyPanelContentResize(oldTm.el);
+      if (oldTm.z > maxZ) maxZ = oldTm.z;
+    } else if (oldTm && oldTm.el) {
+      oldTm.el.remove();
+      oldTm = null;
+    }
+
     list.forEach(function (raw) {
       if (panelTypeOf(raw) === 'live') return;
+      if (reusedTm && raw === tmRaw) return;
       var st = {
         id: raw.id,
         type: 'board',
