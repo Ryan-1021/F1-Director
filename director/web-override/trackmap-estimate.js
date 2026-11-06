@@ -12,7 +12,7 @@
  * 赛段或计时突然前跳时平滑加速追上，接近目标提前减速，不瞬移；
  * 小更新仍然跟得上。追上之后按约 1× 巡航接着走，不把画面钉死在卡住
  * 的测量上；卡在 cap 上等下一格时也不掉到 0.12× 爬行（否则两格之间
- * 像粘住，下一格再 13× 闪过去）。测量后撤仍衰减滑行。进站 / 停车 /
+ * 像粘住，下一格再 vmax 闪过去）。测量后撤仍衰减滑行。进站 / 停车 /
  * 换圈过线 / 大约 0.12 圈以上的后撤仍允许不连续。
  * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
  * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
@@ -1351,7 +1351,7 @@
    * 裁判区段旗语 → 沿轮廓的涂色计划。
    * 数据是 TrackState：yellowSectors / doubleYellowSectors 是 1 起的区段号，
    * globalLevel 4/5/6 是虚拟安全车 / 安全车 / 红旗（整圈）。
-   * 只决定哪一段是什么颜色。弧长边界由调用方用 flagPaintCuts 切：
+   * 只决定哪一段是什么颜色。弧长边界由调用方用 flagSectorRanges 切：
    * 有 CIRCUIT_PHASE.flagBounds 且 count 对齐时用真实裁判区段，否则等分。
    */
   function marshalFlagPlan(track, ringCount) {
@@ -1388,13 +1388,6 @@
       }
     }
     return { full: full, sectors: sectors, count: n };
-  }
-
-  function equalFlagCuts(n) {
-    var out = [0];
-    for (var i = 1; i < n; i++) out.push(i / n);
-    out.push(1);
-    return out;
   }
 
   function forwardMid(a, b) {
@@ -1500,34 +1493,6 @@
       } else return eq;
     }
     return out;
-  }
-
-  /**
-   * 旗语区段在定向弧上的切割点（n+1 个，从 0 到 1）。
-   * 只适用于不跨计时线的 n-1 内部分界；需要绕圈时请用 flagSectorRanges。
-   * flagCount 与 n 对不上、或缺边界时，退回等分。
-   */
-  function flagPaintCuts(n, phase) {
-    n = parseInt(n, 10);
-    if (!isFinite(n) || n < 1) return null;
-    if (n > 64) n = 64;
-    var ranges = flagSectorRanges(n, phase);
-    if (!ranges || ranges.length !== n) return equalFlagCuts(n);
-    var cuts = [0];
-    var i;
-    for (i = 0; i < n; i++) {
-      if (!ranges[i] || ranges[i].length !== 1) return equalFlagCuts(n);
-      var a = ranges[i][0][0];
-      var b = ranges[i][0][1];
-      if (i === 0) {
-        if (a > 1e-9) return equalFlagCuts(n);
-        cuts[0] = 0;
-      } else if (Math.abs(a - cuts[i]) > 1e-9) return equalFlagCuts(n);
-      cuts.push(b);
-    }
-    if (Math.abs(cuts[n] - 1) > 1e-9) return equalFlagCuts(n);
-    cuts[n] = 1;
-    return cuts;
   }
 
   /** 弧长区间 [frac0, frac1] 上的折线点。frac1 = 1 取路径终点，不绕回起点。 */
@@ -1943,22 +1908,12 @@
     wrap01: wrap01,
     wrapDelta: wrapDelta,
     HOLD_BACK: HOLD_BACK,
-    CHASE_KP: CHASE_KP,
-    CHASE_VMAX_X: CHASE_VMAX_X,
-    CHASE_ACCEL_X: CHASE_ACCEL_X,
-    CHASE_SNAP: CHASE_SNAP,
-    CHASE_CRUISE_LEAD: CHASE_CRUISE_LEAD,
     ratchetCap: ratchetCap,
-    beliefOf: beliefOf,
-    chaseToward: chaseToward,
-    timeSeconds: timeSeconds,
     progressFromTiming: progressFromTiming,
     parseGap: parseGap,
     sessionUsesTimeGaps: sessionUsesTimeGaps,
     paceScale: paceScale,
-    refLapSeconds: refLapSeconds,
     planField: planField,
-    ownLapScale: ownLapScale,
     packOffset: packOffset,
     inwardNormal: inwardNormal,
     minDistPointToPolyline: minDistPointToPolyline,
@@ -1982,15 +1937,10 @@
     flagBoundsFromMids: flagBoundsFromMids,
     flagBoundsForPhase: flagBoundsForPhase,
     flagSectorRanges: flagSectorRanges,
-    flagPaintCuts: flagPaintCuts,
-    sampleSvgPath: sampleSvgPath,
-    longestPathD: longestPathD,
     outlineFromSvg: outlineFromSvg,
-    outlineBounds: outlineBounds,
     AUTO_ORIENT_HW: AUTO_ORIENT_HW,
     autoOrientDeg: autoOrientDeg,
     rotatePoint: rotatePoint,
-    orientClosedOutline: orientClosedOutline,
-    sectorFrac: sectorFrac
+    orientClosedOutline: orientClosedOutline
   };
 });
