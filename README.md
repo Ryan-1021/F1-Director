@@ -3,19 +3,17 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.11+20261026**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.12+20261107**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
-相对 **v0.2.7**：
+相对 **v0.2.11**：
 
-- 赛段成绩增加「最快圈」列（各车个人最快）
-- 估计赛道图进度 0 画一小块方格旗
-- 估计赛道图在旗后、轮廓外侧画一枚比赛方向小箭头；夜间底板贴合环面板
-- 白天 HARD 胎徽章黑字 H、透明底贴合斑马纹行
-- 白天迷你赛段黄 / 绿 / 紫与夜间同亮
-- 估计车位小幅回采时保持不回退
-- 已知赛道 `CIRCUIT_PHASE` 对齐计时线（巴林仍为例外）
-- 进站改为左上角 P + 人数徽章
-- 成绩榜 / 赛段成绩排名换行滑动
+- 估计赛道图 Scheme 3：加速度限制追赶测量信念；迷你赛段 tick 之间在 cap 上保持约 **1× 巡航**（Option A），不是停住再闪
+- 默认朝向：较长一边横着铺（先转再适配 **rotate-then-fit**）；竖向轮廓自动 +90°
+- 旗语区段：多数赛道用离线 `flagBounds` 几何上色，不再一律等分；**巴林 / 斯皮尔伯格 / 巴库**仍等分
+- 套用布局预设 / 重置时，估计赛道图 iframe 与直播一样保活，不重绘重建
+- 成绩榜 / 赛段空状态居中「等待成绩数据」；「刷新看板」强制重建看板 iframe
+- 关窗停服：心跳 **4s** / goodbye 约 **3s** / 失联兜底约 **5s**
+- 成绩榜 / 赛段排名换行时长 **1s**（对照原先约 320ms）
 
 ---
 
@@ -31,7 +29,7 @@
 
 图里赛道图还是旧界面的「OpenF1 场次查询失败」。**当前版本不再请求 OpenF1**：轮廓只用本地 f1db SVG，车位是计时估计（不是官方 GPS）。下面才是我们自己做的赛道图。
 
-估计赛道图旗语上色（银石，全部旗况）：本地 SVG + 已有 `track.yellowSectors` / `doubleYellowSectors` / `globalLevel`，黄 / 双黄 / VSC / 安全车 / 红旗 / 全场黄。不请求 OpenF1。进度 0（计时线；巴林仍是文件起点）有一小块方格旗（估计起终点），旗后沿比赛方向有一枚小箭头。同一张图也在 [`docs/trackmap-flags-silverstone.png`](docs/trackmap-flags-silverstone.png)。
+估计赛道图旗语上色（银石，全部旗况）：本地 SVG + 已有 `track.yellowSectors` / `doubleYellowSectors` / `globalLevel`，黄 / 双黄 / VSC / 安全车 / 红旗 / 全场黄。不请求 OpenF1。多数赛道按离线 `flagBounds` 切段，不再一律等分。进度 0（计时线；巴林仍是文件起点）有一小块方格旗（估计起终点），旗后沿比赛方向有一枚小箭头。同一张图也在 [`docs/trackmap-flags-silverstone.png`](docs/trackmap-flags-silverstone.png)。
 
 ![估计赛道图旗语上色（银石，全部旗况）](docs/trackmap-flags-contact-sheet.png)
 
@@ -54,6 +52,22 @@
 Rank swap: both the main timing board and the sector board slide rows to their new places when positions change (FLIP / `translateY`, ~1s / 1000ms ease) instead of jumping. Multi-car reshuffles animate together; POS (and timing gap/interval) update after the slide lands. `prefers-reduced-motion` skips the motion. Separate from the jar’s drop5/drop10/flash blink + ↓N.
 
 ![排名换行示意 / rank-swap demo](docs/rank-swap-demo.gif)
+
+原先约 320ms 的换位偏「一闪」；拉到 1s 后整行滑动更跟得上。左右对照是示意，不是实况截图。
+
+![成绩榜换位时长对照示意：左约 320ms，右 1s](docs/rank-swap-320vs1s-before-after.gif)
+
+估计车位（Scheme 3）：迷你赛段 / 赛段一跳时，点按加速度限制追上测量信念，追上后在 cap 上保持约 1× 巡航直到下一格，不是停住再闪。示意对比，非实况截图。
+
+![估计赛道图追赶巡航示意：停住再闪 vs 1× 巡航](docs/trackmap-chase-before-after.gif)
+
+默认朝向：较长一边横着铺满模块。竖向轮廓先转 +90° 再算包围盒适配（rotate-then-fit）；横向 / 近方保持 0°。因特拉戈斯示意：左竖放两侧留白，右横放铺满。示意对比，非实况截图。
+
+![估计赛道图自动朝向示意：因特拉戈斯竖放 vs 横放](docs/interlagos-orient-before-after.gif)
+
+旗语区段：有 `flagBounds` 的赛道按 MultiViewer 裁判岗投影切弧，不再一律 1/n 等分。因特拉戈斯示意：左等分把区段 9/10 画在错误的弯上，右 `flagBounds` 落在内场那组弯。巴林 / 斯皮尔伯格 / 巴库仍等分。示意对比，非实况截图。
+
+![估计赛道图旗语区段示意：等分弧 vs flagBounds（因特拉戈斯）](docs/interlagos-flag-sectors-before-after.png)
 
 ---
 
@@ -127,7 +141,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 | `director/director.html` | 导播台主页面 |
 | `director/web-override/` | 覆盖 UI（`app.js` / `rank-swap.js` / `style.css` / 状态 SVG 等） |
 | `director/web-override/circuits/` | 本地赛道轮廓 SVG（f1db，不联网） |
-| `docs/` | 效果图、旗语拼图、奥斯汀进站 P 示意、比赛方向箭头、排名换行 GIF |
+| `docs/` | 效果图、旗语拼图、奥斯汀进站 P 示意、比赛方向箭头、排名换行 GIF、追赶 / 朝向 / 旗语区段示意 |
 | `director/layouts.json` | 首次布局种子（写入 `share/web/layouts.json` 后以运行时为准） |
 | `director/assets/` | 图标源与 favicon（`F1-Director.ico`、浏览器图标） |
 | `director/Publish-Web.cmd` | 把 UI（含 assets）拷到 `share/web/` |
@@ -141,14 +155,15 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 ## 主要功能（当前）
 
 - 可拖拽多面板：成绩榜、赛段成绩、赛道图、天气、实时流等；布局可锁定（锁定后仍可切换预设，不可重置/删预设）
-- 切换布局时**沿用正在播的直播面板**（整块面板留在页面里，只改位置和尺寸；iframe / video 不拆走、不重新载入，也不必再点一次播放）
+- 切换布局预设 / 重置时**沿用正在播的直播面板**，估计赛道图 iframe 同样保活（整块面板留在页面里，只改位置和尺寸并 relayout；chase 与旋转不丢，iframe / video 不拆走、不重新载入）。成绩榜等其它看板仍重建。「刷新看板」强制重建看板 iframe（缓存清空，直播不停）
 - 看板数据延迟只推迟四周看板和左上角场次，**不改变直播画面**。秒数记在本标签的 sessionStorage：关掉标签即丢，同一标签刷新还在。启动时清掉旧的 localStorage 延迟，避免上一场的缓冲留到下次打开
 - 日/夜主题：按钮点击处约 **1s** 圆形扩散切换（View Transition）；启动读盘与布局预设仍瞬时切主题；`prefers-reduced-motion` 时跳过动画
 - 顶栏剩余时间：jar 按官方 `Extrapolating`/`Utc` **本地外推**；SSE **至少 1Hz** 推送；秒级向上取整，减轻跳秒
 - 赛段 S1–S3：紫/绿/黄（总最佳 / 个人最佳 / 更慢），迷你赛段条与可选 +delta；白天黄/绿/紫与夜间同亮，格子描边更浅
 - 赛段成绩有「最快圈」列：各车个人最快（`TimingData.BestLapTime` / TimingStats），全场最快紫、其余绿；「本圈」同色规则
-- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）不画在轮廓上，只计入视口左上角「P + 人数」徽章；出站后回线。顶栏只有红色「估计」和旋转。竖向轮廓（H/W ≥ 1.20）默认先转 +90° 再适配，让长轴横铺；横向 / 近方保持 0°。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线（巴林仍是文件起点），并画一小块方格旗（估计起终点）；旗后沿比赛方向有一枚小箭头。新计时若只比外推略靠后，车位保持不回退；真后撤 / 进站仍收回。P 徽章、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
-- 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 把轮廓等分成裁判区段来上色（黄 / 深黄）。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位。预览见上方效果图
+- 赛道图车位是**估计**：轮廓只读 `director/web-override/circuits/` 里的本地 f1db SVG，不请求 OpenF1，也不用官方 GPS。练习 / 排位沿赛段和迷你赛段，正赛用相对领先者的时间差。进站车（`inPit` / 差距含 PIT）不画在轮廓上，只计入视口左上角「P + 人数」徽章；出站后回线。顶栏只有红色「估计」和旋转。默认朝向让**较长一边横着铺**：竖向轮廓先转 +90° 再算包围盒适配（rotate-then-fit），横向 / 近方保持 0°。对不上的赛道写「未识别赛道」，不联网。已知赛道的进度 0 用 `CIRCUIT_PHASE` 对到计时线（巴林仍是文件起点），并画一小块方格旗（估计起终点）；旗后沿比赛方向有一枚小箭头。画面沿圈加速度限制追赶测量信念（Scheme 3）：迷你赛段 tick 之间在 cap 上保持约 1× 巡航，不是停住再闪；新计时若只比外推略靠后，车位保持不回退；真后撤 / 进站仍收回。P 徽章、安全车和起跑线对齐都不是真实几何。细节见 [`director/TRACKMAP.md`](director/TRACKMAP.md)
+- 赛道图旗语：用现有 `track.yellowSectors` / `doubleYellowSectors` 上色（黄 / 深黄）。多数赛道按离线 `CIRCUIT_PHASE.flagBounds` 切弧（MultiViewer 裁判岗投到轮廓），`ring.count` 对不上 `flagCount` 时回退等分。巴林无相位、斯皮尔伯格投影离线、巴库中点不沿圈递增，这三站仍等分。红旗、安全车、虚拟安全车给整圈上色。没有弯道实测桩位。预览见上方效果图
+- 开赛前成绩榜 / 赛段成绩内容区居中「等待成绩数据」，无数据不显示表头；赛道图空文案稳定为「等待场次信息」
 - 轮胎扁圆徽章；成绩榜与**赛段成绩**斑马纹（`tbody` 兼容选择器）；强调色 F1 红 `#e10600`
 - 成绩榜 / 赛段成绩排名换行：名次变了时按车号 FLIP 滑动（约 1s / 1000ms），POS 落位后再改；`prefers-reduced-motion` 跳过。不是 jar 的 drop/flash 掉位闪烁
 - 轮胎 `Compound`：官方 Stints 增量常只推圈数、不带胎种；jar `deepMerge` 不再用空 Compound 盖掉旧值，读胎种自新到旧扫 stint 并 sticky 最近一次非空，避免成绩榜灰色 `—`
