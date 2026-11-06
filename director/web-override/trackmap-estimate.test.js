@@ -650,6 +650,11 @@ assert(appSrc.indexOf('tm-dir-arrow') >= 0, 'app uses the direction-arrow class'
 assert(appSrc.indexOf('比赛方向') >= 0, 'direction cue has a Chinese title');
 assert(appSrc.indexOf('directionOutset') >= 0 && appSrc.indexOf('screenCentroid') >= 0,
   'app offsets the cue along the outward normal');
+assert(appSrc.indexOf('applyTrackmapAutoOrient') >= 0, 'app applies per-circuit auto-orient');
+assert(appSrc.indexOf('computeFitBounds') >= 0, 'app rotate-then-fits before scale');
+assert(appSrc.indexOf('viewRotDeg = wrapTrackmapRot(TRACKMAP.baseRotDeg)') >= 0,
+  'reset restores the auto default, not hard 0');
+assert(appSrc.indexOf('TRACKMAP.viewRotDeg = 0') < 0, 'reset does not force 0°');
 var phaseSrc = appSrc.split('var CIRCUIT_PHASE')[1].split('function circuitPhase')[0];
 var svgSrc = appSrc.split('var CIRCUIT_SVG')[1].split('};')[0];
 function parsePhases(block) {
@@ -794,6 +799,45 @@ files.forEach(function (f) {
   assert(maxX - minX > 40 && maxY - minY > 40, f + ' bbox');
   assert(isFinite(minX) && isFinite(maxY), f + ' finite');
 });
+
+near(E.rotatePoint(1, 0, 90).x, 0, 1e-12, 'rotate +90 x');
+near(E.rotatePoint(1, 0, 90).y, 1, 1e-12, 'rotate +90 y');
+near(E.rotatePoint(0, 1, 90).x, -1, 1e-12, 'rotate +90 of +y');
+near(E.rotatePoint(0, 1, 90).y, 0, 1e-12, 'rotate +90 of +y → x');
+assert(E.AUTO_ORIENT_HW === 1.2, 'portrait threshold is H/W 1.20');
+assert(E.autoOrientDeg([
+  { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 12 }, { x: 0, y: 12 }
+]) === 90, 'H/W 1.20 defaults +90');
+assert(E.autoOrientDeg([
+  { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 11.9 }, { x: 0, y: 11.9 }
+]) === 0, 'just under 1.20 stays 0');
+assert(E.autoOrientDeg([
+  { x: 0, y: 0 }, { x: 13, y: 0 }, { x: 13, y: 10 }, { x: 0, y: 10 }
+]) === 0, 'landscape stays 0');
+
+var expect90 = {
+  'circuits/catalunya-6.svg': true,
+  'circuits/interlagos-2.svg': true,
+  'circuits/melbourne-2.svg': true,
+  'circuits/monaco-6.svg': true,
+  'circuits/montreal-6.svg': true,
+  'circuits/monza-7.svg': true,
+  'circuits/silverstone-8.svg': true,
+  'circuits/spa-francorchamps-4.svg': true,
+  'circuits/yas-marina-2.svg': true
+};
+var got90 = 0;
+svgKeys.forEach(function (rel) {
+  var orientPts = flipY(E.outlineFromSvg(fs.readFileSync(path.join(__dirname, rel), 'utf8'), 4));
+  var deg = E.autoOrientDeg(orientPts);
+  if (expect90[rel]) {
+    assert(deg === 90, rel + ' should auto-orient +90, got ' + deg);
+    got90++;
+  } else {
+    assert(deg === 0, rel + ' should stay 0°, got ' + deg);
+  }
+});
+assert(got90 === 9, 'nine portrait circuits auto-orient +90, got ' + got90);
 
 var square = E.buildArc([
   { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 0, y: 0 }
@@ -956,14 +1000,16 @@ function trackStrokeW(zoom) {
   return Math.max(4, Math.min(12, 5 + Math.sqrt(z) * 3));
 }
 
-function mapOutlineToView(pts, w, h, zoom) {
+function mapOutlineToView(pts, w, h, zoom, rotDeg) {
+  if (rotDeg == null) rotDeg = E.autoOrientDeg(pts);
   var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   var i;
   for (i = 0; i < pts.length; i++) {
-    if (pts[i].x < minX) minX = pts[i].x;
-    if (pts[i].y < minY) minY = pts[i].y;
-    if (pts[i].x > maxX) maxX = pts[i].x;
-    if (pts[i].y > maxY) maxY = pts[i].y;
+    var rp = E.rotatePoint(pts[i].x, pts[i].y, rotDeg);
+    if (rp.x < minX) minX = rp.x;
+    if (rp.y < minY) minY = rp.y;
+    if (rp.x > maxX) maxX = rp.x;
+    if (rp.y > maxY) maxY = rp.y;
   }
   var padX = (maxX - minX) * 0.06 || 1;
   var padY = (maxY - minY) * 0.06 || 1;
@@ -976,7 +1022,8 @@ function mapOutlineToView(pts, w, h, zoom) {
   var ox = (w - bw * scale) / 2;
   var oy = (h - bh * scale) / 2;
   function mapPoint(x, y) {
-    return { x: ox + (x - minX) * scale, y: oy + (maxY - y) * scale };
+    var p = E.rotatePoint(x, y, rotDeg);
+    return { x: ox + (p.x - minX) * scale, y: oy + (maxY - p.y) * scale };
   }
   var screen = [];
   var sx = 0, sy = 0;
@@ -998,6 +1045,33 @@ function mapOutlineToView(pts, w, h, zoom) {
     map: mapPoint
   };
 }
+
+function fittedSpan(pts, w, h, zoom, rotDeg) {
+  var view = mapOutlineToView(pts, w, h, zoom, rotDeg);
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (var i = 0; i < view.outline.length; i++) {
+    var sp = view.outline[i];
+    if (sp.x < minX) minX = sp.x;
+    if (sp.y < minY) minY = sp.y;
+    if (sp.x > maxX) maxX = sp.x;
+    if (sp.y > maxY) maxY = sp.y;
+  }
+  return { w: maxX - minX, h: maxY - minY };
+}
+
+var interlagosPts = flipY(E.outlineFromSvg(
+  fs.readFileSync(path.join(__dirname, 'circuits/interlagos-2.svg'), 'utf8'), 4));
+assert(E.autoOrientDeg(interlagosPts) === 90, 'Interlagos is portrait');
+var inter0 = fittedSpan(interlagosPts, 420, 240, 1.05, 0);
+var inter90 = fittedSpan(interlagosPts, 420, 240, 1.05, 90);
+assert(inter90.w > inter0.w * 1.15, 'rotate-then-fit refills Interlagos width ' +
+  inter0.w.toFixed(1) + ' → ' + inter90.w.toFixed(1));
+assert(inter90.w > inter90.h, 'Interlagos long axis is horizontal after +90');
+var miamiPts = flipY(E.outlineFromSvg(
+  fs.readFileSync(path.join(__dirname, 'circuits/miami-1.svg'), 'utf8'), 4));
+assert(E.autoOrientDeg(miamiPts) === 0, 'Miami stays 0');
+var miami0 = fittedSpan(miamiPts, 420, 240, 1.05, 0);
+assert(miami0.w > miami0.h, 'landscape Miami already fills horizontally');
 
 var austinFlipped = E.orientClosedOutline(flipY(austinRaw), austinPhase.offset, austinPhase.reverse);
 var austinView = mapOutlineToView(austinFlipped, 420, 280, 1.05);

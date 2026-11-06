@@ -2199,7 +2199,8 @@
     viewZoom: 1.05,
     viewPanX: 0,
     viewPanY: 0,
-    viewRotDeg: 0,
+    viewRotDeg: 0,   // 总转角 = 自动默认 + 用户偏移
+    baseRotDeg: 0,   // 按轮廓长宽比：竖向 H/W≥1.20 为 +90，否则 0
     motion: {},
     nodes: {},
     carsG: null,
@@ -2323,6 +2324,7 @@
       TRACKMAP.unknownCircuit = false;
       TRACKMAP.outlineError = false;
       TRACKMAP.arc = window.TrackmapEstimate ? window.TrackmapEstimate.buildArc(c.outline) : null;
+      applyTrackmapAutoOrient(c.outline, true);
       TRACKMAP.viewDirty = true;
       TRACKMAP.viewKey = '';
       if (c.status && String(c.status).indexOf('估计') === 0) TRACKMAP.status = c.status;
@@ -2346,11 +2348,47 @@
     return deg;
   }
 
+  function rotateTrackmapPoint(x, y, deg) {
+    var E = window.TrackmapEstimate;
+    if (E && typeof E.rotatePoint === 'function') return E.rotatePoint(x, y, deg);
+    var r = wrapTrackmapRot(deg) * Math.PI / 180;
+    if (!r) return { x: x, y: y };
+    var c = Math.cos(r), s = Math.sin(r);
+    return { x: x * c - y * s, y: x * s + y * c };
+  }
+
+  function autoOrientDegFor(pts) {
+    var E = window.TrackmapEstimate;
+    if (!E || typeof E.autoOrientDeg !== 'function' || !pts || pts.length < 3) return 0;
+    return wrapTrackmapRot(E.autoOrientDeg(pts));
+  }
+
+  /** 轮廓换了时重算默认朝向。用户仍停在上一条默认上则跟上新默认，否则保留偏移。 */
+  function applyTrackmapAutoOrient(pts, force) {
+    var next = autoOrientDegFor(pts);
+    var prev = wrapTrackmapRot(TRACKMAP.baseRotDeg);
+    TRACKMAP.baseRotDeg = next;
+    if (force || wrapTrackmapRot(TRACKMAP.viewRotDeg) === prev) {
+      TRACKMAP.viewRotDeg = next;
+    }
+  }
+
+  function computeFitBounds(pts, rotDeg) {
+    rotDeg = wrapTrackmapRot(rotDeg);
+    if (!pts || !pts.length) return computeBounds(pts);
+    if (!rotDeg) return computeBounds(pts);
+    var rot = [];
+    for (var i = 0; i < pts.length; i++) {
+      rot.push(rotateTrackmapPoint(pts[i].x, pts[i].y, rotDeg));
+    }
+    return computeBounds(rot);
+  }
+
   function resetTrackmapView() {
     TRACKMAP.viewZoom = 1.05;
     TRACKMAP.viewPanX = 0;
     TRACKMAP.viewPanY = 0;
-    TRACKMAP.viewRotDeg = 0;
+    TRACKMAP.viewRotDeg = wrapTrackmapRot(TRACKMAP.baseRotDeg);
   }
 
   var TM_VIEW_HINT = '滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位';
@@ -2528,16 +2566,6 @@
     };
   }
 
-  /** Unrotate screen point around view center → pre-rotation screen coords. */
-  function unrotateTrackmapScreen(mx, my, w, h) {
-    var ang = -wrapTrackmapRot(TRACKMAP.viewRotDeg) * Math.PI / 180;
-    if (!ang) return { x: mx, y: my };
-    var cx = w / 2, cy = h / 2;
-    var dx = mx - cx, dy = my - cy;
-    var c = Math.cos(ang), s = Math.sin(ang);
-    return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c };
-  }
-
   function wireTrackmapZoom(wrap, box) {
     if (!wrap || wrap.dataset.zoomWired === '1') return;
     wrap.dataset.zoomWired = '1';
@@ -2550,7 +2578,6 @@
     wrap.addEventListener('wheel', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      var size = trackmapViewSize(box, wrap);
       var rect = wrap.getBoundingClientRect();
       var mx = e.clientX - rect.left;
       var my = e.clientY - rect.top;
@@ -2564,8 +2591,7 @@
       }
       var factor = e.deltaY < 0 ? 1.12 : (1 / 1.12);
       if (e.deltaMode === 1) factor = e.deltaY < 0 ? 1.18 : (1 / 1.18);
-      var pre = unrotateTrackmapScreen(mx, my, size.w, size.h);
-      zoomTrackmapAt(box, wrap, pre.x, pre.y, factor);
+      zoomTrackmapAt(box, wrap, mx, my, factor);
     }, { passive: false });
 
     wrap.addEventListener('dblclick', function (e) {
@@ -2636,8 +2662,7 @@
   function zoomTrackmapAt(box, wrap, mx, my, factor) {
     var size = trackmapViewSize(box, wrap);
     var w = size.w, h = size.h;
-    var fitPts = TRACKMAP.outline;
-    var bounds = computeBounds(fitPts);
+    var bounds = computeFitBounds(TRACKMAP.outline, TRACKMAP.viewRotDeg);
     if (!bounds) {
       TRACKMAP.viewZoom = clampTrackmapZoom(TRACKMAP.viewZoom * factor);
       drawTrackmap(box);
@@ -2777,11 +2802,15 @@
     TRACKMAP.outlineError = false;
     TRACKMAP.unknownCircuit = false;
     TRACKMAP.arc = window.TrackmapEstimate ? window.TrackmapEstimate.buildArc(pts) : null;
+    applyTrackmapAutoOrient(pts, false);
     TRACKMAP.viewDirty = true;
     TRACKMAP.viewKey = '';
     saveTrackmapCache();
     var box = document.querySelector('.b-trackmap');
-    if (box) drawTrackmap(box);
+    if (box) {
+      syncTrackmapRotUi(box);
+      drawTrackmap(box);
+    }
     return true;
   }
 
@@ -3064,7 +3093,8 @@
     var empty = svg.querySelector('.tm-empty');
     var bg = svg.querySelector('.tm-line-bg');
     var fg = svg.querySelector('.tm-line-fg');
-    var bounds = computeBounds(TRACKMAP.outline || []);
+    var rotDeg = wrapTrackmapRot(TRACKMAP.viewRotDeg);
+    var bounds = computeFitBounds(TRACKMAP.outline || [], rotDeg);
     if (!bounds || TRACKMAP.outline.length < 3) {
       TRACKMAP.mapper = null;
       TRACKMAP.screenCentroid = null;
@@ -3096,20 +3126,13 @@
     var usedH = bh * scale;
     var ox = (w - usedW) / 2 + (TRACKMAP.viewPanX || 0);
     var oy = (h - usedH) / 2 + (TRACKMAP.viewPanY || 0);
-    var rot = TRACKMAP.viewRotDeg * Math.PI / 180;
-    var cosR = Math.cos(rot);
-    var sinR = Math.sin(rot);
-    var viewCx = w / 2;
-    var viewCy = h / 2;
+    // rotate-then-fit：先按 viewRotDeg 转轮廓，再用旋转后的包围盒适配。
+    // 竖向赛道默认 +90° 后长轴才能横铺；装进框后再转不会回填宽度。
     function mapPoint(x, y) {
-      var sx = ox + (x - bounds.minX) * scale;
-      var sy = oy + (bounds.maxY - y) * scale;
-      if (!rot) return { x: sx, y: sy };
-      var dx = sx - viewCx;
-      var dy = sy - viewCy;
+      var rp = rotDeg ? rotateTrackmapPoint(x, y, rotDeg) : { x: x, y: y };
       return {
-        x: viewCx + dx * cosR - dy * sinR,
-        y: viewCy + dx * sinR + dy * cosR
+        x: ox + (rp.x - bounds.minX) * scale,
+        y: oy + (bounds.maxY - rp.y) * scale
       };
     }
     TRACKMAP.mapper = mapPoint;
@@ -3677,6 +3700,7 @@
       TRACKMAP.viewKey = '';
       TRACKMAP.flagGeomKey = '';
       TRACKMAP.flagPaintKey = '';
+      TRACKMAP.baseRotDeg = 0;
       resetTrackmapView();
       stopTrackmapPoll();
       restoreTrackmapCache(rk);

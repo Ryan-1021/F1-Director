@@ -418,32 +418,58 @@
     var placed = screenAt(frac);
     if (!placed) return null;
     var centroid = opts.centroid;
+    var mappedOutline = [];
+    var pts = arc.pts || [];
+    var sx = 0;
+    var sy = 0;
+    var n = 0;
+    var i;
+    for (i = 0; i < pts.length; i++) {
+      var mapped = mapPoint(pts[i].x, pts[i].y);
+      if (!mapped || !isFinite(mapped.x) || !isFinite(mapped.y)) continue;
+      mappedOutline.push(mapped);
+      sx += mapped.x;
+      sy += mapped.y;
+      n++;
+    }
     if (!centroid || !isFinite(centroid.x) || !isFinite(centroid.y)) {
-      var pts = arc.pts || [];
-      var sx = 0;
-      var sy = 0;
-      var n = 0;
-      var i;
-      for (i = 0; i < pts.length; i++) {
-        var mapped = mapPoint(pts[i].x, pts[i].y);
-        if (!mapped || !isFinite(mapped.x) || !isFinite(mapped.y)) continue;
-        sx += mapped.x;
-        sy += mapped.y;
-        n++;
-      }
       if (n >= 3) centroid = { x: sx / n, y: sy / n };
     }
-    var onTrack = placed.origin;
-    var origin = onTrack;
-    var outward = { x: 0, y: 0 };
-    if (outset > 0) {
-      var inn = inwardNormal(placed.tx, placed.ty, onTrack, centroid);
-      outward = { x: -inn.x, y: -inn.y };
-      origin = {
-        x: onTrack.x + outward.x * outset,
-        y: onTrack.y + outward.y * outset
-      };
+
+    function offsetPlaced(hit) {
+      if (!hit) return null;
+      var on = hit.origin;
+      var ow = { x: 0, y: 0 };
+      var org = on;
+      if (outset > 0) {
+        var inn = inwardNormal(hit.tx, hit.ty, on, centroid);
+        ow = { x: -inn.x, y: -inn.y };
+        org = { x: on.x + ow.x * outset, y: on.y + ow.y * outset };
+      }
+      return { placed: hit, onTrack: on, origin: org, outward: ow };
     }
+
+    var pose = offsetPlaced(placed);
+    if (!pose) return null;
+    // 先转再适配后邻段可能贴得更近；箭头仍在 maxFrac 内沿圈往前走到不压灰线。
+    var needClear = strokeW > 0 ? strokeW / 2 - 0.2 : 0;
+    if (needClear > 0 && mappedOutline.length >= 2 &&
+        minDistPointToPolyline(pose.origin.x, pose.origin.y, mappedOutline) < needClear) {
+      var f;
+      for (f = frac + 0.002; f <= maxFrac + 1e-9; f += 0.002) {
+        var cand = offsetPlaced(screenAt(f > maxFrac ? maxFrac : f));
+        if (!cand) continue;
+        if (minDistPointToPolyline(cand.origin.x, cand.origin.y, mappedOutline) >= needClear) {
+          pose = cand;
+          frac = cand.placed.frac;
+          break;
+        }
+      }
+    }
+    var onTrack = pose.onTrack;
+    var origin = pose.origin;
+    var outward = pose.outward;
+    placed = pose.placed;
     var arrow = directionArrow(origin, placed.tx, placed.ty, length, width);
     return {
       frac: frac,
@@ -701,7 +727,8 @@
   /**
    * 屏幕坐标：P 徽章钉在赛道图视口左上角（面板 UI 角，不是按赛道搜空位）。
    * 默认离开边缘 PIT_BAY_INSET；若 AABB 仍压到灰线描边（间隙 < 半线宽），
-   * 只把同一角的边距略加大，不回到内侧/网格搜索。
+   * 先把同一角的边距略加大；再不行且仍是默认 inset 时往角落收一点。
+   * 不回到内侧/网格搜索。
    */
   function placePitBay(opts) {
     opts = opts || {};
@@ -715,7 +742,8 @@
     if (!(viewH > 0)) viewH = 240;
     var size = pitBaySize(opts.carCount, opts.zoom, 0);
     var baseInset = Number(opts.inset);
-    if (!(baseInset >= 0)) baseInset = PIT_BAY_INSET;
+    var usingDefaultInset = !(baseInset >= 0);
+    if (usingDefaultInset) baseInset = PIT_BAY_INSET;
 
     function atInset(m) {
       var origin = clampBayOrigin(m, m, size.width, size.height, viewW, viewH, Math.min(m, 4));
@@ -730,6 +758,16 @@
       for (extra = 2; extra <= 20; extra += 2) {
         var cand = atInset(baseInset + extra);
         if (cand.clearance > placed.clearance) placed = cand;
+        if (placed.clearance >= minClear) break;
+      }
+    }
+    // 竖向赛道横铺后顶边更满：加大边距会更贴线，这时往角落收一点。
+    // 调用方写了 inset 则尊重，不往回收。
+    if (outline.length && placed.clearance < minClear && usingDefaultInset) {
+      var tighter;
+      for (tighter = baseInset - 2; tighter >= 2; tighter -= 2) {
+        var pull = atInset(tighter);
+        if (pull.clearance > placed.clearance) placed = pull;
         if (placed.clearance >= minClear) break;
       }
     }
@@ -1617,6 +1655,58 @@
     return sampleSvgPath(longestPathD(svgText), curveSteps);
   }
 
+  /** 竖向更长（H/W ≥ 此值）时默认转 +90°，让长轴横着铺。 */
+  var AUTO_ORIENT_HW = 1.2;
+
+  function outlineBounds(pts) {
+    if (!pts || !pts.length) return null;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < pts.length; i++) {
+      var p = pts[i];
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    if (!isFinite(minX)) return null;
+    return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
+  }
+
+  /**
+   * 按 0° 轮廓 AABB 定默认朝向。竖向更长返回 +90（CCW），横向 / 近方返回 0。
+   * 适配层应先转再算包围盒（rotate-then-fit），不要只在装进框之后转。
+   */
+  function autoOrientDeg(pts, minHw) {
+    var b = outlineBounds(pts);
+    if (!b) return 0;
+    var w = b.maxX - b.minX;
+    var h = b.maxY - b.minY;
+    if (!(w > 0)) return 0;
+    var ratio = minHw == null ? AUTO_ORIENT_HW : Number(minHw);
+    if (!(ratio > 0)) ratio = AUTO_ORIENT_HW;
+    if (h / w >= ratio) return 90;
+    return 0;
+  }
+
+  /** 绕原点转屏幕/轮廓点。90/180/270 走整数，避免 cos(π/2) 的浮点渣。 */
+  function rotatePoint(x, y, deg) {
+    deg = Number(deg) || 0;
+    deg = deg % 360;
+    if (deg < 0) deg += 360;
+    if (!deg) return { x: x, y: y };
+    var snapped = Math.round(deg);
+    if (Math.abs(deg - snapped) < 1e-9) {
+      if (snapped === 90) return { x: -y, y: x };
+      if (snapped === 180) return { x: -x, y: -y };
+      if (snapped === 270) return { x: y, y: -x };
+      if (snapped === 0 || snapped === 360) return { x: x, y: y };
+    }
+    var rad = deg * Math.PI / 180;
+    var c = Math.cos(rad);
+    var s = Math.sin(rad);
+    return { x: x * c - y * s, y: x * s + y * c };
+  }
+
   function ptDist(a, b) {
     var dx = a.x - b.x;
     var dy = a.y - b.y;
@@ -1742,6 +1832,10 @@
     sampleSvgPath: sampleSvgPath,
     longestPathD: longestPathD,
     outlineFromSvg: outlineFromSvg,
+    outlineBounds: outlineBounds,
+    AUTO_ORIENT_HW: AUTO_ORIENT_HW,
+    autoOrientDeg: autoOrientDeg,
+    rotatePoint: rotatePoint,
     orientClosedOutline: orientClosedOutline,
     sectorFrac: sectorFrac
   };
