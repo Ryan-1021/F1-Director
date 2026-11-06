@@ -726,7 +726,7 @@ table.timing tbody tr.retired:nth-child(even) > td {
 
 /* Rank-row swap (FLIP / translateY). Not the jar drop5/drop10/flash blink. */
 table.timing {
-  --rank-swap-ms: 320ms;
+  --rank-swap-ms: 1000ms;
   --rank-swap-ease: ease;
 }
 table.timing tr[data-car] {
