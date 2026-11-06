@@ -15,7 +15,8 @@
 })(typeof window !== 'undefined' ? window : globalThis, function () {
   'use strict';
 
-  var DURATION_MS = 320;
+  // Keep in sync with --rank-swap-ms / --rank-swap-ease in style.css.
+  var DURATION_MS = 1000;
   var EASE = 'ease';
   var MIN_DY = 0.5;
 

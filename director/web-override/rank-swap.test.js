@@ -57,7 +57,32 @@ assert(RS.stripeClassForIndex(0) === true, 'P1 stripe');
 assert(RS.stripeClassForIndex(1) === false, 'P2 no stripe');
 assert(RS.stripeClassForIndex(2) === true, 'P3 stripe');
 
-assert(RS.DURATION_MS >= 280 && RS.DURATION_MS <= 350, 'duration in agreed window');
+assert(RS.DURATION_MS === 1000, 'duration is 1s');
+(function assertCssDurationMatches() {
+  var fs = require('fs');
+  var path = require('path');
+  var css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+  assert(/--rank-swap-ms:\s*1000ms/.test(css), 'CSS --rank-swap-ms is 1000ms');
+})();
+
+(function testPlayFlipWritesDuration() {
+  function fakeRow(key, top) {
+    return {
+      getAttribute: function (n) { return n === 'data-car' ? key : ''; },
+      getBoundingClientRect: function () { return { top: top, height: 24 }; },
+      style: {},
+      classList: { add: function () {}, remove: function () {} },
+      addEventListener: function () {},
+      removeEventListener: function () {},
+      offsetHeight: 24
+    };
+  }
+  var row = fakeRow('1', 40);
+  var result = RS.playFlip([row], { '1': { top: 16, height: 24, index: 0 } });
+  assert(result.animated === true, 'playFlip animates when invert dy is large');
+  assert(row.style.transition === 'transform 1000ms ease',
+    'playFlip writes 1000ms ease, got ' + row.style.transition);
+})();
 
 (function testSkipBoardEmptyRow() {
   function fakeTr(opts) {
