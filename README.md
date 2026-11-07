@@ -176,8 +176,10 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 ## 开发与发布备注
 
 - 改 `director/web-override/` 或 `director.html` 后跑一次 `director\Publish-Web.cmd`，或直接再开 `启动导播台.exe`（启动流程会发布）。
+- 系统窗口标题（浏览器 / Edge `--app` 的 `<title>`）在 Publish-Web / Start 时从根目录 `VERSION` 写入，格式 `F1 导播台 · Director · v{短版本}`（去掉 `+build`）；页内顶栏 logo 不含版本。
 - 排名换行自测：`node director/web-override/rank-swap.test.js`；界面上换位成绩榜或赛段成绩里任意两车的 POS 应看到整行滑动。
 - 关页停服时序自测：`node director/lifecycle-heartbeat.test.js`（心跳 4s / 告别 ~3s / 失联 ~5s）。
+- 窗口标题版本自测：`node director/window-title-version.test.js`。
 - `share/web/` 为生成物，以 `director/` 为源。
 - 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。

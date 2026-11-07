@@ -26,5 +26,9 @@ if exist "%~dp0assets" (
   xcopy /Y /Q /E "%~dp0assets\*" "%WEBDIR%\assets\" >nul
 )
 if exist "%~dp0director.html" copy /Y "%~dp0director.html" "%WEBDIR%\director.html" >nul
+if exist "%~dp0..\VERSION" (
+  copy /Y "%~dp0..\VERSION" "%WEBDIR%\VERSION" >nul
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Stamp-WindowTitle.ps1" -WebDir "%WEBDIR%" -VersionFile "%~dp0..\VERSION"
+)
 echo Published to %WEBDIR%
 echo Soft-refresh (F5) should pick it up; hard refresh if a tab still looks stale.
