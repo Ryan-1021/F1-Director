@@ -46,7 +46,7 @@ Backup of prior jar: `share\F1-RaceControl-Desktop.jar.bak-0.1.16`
 - `.sec-purple` / `.sec-green` / `.sec-yellow` on S1–S3 cells
 - optional `+0.123` delta vs field / overall best
 - when live status is 0: purple via field-min time; green via match to `bestSectors`
-- compact `.sec-mini` strip under each sector time (status-colored bits)
+- compact `.sec-mini` strip under each sector time (status-colored bits). Official `Segments` status often ages to `0` front-to-back (gray early cells, later still yellow/green); the board paints those holes as-is. Estimated trackmap does **not** exact-pull from residual lit cells, and same-lap progress / `doneSegs` only ratchets forward.
 - weather board prefers structured `humidity` / `wind` / `rain` (falls back to parsing `text`)
 - speeds exposed in `/api/state` only for now (no FL column — keep sectors board dense)
 
