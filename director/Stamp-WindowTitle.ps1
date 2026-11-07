@@ -1,6 +1,6 @@
 # Stamp share/web/director.html <title> from repo VERSION.
 # Short form: strip +build metadata, drop a leading v, then prefix v.
-# Example: 0.2.12+20261107 -> "F1 ... Director · v0.2.12"
+# Example: 0.2.13+20261107 -> "F1 ... Director · v0.2.13"
 # This file is ASCII-only so Windows PowerShell 5.1 can parse it on any code page.
 param(
     [Parameter(Mandatory = $true)][string]$WebDir,
