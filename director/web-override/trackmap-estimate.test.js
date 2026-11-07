@@ -601,8 +601,8 @@ assert(E.PACE_STRAIGHT === 1.15, 'straight ratio is 1.15×');
 assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.2, 'straight ratio in the 1.0–1.2× band');
 assert(E.PACE_CORNER === 0.55, 'corner ratio is 0.55×');
 assert(E.PACE_CORNER >= 0.35 && E.PACE_CORNER <= 0.55, 'corner ratio in the 0.35–0.55× band');
-assert(E.PACE_K_LO === 6, 'turn-rate lo is 6');
-assert(E.PACE_K_HI === 56, 'turn-rate hi is 56');
+assert(E.PACE_K_LO === 10, 'turn-rate lo is 10');
+assert(E.PACE_K_HI === 48, 'turn-rate hi is 48');
 
 var paceSq = E.buildArc([
   { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 0, y: 0 }
