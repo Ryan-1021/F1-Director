@@ -12,7 +12,9 @@
  * 赛段或计时突然前跳时平滑加速追上，接近目标提前减速，不瞬移；
  * 小更新仍然跟得上。追上之后按约 1× 巡航接着走，不把画面钉死在卡住
  * 的测量上；卡在 cap 上等下一格时也不掉到 0.12× 爬行（否则两格之间
- * 像粘住，下一格再 vmax 闪过去）。测量后撤仍衰减滑行。进站 / 停车 /
+ * 像粘住，下一格再 vmax 闪过去）。有轮廓时，这趟 1× 参考巡航再乘
+ * 当地折线曲率：弯慢直快（示意图近似，不是官方弯角表）。vmax /
+ * 加速度仍按未缩放圈速。测量后撤仍衰减滑行。进站 / 停车 /
  * 换圈过线 / 大约 0.12 圈以上的后撤仍允许不连续。
  * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
  * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
@@ -79,6 +81,125 @@
   // 积分步长。单次 sample 可能跨整秒（测试 / 切后台），必须拆开，
   // 否则 8× × 3s 会一次跳 ~0.27 圈。
   var CHASE_DT_MS = 12;
+  // 示意图折线曲率 → 参考巡航倍数。不是官方弯角 / 测距。
+  // 直线略快于 1×，弯角大约半速；过渡用平滑插值 + 短时滞，避免因子抖动。
+  var PACE_STRAIGHT = 1.15;
+  var PACE_CORNER = 0.45;
+  var PACE_K_LO = 10;
+  var PACE_K_HI = 48;
+  var PACE_WIN = 0.022;
+  var PACE_SAMPLES = 256;
+  var PACE_SMOOTH = 3;
+  var PACE_DILATE = 2;
+  var PACE_TAU_MS = 120;
+
+  function angAbsDiff(a, b) {
+    var d = b - a;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return Math.abs(d);
+  }
+
+  function smoother01(t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  }
+
+  function paceFromTurn(k) {
+    var u = (Number(k) - PACE_K_LO) / (PACE_K_HI - PACE_K_LO);
+    return PACE_STRAIGHT + (PACE_CORNER - PACE_STRAIGHT) * smoother01(u);
+  }
+
+  /**
+   * 窗口内累计 |Δheading| / 弧长比例 → 弧度/圈。折线噪声用多步采样压掉。
+   * 示意图近似：转角密的地方当弯，平的当直，没有官方弯号。
+   */
+  function turnRateAt(arc, frac, win) {
+    if (!arc || !(arc.total > 0)) return 0;
+    if (!(win > 0)) win = PACE_WIN;
+    var steps = 8;
+    var acc = 0;
+    var prev = null;
+    var i;
+    for (i = 0; i <= steps; i++) {
+      var p = pointOnArc(arc, wrap01(frac - win / 2 + win * i / steps));
+      var h = Math.atan2(p.ty, p.tx);
+      if (prev != null) acc += angAbsDiff(prev, h);
+      prev = h;
+    }
+    return acc / win;
+  }
+
+  function buildPaceProfile(arc) {
+    if (!arc || !(arc.total > 0) || !arc.pts || arc.pts.length < 4) return null;
+    var n = PACE_SAMPLES;
+    var raw = [];
+    var i;
+    for (i = 0; i < n; i++) raw.push(turnRateAt(arc, i / n, PACE_WIN));
+    var dilated = [];
+    for (i = 0; i < n; i++) {
+      var peak = raw[i];
+      var d;
+      for (d = -PACE_DILATE; d <= PACE_DILATE; d++) {
+        var v = raw[(i + d + n) % n];
+        if (v > peak) peak = v;
+      }
+      dilated.push(raw[i] * 0.55 + peak * 0.45);
+    }
+    var turn = [];
+    for (i = 0; i < n; i++) {
+      var acc = 0;
+      var k;
+      for (k = -PACE_SMOOTH; k <= PACE_SMOOTH; k++) acc += dilated[(i + k + n) % n];
+      turn.push(acc / (2 * PACE_SMOOTH + 1));
+    }
+    var factor = [];
+    for (i = 0; i < n; i++) factor.push(paceFromTurn(turn[i]));
+    return { n: n, factor: factor, turn: turn };
+  }
+
+  function paceFactorAt(arc, frac) {
+    var p = arc && arc.pace;
+    if (!p || !p.factor || !p.n) return 1;
+    var t = wrap01(frac) * p.n;
+    var i = Math.floor(t);
+    var u = t - i;
+    var a = p.factor[((i % p.n) + p.n) % p.n];
+    var b = p.factor[((i + 1) % p.n + p.n) % p.n];
+    var f = a + (b - a) * u;
+    if (f < PACE_CORNER) f = PACE_CORNER;
+    if (f > PACE_STRAIGHT) f = PACE_STRAIGHT;
+    return f;
+  }
+
+  function motionArc(st, arc) {
+    if (arc && arc.pace) return arc;
+    if (st && st.arc && st.arc.pace) return st.arc;
+    return null;
+  }
+
+  function blendPaceFactor(st, target, dt) {
+    if (!(target > 0) || !isFinite(target)) target = 1;
+    if (target < PACE_CORNER) target = PACE_CORNER;
+    if (target > PACE_STRAIGHT) target = PACE_STRAIGHT;
+    if (!(st.paceFactor > 0) || !isFinite(st.paceFactor)) {
+      st.paceFactor = target;
+      return target;
+    }
+    var a = 1 - Math.exp(-(dt > 0 ? dt : 0) / PACE_TAU_MS);
+    if (a > 1) a = 1;
+    if (a > 0) st.paceFactor += (target - st.paceFactor) * a;
+    return st.paceFactor;
+  }
+
+  function cruiseSpeed(st, fullSpeed) {
+    var f = st && st.paceFactor;
+    if (!(f > 0) || !isFinite(f)) f = 1;
+    if (f < PACE_CORNER) f = PACE_CORNER;
+    if (f > PACE_STRAIGHT) f = PACE_STRAIGHT;
+    return fullSpeed * f;
+  }
 
   /**
    * 沿圈取更靠前的 cap。newCap 略落后时保住 previous；
@@ -1018,10 +1139,25 @@
   }
 
   /** 这一拍的测量信念：锚点按圈速外推，再夹到棘轮 cap（含少量 bleed）。 */
-  function beliefOf(st, now, lapMs) {
+  function beliefOf(st, now, lapMs, arc) {
     var scale = st.lapScale > 0 ? st.lapScale : 1;
     var ms = (lapMs > 1 ? lapMs : 90000) * scale;
-    var adv = Math.max(0, now - st.at) / ms;
+    var elapsed = Math.max(0, now - st.at);
+    var adv = elapsed / ms;
+    arc = motionArc(st, arc);
+    if (arc && elapsed > 0) {
+      adv = 0;
+      var t = 0;
+      var step = CHASE_DT_MS;
+      if (elapsed > 2500) step = 24;
+      if (elapsed > 8000) step = 48;
+      while (t < elapsed) {
+        var h = elapsed - t;
+        if (h > step) h = step;
+        t += h;
+        adv += paceFactorAt(arc, wrap01(st.anchor + adv)) * h / ms;
+      }
+    }
     if (st.cap != null && isFinite(st.cap)) {
       var room = wrap01(st.cap - st.anchor);
       if (room > 0.98) room = 0;
@@ -1042,16 +1178,22 @@
   /**
    * 画面沿圈追 belief：只向前（过起终点按短弧绕），加速度和最高速度封顶。
    * dt 可能是整秒（测试一次采样 / 页签回前台），按 CHASE_DT_MS 拆开积。
+   * 曲率只缩放参考巡航（cruise）；vmax / 加速度仍用未缩放 fullSpeed。
+   * HOLD_BACK 回贴 shown=belief、#21 coast 种子与下限都不走曲率。
    */
-  function chaseToward(st, belief, dt, fullSpeed) {
+  function chaseToward(st, belief, dt, fullSpeed, arc) {
     var shown = (st.display != null && isFinite(st.display)) ? st.display : belief;
-    if (!(st.vel > 0) && !st.coasting) st.vel = fullSpeed;
+    arc = motionArc(st, arc);
+    if (arc) blendPaceFactor(st, paceFactorAt(arc, shown), dt > 0 ? Math.min(dt, PACE_TAU_MS) : 0);
+    else if (!(st.paceFactor > 0)) st.paceFactor = 1;
+    var cruise = cruiseSpeed(st, fullSpeed);
+    if (!(st.vel > 0) && !st.coasting) st.vel = cruise;
     var prevBelief = (st.belief != null && isFinite(st.belief)) ? st.belief : shown;
-    var beliefVel = dt > 0 ? wrapDelta(belief - prevBelief) / dt : fullSpeed;
+    var beliefVel = dt > 0 ? wrapDelta(belief - prevBelief) / dt : cruise;
     // cap 卡住时 belief 几乎不动（含 0.22× bleed）。这时不要把画面粘在
     // belief 上，否则两格之间停死。belief 仍在按圈速走时，追上就停在
     // 这一拍的帧末信念，剩下的 dt 不要继续往前跑。
-    var beliefPinned = !(beliefVel > fullSpeed * 0.45);
+    var beliefPinned = !(beliefVel > cruise * 0.45);
     // 测量后撤：belief 这一拍往后跳。卡在 cap 上 1× 巡航超前不是后撤，
     // 不要进 0.12× 深 coast。
     var rolledBack = wrapDelta(belief - prevBelief) < -1e-6;
@@ -1066,7 +1208,7 @@
       }
     } else if (!coastLead || !st.coasting) {
       st.coasting = false;
-      if (!(st.vel > fullSpeed)) st.vel = fullSpeed;
+      if (!(st.vel > cruise)) st.vel = cruise;
     }
     st.belief = belief;
     if (!(dt > 0)) return shown;
@@ -1079,6 +1221,10 @@
       var h = dt - t;
       if (h > CHASE_DT_MS) h = CHASE_DT_MS;
       t += h;
+      if (arc) {
+        blendPaceFactor(st, paceFactorAt(arc, shown), h);
+        cruise = cruiseSpeed(st, fullSpeed);
+      }
       var err = wrapDelta(belief - shown);
       if (err <= -HOLD_BACK) {
         // 大后撤不走 chase（换圈误判 / 重置）：允许一次不连续，交给 ease 或直接落到 belief。
@@ -1090,7 +1236,7 @@
       }
       if (!beliefPinned && err >= 0 && err <= CHASE_SNAP) {
         shown = belief;
-        if (!(st.vel > fullSpeed)) st.vel = fullSpeed;
+        if (!(st.vel > cruise)) st.vel = cruise;
         st.coasting = false;
         st.coastSpeed = 0;
         break;
@@ -1107,25 +1253,25 @@
         st.coastSpeed = Math.max(st.coastSpeed * Math.exp(-h / COAST_TAU_MS), fullSpeed * COAST_MIN);
       } else {
         st.coasting = false;
-        // 已跟上、略超前、或卡在 cap 上等下一格：1× 巡航直到 HOLD_BACK。
-        // 非 coast 时 vel 不低于 fullSpeed，下一格小跳不必从 0 再爬 vmax。
-        if (!(st.vel > fullSpeed)) st.vel = fullSpeed;
-        if (err <= CHASE_SNAP) desired = fullSpeed;
+        // 已跟上、略超前、或卡在 cap 上等下一格：曲率缩放后的参考巡航直到 HOLD_BACK。
+        // 非 coast 时 vel 不低于 cruise，下一格小跳不必从 0 再爬 vmax。
+        if (!(st.vel > cruise)) st.vel = cruise;
+        if (err <= CHASE_SNAP) desired = cruise;
         else {
-          desired = fullSpeed + kp * err;
+          desired = cruise + kp * err;
           if (desired > vmax) desired = vmax;
         }
-        if (desired < fullSpeed) desired = fullSpeed;
+        if (desired < cruise) desired = cruise;
       }
       var vel = st.vel;
-      if (!st.coasting && !(vel > fullSpeed)) vel = fullSpeed;
+      if (!st.coasting && !(vel > cruise)) vel = cruise;
       var dv = desired - vel;
       var maxDv = aMax * h;
       if (dv > maxDv) dv = maxDv;
       if (dv < -maxDv) dv = -maxDv;
       vel += dv;
       if (vel < 0) vel = 0;
-      if (!st.coasting && vel < fullSpeed) vel = fullSpeed;
+      if (!st.coasting && vel < cruise) vel = cruise;
       if (err >= 0 && vel > vmax) vel = vmax;
       var step = vel * h;
       if (st.coasting && step > COAST_STEP_MAX) step = COAST_STEP_MAX;
@@ -1133,7 +1279,7 @@
         var slack = beliefPinned ? CHASE_CRUISE_LEAD : 0;
         if (step > err + slack) {
           step = err + slack;
-          vel = fullSpeed;
+          vel = cruise;
         }
       } else {
         var maxLead = HOLD_BACK - 0.002;
@@ -1154,8 +1300,10 @@
     return shown;
   }
 
-  function sampleMotion(st, now, lapMs, frozen) {
+  function sampleMotion(st, now, lapMs, frozen, arc) {
     if (!st) return 0;
+    if (arc && arc.pace) st.arc = arc;
+    else arc = motionArc(st, arc);
     var lastSeen = st.seen != null && isFinite(st.seen) ? st.seen : st.at;
     var frameDt = Math.max(0, now - lastSeen);
     st.seen = now;
@@ -1193,8 +1341,8 @@
     var scale = st.lapScale > 0 ? st.lapScale : 1;
     var ms = (lapMs > 1 ? lapMs : 90000) * scale;
     var fullSpeed = 1 / ms;
-    var belief = beliefOf(st, now, lapMs);
-    var next = chaseToward(st, belief, frameDt, fullSpeed);
+    var belief = beliefOf(st, now, lapMs, arc);
+    var next = chaseToward(st, belief, frameDt, fullSpeed, arc);
     st.display = next;
     return next;
   }
@@ -1214,7 +1362,7 @@
   }
 
   function pointTarget(st, target, cap, now, lapMs, frozen, flags) {
-    var shown = sampleMotion(st, now, lapMs, frozen);
+    var shown = sampleMotion(st, now, lapMs, frozen, flags && flags.arc);
     var modeChanged = !!st.pit !== !!flags.pit || !!st.hold !== !!flags.hold;
     var targetMoved = st.lastTarget == null || Math.abs(wrapDelta(target - st.lastTarget)) > 0.0005;
     var err = wrapDelta(target - shown);
@@ -1260,8 +1408,10 @@
       st.hide = !!flags.hide;
       st.lapScale = flags.outlap && !flags.exact ? 1.75 : (flags.lapScale > 0.5 ? flags.lapScale : 1);
       st.lastTarget = target;
+      if ('arc' in flags) st.arc = flags.arc;
       return st;
     }
+    if ('arc' in flags) st.arc = flags.arc;
     if (flags.hide) {
       st.hide = true;
       return st;
@@ -1270,7 +1420,7 @@
 
     if (flags.pit) {
       if (!st.pit) {
-        var entered = sampleMotion(st, now, lapMs, frozen);
+        var entered = sampleMotion(st, now, lapMs, frozen, flags.arc);
         rebaseMotion(st, entered, now);
         st.cap = entered;
         st.lastTarget = entered;
@@ -1288,7 +1438,7 @@
 
     if (flags.hold) {
       if (!st.hold) {
-        var stoppedAt = sampleMotion(st, now, lapMs, frozen);
+        var stoppedAt = sampleMotion(st, now, lapMs, frozen, flags.arc);
         rebaseMotion(st, stoppedAt, now);
       }
       st.hold = true;
@@ -1300,14 +1450,14 @@
     st.hold = false;
     var nextScale = flags.outlap && !flags.exact ? 1.75 : (flags.lapScale > 0.5 ? flags.lapScale : 1);
     if (st.lapScale > 0 && Math.abs(nextScale - st.lapScale) / st.lapScale > 0.05) {
-      var shownScale = sampleMotion(st, now, lapMs, frozen);
+      var shownScale = sampleMotion(st, now, lapMs, frozen, flags.arc);
       rebaseMotion(st, shownScale, now);
     }
     st.lapScale = nextScale;
 
     // 三赛段全亮时进度会落到起点。车若还在半圈上，多半是后两段留着上一圈的颜色，不要拉回去。
     if (flags.freshLap) {
-      var shownLap = sampleMotion(st, now, lapMs, frozen);
+      var shownLap = sampleMotion(st, now, lapMs, frozen, flags.arc);
       if (shownLap > 0.15 && shownLap < 0.88) {
         st.cap = wrap01(shownLap + 0.03);
         return st;
@@ -1315,7 +1465,7 @@
     }
 
     if (!flags.exact) {
-      var shown = sampleMotion(st, now, lapMs, frozen);
+      var shown = sampleMotion(st, now, lapMs, frozen, flags.arc);
       var behind = wrapDelta(target - shown);
       if (behind > 0.02 && behind < 0.5 && st.easeTo == null) {
         // 下限抬高：belief 前移，画面仍走加速度限制，不 420ms ease 瞬移。
@@ -1344,7 +1494,9 @@
       total += Math.sqrt(dx * dx + dy * dy);
       cum.push(total);
     }
-    return { pts: src, cum: cum, total: total };
+    var arc = { pts: src, cum: cum, total: total };
+    arc.pace = buildPaceProfile(arc);
+    return arc;
   }
 
   /**
@@ -1908,6 +2060,9 @@
     wrap01: wrap01,
     wrapDelta: wrapDelta,
     HOLD_BACK: HOLD_BACK,
+    PACE_STRAIGHT: PACE_STRAIGHT,
+    PACE_CORNER: PACE_CORNER,
+    paceFactorAt: paceFactorAt,
     ratchetCap: ratchetCap,
     progressFromTiming: progressFromTiming,
     parseGap: parseGap,
