@@ -2,6 +2,7 @@ F1 Director — runtime pack (upstream jar + portable JRE)
 
 This folder is the runtime used by F1-Director:
   - F1-RaceControl-Desktop-0.1.15_modify.jar  (upstream release 0.1.15 + local patches; MANIFEST 0.1.15_modify)
+  - translations.rctrans        (next to the jar; overrides built-in gloss for drivers/phrases)
   - jre\                        (portable JRE; not in git — keep locally)
   - web\                        (published by director\Start.cmd; not in git)
 

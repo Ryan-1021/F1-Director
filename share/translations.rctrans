@@ -1,0 +1,89 @@
+!rctrans 3
+# F1-Race Control 翻译库（纯文本，UTF-8）—— 改完保存，重启程序生效
+# 安卓端：设置 → 翻译库 → 导入翻译（选这个文件）
+# 分四段：
+#   [phrases]  短语 -> 中文：消息里包含这个短语就用它（最长匹配优先）
+#   [drivers]  三位缩写 -> 中文姓氏：精确查表，直接生效
+#   [texts]    译文里的中文片段替换：左边=程序原本说法，右边=你的说法
+#              默认左右相同（等于没改），改了就在输出里替换
+#   [patterns] 正则 + 变量模板：取消注释即生效，命中后整条译文换成模板
+#              模板里 {0}=整条匹配，{1}{2}…=捕获组
+# 井号开头是注释，空行忽略。
+
+[phrases]
+# 短语 -> 中文
+FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS – ESCAPE ROAD INSTRUCTIONS = 未遵守赛会指令（逃生通道）
+FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS - ESCAPE ROAD INSTRUCTIONS = 未遵守赛会指令（逃生通道）
+FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS – MAXIMUM DELTA TIME = 未遵守赛会指令（超出最大圈速差）
+FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS - MAXIMUM DELTA TIME = 未遵守赛会指令（超出最大圈速差）
+FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS – PRACTICE START INFRINGEMENT = 未遵守赛会指令（起步练习违规）
+FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS - PRACTICE START INFRINGEMENT = 未遵守赛会指令（起步练习违规）
+FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS = 未遵守赛会指令
+LEAVING THE TRACK AND GAINING AN ADVANTAGE = 离开赛道并获得优势
+FORCING ANOTHER DRIVER OFF THE TRACK = 把对手逼出赛道
+SPEEDING IN THE PIT LANE = 维修区超速
+CAUSING A COLLISION = 造成碰撞
+REJOINING UNSAFELY = 不安全地回归赛道
+MOVING UNDER BRAKING = 制动中变线
+MAXIMUM DELTA TIME = 超出最大圈速差
+YELLOW FLAG INFRINGEMENT = 黄旗违规
+UNSAFE RELEASE = 不安全放车
+IMPEDING = 阻挡他人
+TRACK LIMITS = 超出赛道限制
+SAFETY CAR PROCEDURE INFRINGEMENT = 安全车程序违规
+STARTING PROCEDURE INFRINGEMENT = 起步程序违规
+DRIVING ERRATICALLY OR IN A POTENTIALLY DANGEROUS MANNER = 危险驾驶
+DRIVING ERRATICALLY = 危险驾驶
+UNSAFE CONDITION = 不安全状况
+PRACTICE START INFRINGEMENT = 练习起步违规
+DOUBLE YELLOW = 双黄旗
+
+[drivers]
+# 车手译名：三位缩写 = 中文姓氏
+VER = 维斯塔潘
+LAW = 劳森
+ALO = 阿隆索
+SAR = 萨金特
+ANT = 安东内利
+STR = 斯特罗尔
+HUL = 霍肯伯格
+BEA = 比尔曼
+ZHO = 周冠宇
+COL = 科拉平托
+BOR = 博托莱托
+DOO = 杜汉
+BOT = 博塔斯
+PIA = 皮亚斯特里
+HAD = 哈贾尔
+LEC = 勒克莱尔
+RIC = 里卡多
+NOR = 诺里斯
+LIN = 林布拉德
+RUS = 拉塞尔
+MAG = 马格努森
+DEV = 德弗里斯
+HAM = 汉密尔顿
+TSU = 角田
+ALB = 阿尔本
+GAS = 加斯利
+SAI = 塞恩斯
+OCO = 奥康
+PER = 佩雷兹
+FOR = 福纳罗利
+BEG = 贝加诺维奇
+BRO = 布朗宁
+MIN = 米尼
+SLA = 斯莱特
+HER = 赫塔
+CAM = 卡马拉
+
+[patterns]
+# 带变量的正则覆盖：取消注释（去掉行首 # ）即生效，
+# 命中后**整条译文**就是你的模板，不再走内置规则。
+# 每行格式：正则 = 中文模板        （{1}=第1个捕获组，{0}=整条匹配）
+# FIA STEWARDS:\s*REPRIMAND.*?CAR\s+(\d+)\s*\(([A-Z]{3})\).* = ★ 训诫：{2}（{1} 号车）
+# CAR\s+(\d+)\s*\(([A-Z]{3})\).*?(\d+)\s*SECOND\w*\s*PENALTY = {2}（{1} 号车）罚 {3} 秒
+# TURN\s+(\d+) = {1} 号弯
+# LAP\s+(\d+) = 第 {1} 圈
+# SECTOR\s+(\d+) = 第 {1} 区段
+# RISK OF RAIN FOR (.+?) IS (\d+)\s*% = {1} 降雨概率 {2}%
