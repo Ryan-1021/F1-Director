@@ -4,9 +4,6 @@ share/jre/
 # Published web UI — regenerated from director/ on every Start.cmd
 share/web/
 
-# Optional upstream translation override (not required)
-share/translations.rctrans
-
 # Race Control / Director logs
 *.rclog
 *.log
