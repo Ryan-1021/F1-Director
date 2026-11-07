@@ -597,10 +597,12 @@ assert(E.wrapDelta(capLater - capTick) < 0.05, 'cap leap chase is accel-limited 
 
 assert(E.paceFactorAt(null, 0.2) === 1, 'no outline keeps 1× pace');
 assert(E.paceFactorAt({ pts: [], total: 0 }, 0.5) === 1, 'empty arc keeps 1× pace');
-assert(E.PACE_STRAIGHT === 1.05, 'straight ratio is 1.05×');
-assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.1, 'straight ratio in the 1.0–1.1× band');
+assert(E.PACE_STRAIGHT === 1.15, 'straight ratio is 1.15×');
+assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.2, 'straight ratio in the 1.0–1.2× band');
 assert(E.PACE_CORNER === 0.55, 'corner ratio is 0.55×');
 assert(E.PACE_CORNER >= 0.35 && E.PACE_CORNER <= 0.55, 'corner ratio in the 0.35–0.55× band');
+assert(E.PACE_K_LO === 6, 'turn-rate lo is 6');
+assert(E.PACE_K_HI === 56, 'turn-rate hi is 56');
 
 var paceSq = E.buildArc([
   { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 0, y: 0 }
@@ -636,7 +638,7 @@ var sqFreeS = cruiseVisX(paceSq, 0.125, 0.32, 200, 1200);
 assert(sqFreeC.visX < sqFreeS.visX * 0.7,
   'chase reference pace is lower in a corner than on a straight ' + sqFreeC.visX + ' vs ' + sqFreeS.visX);
 assert(sqFreeC.visX > 0.30 && sqFreeC.visX < 0.70, 'corner chase stays in the corner band visX=' + sqFreeC.visX);
-assert(sqFreeS.visX > 0.95 && sqFreeS.visX < 1.20, 'straight chase stays in the 1.05× band visX=' + sqFreeS.visX);
+assert(sqFreeS.visX > 0.95 && sqFreeS.visX < 1.35, 'straight chase stays in the 1.15× band visX=' + sqFreeS.visX);
 
 var sqPinC = cruiseVisX(paceSq, 0, 0.004, 400, 1400);
 var sqPinS = cruiseVisX(paceSq, 0.125, 0.129, 400, 1400);
@@ -645,7 +647,7 @@ assert(sqPinC.st.coasting === false && sqPinS.st.coasting === false,
 assert(sqPinC.visX < sqPinS.visX * 0.7,
   'pinned-cap hold-cruise still uses the curvature factor ' + sqPinC.visX + ' vs ' + sqPinS.visX);
 assert(sqPinC.visX > 0.30 && sqPinC.visX < 0.70, 'pinned corner visX=' + sqPinC.visX);
-assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.25, 'pinned straight visX=' + sqPinS.visX);
+assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.40, 'pinned straight visX=' + sqPinS.visX);
 
 var leapC = E.stepMotion(null, 0.0, 0.02, 0, 90000, false, { exact: true, arc: paceSq });
 leapC = E.stepMotion(leapC, 0.16, 0.22, 300, 90000, false, { exact: true, arc: paceSq });
