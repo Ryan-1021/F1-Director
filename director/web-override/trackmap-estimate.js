@@ -13,7 +13,7 @@
  * 小更新仍然跟得上。追上之后按约 1× 巡航接着走，不把画面钉死在卡住
  * 的测量上；卡在 cap 上等下一格时也不掉到 0.12× 爬行（否则两格之间
  * 像粘住，下一格再 vmax 闪过去）。有轮廓时，这趟 1× 参考巡航再乘
- * 当地折线曲率：弯慢直快（示意图近似，不是官方弯角表；直道约 1.05×，
+ * 当地折线曲率：弯慢直快（示意图近似，不是官方弯角表；直道约 1.15×，
  * 弯角约 0.55×）。vmax / 加速度仍按未缩放圈速。测量后撤仍衰减滑行。
  * 同一圈内测量进度 / doneSegs 只向前收：迷你赛段前缀变短或出现空洞
  * （前灰后黄/绿）不当成回退，只当赛段下限；换圈 / 进站 / 大幅重置
@@ -84,11 +84,12 @@
   // 否则 8× × 3s 会一次跳 ~0.27 圈。
   var CHASE_DT_MS = 12;
   // 示意图折线曲率 → 参考巡航倍数。不是官方弯角 / 测距。
-  // 直线略快于 1×（1.05），弯角略快于半速（0.55）；过渡用平滑插值 + 短时滞。
-  var PACE_STRAIGHT = 1.05;
+  // 直线快于 1×（1.15），弯角略快于半速（0.55）；k∈[6, 56] 从直到弯。
+  // 过渡用平滑插值 + 短时滞。
+  var PACE_STRAIGHT = 1.15;
   var PACE_CORNER = 0.55;
-  var PACE_K_LO = 10;
-  var PACE_K_HI = 48;
+  var PACE_K_LO = 6;
+  var PACE_K_HI = 56;
   var PACE_WIN = 0.022;
   var PACE_SAMPLES = 256;
   var PACE_SMOOTH = 3;
@@ -2181,6 +2182,8 @@
     HOLD_BACK: HOLD_BACK,
     PACE_STRAIGHT: PACE_STRAIGHT,
     PACE_CORNER: PACE_CORNER,
+    PACE_K_LO: PACE_K_LO,
+    PACE_K_HI: PACE_K_HI,
     paceFactorAt: paceFactorAt,
     ratchetCap: ratchetCap,
     ratchetLapProgress: ratchetLapProgress,
