@@ -599,7 +599,7 @@ assert(E.paceFactorAt(null, 0.2) === 1, 'no outline keeps 1× pace');
 assert(E.paceFactorAt({ pts: [], total: 0 }, 0.5) === 1, 'empty arc keeps 1× pace');
 assert(E.PACE_STRAIGHT === 1.05, 'straight ratio is 1.05×');
 assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.1, 'straight ratio in the 1.0–1.1× band');
-assert(E.PACE_CORNER === 0.45, 'corner ratio is 0.45×');
+assert(E.PACE_CORNER === 0.55, 'corner ratio is 0.55×');
 assert(E.PACE_CORNER >= 0.35 && E.PACE_CORNER <= 0.55, 'corner ratio in the 0.35–0.55× band');
 
 var paceSq = E.buildArc([
