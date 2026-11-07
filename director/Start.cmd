@@ -79,6 +79,10 @@ if exist "%~dp0assets" (
   xcopy /Y /Q /E "%~dp0assets\*" "%WEBDIR%\assets\" >nul
 )
 copy /Y "%HTML%" "%WEBDIR%\director.html" >nul
+if exist "%~dp0..\VERSION" (
+  copy /Y "%~dp0..\VERSION" "%WEBDIR%\VERSION" >nul
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Stamp-WindowTitle.ps1" -WebDir "%WEBDIR%" -VersionFile "%~dp0..\VERSION"
+)
 rem Seed layouts.json once (do not overwrite user-saved presets in share\web)
 if not exist "%WEBDIR%\layouts.json" if exist "%~dp0layouts.json" (
   copy /Y "%~dp0layouts.json" "%WEBDIR%\layouts.json" >nul

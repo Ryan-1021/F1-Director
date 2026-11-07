@@ -13,6 +13,34 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>F1 导播台 · Director</title>
+<script>
+(function () {
+  var DIRECTOR_TITLE_BASE = 'F1 导播台 · Director';
+  function directorShortVersion(raw) {
+    var s = String(raw == null ? '' : raw).replace(/^\uFEFF/, '').trim();
+    var plus = s.indexOf('+');
+    if (plus >= 0) s = s.slice(0, plus);
+    s = s.trim();
+    if (!s) return '';
+    if (s.charAt(0) === 'v' || s.charAt(0) === 'V') s = s.slice(1);
+    return s;
+  }
+  function directorWindowTitle(raw) {
+    var short = directorShortVersion(raw);
+    return short ? DIRECTOR_TITLE_BASE + ' · v' + short : DIRECTOR_TITLE_BASE;
+  }
+  function applyDirectorWindowTitle(raw) {
+    document.title = directorWindowTitle(raw);
+  }
+  try {
+    fetch('VERSION', { cache: 'no-store' }).then(function (res) {
+      return res.ok ? res.text() : '';
+    }).then(function (text) {
+      if (text) applyDirectorWindowTitle(text);
+    }).catch(function () {});
+  } catch (e0) {}
+})();
+</script>
 <style>
   :root {
     /* night = current dark broadcast look */
