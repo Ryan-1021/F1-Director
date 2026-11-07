@@ -13,9 +13,11 @@
  * 小更新仍然跟得上。追上之后按约 1× 巡航接着走，不把画面钉死在卡住
  * 的测量上；卡在 cap 上等下一格时也不掉到 0.12× 爬行（否则两格之间
  * 像粘住，下一格再 vmax 闪过去）。有轮廓时，这趟 1× 参考巡航再乘
- * 当地折线曲率：弯慢直快（示意图近似，不是官方弯角表）。vmax /
- * 加速度仍按未缩放圈速。测量后撤仍衰减滑行。进站 / 停车 /
- * 换圈过线 / 大约 0.12 圈以上的后撤仍允许不连续。
+ * 当地折线曲率：弯慢直快（示意图近似，不是官方弯角表；直道约 1.05×，
+ * 弯角约 0.45×）。vmax / 加速度仍按未缩放圈速。测量后撤仍衰减滑行。
+ * 同一圈内测量进度 / doneSegs 只向前收：迷你赛段前缀变短或出现空洞
+ * （前灰后黄/绿）不当成回退，只当赛段下限；换圈 / 进站 / 大幅重置
+ * 才允许降低。进站 / 停车 / 换圈过线 / 大约 0.12 圈以上的后撤仍允许不连续。
  * 进站冻在进站那一刻的估计进度；绘图层不把进站车画在轮廓上，
  * 只在赛道图视口左上角放一块「P + 人数」徽章。出站后车点回到赛道上。
  * 轮廓文件的起点不一定是起跑线。已知赛道用 orientClosedOutline 把进度 0 转到计时线，
@@ -82,8 +84,8 @@
   // 否则 8× × 3s 会一次跳 ~0.27 圈。
   var CHASE_DT_MS = 12;
   // 示意图折线曲率 → 参考巡航倍数。不是官方弯角 / 测距。
-  // 直线略快于 1×，弯角大约半速；过渡用平滑插值 + 短时滞，避免因子抖动。
-  var PACE_STRAIGHT = 1.15;
+  // 直线略快于 1×（1.05），弯角大约半速（0.45）；过渡用平滑插值 + 短时滞。
+  var PACE_STRAIGHT = 1.05;
   var PACE_CORNER = 0.45;
   var PACE_K_LO = 10;
   var PACE_K_HI = 48;
@@ -292,14 +294,23 @@
   function sectorMini(segments) {
     var segs = segments || [];
     var done = 0;
-    for (var i = 0; i < segs.length; i++) {
+    var i;
+    for (i = 0; i < segs.length; i++) {
       if (!segmentReached(segs[i])) break;
       done++;
+    }
+    var hole = false;
+    for (i = done; i < segs.length; i++) {
+      if (segmentReached(segs[i])) {
+        hole = true;
+        break;
+      }
     }
     var allLit = segs.length > 0 && done === segs.length;
     return {
       len: segs.length,
       done: done,
+      hole: hole,
       allLit: allLit,
       partial: done > 0 && !allLit
     };
@@ -309,7 +320,7 @@
    * 本车自己的圈进度，和迷你赛段条上「从左点亮到哪一格」对齐。
    * 正在点亮的那一段优先：上一圈留下的赛段时间不能把车判成已冲线。
    * exact=false 表示只知道「至少已经到这个赛段起点」，绘图不该把车拉回去
-   * （迷你赛段状态会褪成 0）。
+   * （迷你赛段状态会褪成 0，或前缀断开后的残留亮格不可信）。
    */
   /**
    * 赛段在一圈上的弧长比例。不传 ends 时三等分。
@@ -377,7 +388,17 @@
     var inner;
     var capInner;
     var exact = false;
-    if (mini.len && done > 0) {
+    if (mini.hole) {
+      // 前缀断开：前面已灰、后面仍黄/绿。残留亮格不能当 exact 进度。
+      done = 0;
+      if (current > 0) {
+        inner = 0.03;
+        capInner = mini.len ? Math.max(0.2, 1.15 / mini.len) : 0.92;
+      } else {
+        inner = 0.02;
+        capInner = mini.len ? Math.max(0.18, 1 / mini.len) : 0.9;
+      }
+    } else if (mini.len && done > 0) {
       // 点亮前缀的右边界：条上亮了几格，车就在这一段的同样比例处。
       inner = done / mini.len;
       capInner = Math.min(0.99, inner + (1 / mini.len) * 0.35);
@@ -402,11 +423,48 @@
       frac: sectorFrac(current, inner, sectorEnds),
       cap: sectorFrac(current, Math.min(0.99, capInner), sectorEnds),
       sector: current,
-      confident: current > 0 || done > 0 || anyTime,
+      confident: current > 0 || done > 0 || anyTime || !!mini.hole,
       exact: exact,
       doneSegs: done,
+      hole: !!mini.hole,
       freshLap: false
     };
+  }
+
+  /**
+   * 同一圈测量只向前收。迷你赛段前缀变短 / 空洞地板不能降低 frac 或 doneSegs。
+   * 换圈、进站、停车才允许重置。
+   */
+  function cloneTiming(src) {
+    if (!src) return src;
+    return {
+      frac: src.frac,
+      cap: src.cap,
+      sector: src.sector,
+      confident: src.confident,
+      exact: src.exact,
+      doneSegs: src.doneSegs,
+      hole: !!src.hole,
+      freshLap: !!src.freshLap
+    };
+  }
+
+  function ratchetLapProgress(prev, next, reset) {
+    if (!next) return next;
+    if (reset || !prev || next.freshLap) return cloneTiming(next);
+    if (prev.sector == null || next.sector == null) return cloneTiming(next);
+    if ((next.sector | 0) !== (prev.sector | 0)) return cloneTiming(next);
+    var droppedSegs = prev.doneSegs != null && next.doneSegs != null && next.doneSegs < prev.doneSegs;
+    var droppedFrac = isFinite(prev.frac) && isFinite(next.frac) && wrapDelta(next.frac - prev.frac) < -1e-9;
+    if (!droppedSegs && !droppedFrac) return cloneTiming(next);
+    var kept = cloneTiming(prev);
+    kept.cap = ratchetCap(prev.cap, next.cap, false);
+    kept.exact = false;
+    kept.hole = !!(prev.hole || next.hole);
+    kept.confident = !!(prev.confident || next.confident);
+    kept.freshLap = false;
+    if (prev.doneSegs != null) kept.doneSegs = prev.doneSegs;
+    return kept;
   }
 
   /** 用本车上一圈（否则最快圈）相对参考圈速的比例，避免按全场最快圈把点跑到迷你赛段前面。 */
@@ -1027,23 +1085,39 @@
     return leader;
   }
 
-  function planField(cars, sessionName, statusText, sectorEnds) {
+  function planField(cars, sessionName, statusText, sectorEnds, prevPlan) {
     var list = cars || [];
     var raceGaps = sessionUsesTimeGaps(sessionName);
     var lapSeconds = refLapSeconds(list);
     var pace = paceScale(statusText);
     var leader = findLeader(list);
-    var leaderProg = leader ? progressFromTiming(leader, sectorEnds) : null;
+    var prevByNum = {};
+    if (prevPlan && prevPlan.cars) {
+      for (var pi = 0; pi < prevPlan.cars.length; pi++) {
+        var pc = prevPlan.cars[pi];
+        if (pc && pc.number) prevByNum[pc.number] = pc;
+      }
+    }
     var leaderNum = leader ? carNumber(leader) : '';
+    var leaderProg = null;
+    if (leader) {
+      var leadMeasured = progressFromTiming(leader, sectorEnds);
+      var leadPrev = prevByNum[leaderNum] && prevByNum[leaderNum].timing;
+      var leadGap = parseGap(leader.gap);
+      var leadPit = !!leader.inPit || leadGap.kind === 'pit';
+      var leadHold = !leadPit && !!leader.stopped;
+      leaderProg = ratchetLapProgress(leadPrev, leadMeasured, leadPit || leadHold || !!leadMeasured.freshLap);
+    }
     var planned = [];
     for (var i = 0; i < list.length; i++) {
       var c = list[i] || {};
       var num = carNumber(c);
-      var prog = progressFromTiming(c, sectorEnds);
       var gap = parseGap(c.gap);
       var hide = !!(c.retired || c.knockedOut);
       var pit = !hide && (!!c.inPit || gap.kind === 'pit');
       var hold = !hide && !pit && !!c.stopped;
+      var measured = progressFromTiming(c, sectorEnds);
+      var prog = ratchetLapProgress(prevByNum[num] && prevByNum[num].timing, measured, pit || hold || !!measured.freshLap);
       var outlap = !hide && !pit && !!c.pitOut && prog.sector === 0 && prog.doneSegs === 0 && !prog.freshLap;
       var frac = prog.frac;
       var cap = prog.cap;
@@ -1088,6 +1162,7 @@
         exact = false;
         mode = 'outlap';
       }
+      var ownStrip = mode === 'sector' || mode === 'floor' || mode === 'outlap';
       planned.push({
         number: num,
         tla: c.tla || num,
@@ -1102,7 +1177,10 @@
         hide: hide,
         mode: mode,
         lapScale: ownLapScale(c, lapSeconds),
-        freshLap: !!prog.freshLap
+        freshLap: !!prog.freshLap,
+        sector: ownStrip ? prog.sector : undefined,
+        doneSegs: ownStrip ? prog.doneSegs : undefined,
+        timing: cloneTiming(prog)
       });
     }
     return {
@@ -1361,6 +1439,28 @@
     return st;
   }
 
+  function noteTiming(st, flags, allowLower) {
+    if (!st || !flags) return;
+    if (flags.sector == null && flags.doneSegs == null) return;
+    if (allowLower || st.sector == null || flags.sector == null ||
+        (flags.sector | 0) !== (st.sector | 0)) {
+      if (flags.sector != null) st.sector = flags.sector;
+      if (flags.doneSegs != null) st.doneSegs = flags.doneSegs;
+      return;
+    }
+    if (flags.doneSegs != null) {
+      if (st.doneSegs == null || flags.doneSegs > st.doneSegs) st.doneSegs = flags.doneSegs;
+    }
+  }
+
+  function sameLapPrefixDrop(st, flags) {
+    if (!st || !flags || flags.freshLap || flags.pit || flags.hold) return false;
+    if (flags.sector == null || st.sector == null) return false;
+    if ((flags.sector | 0) !== (st.sector | 0)) return false;
+    if (flags.doneSegs == null || st.doneSegs == null) return false;
+    return flags.doneSegs < st.doneSegs;
+  }
+
   function pointTarget(st, target, cap, now, lapMs, frozen, flags) {
     var shown = sampleMotion(st, now, lapMs, frozen, flags && flags.arc);
     var modeChanged = !!st.pit !== !!flags.pit || !!st.hold !== !!flags.hold;
@@ -1409,6 +1509,7 @@
       st.lapScale = flags.outlap && !flags.exact ? 1.75 : (flags.lapScale > 0.5 ? flags.lapScale : 1);
       st.lastTarget = target;
       if ('arc' in flags) st.arc = flags.arc;
+      noteTiming(st, flags, true);
       return st;
     }
     if ('arc' in flags) st.arc = flags.arc;
@@ -1454,6 +1555,24 @@
       rebaseMotion(st, shownScale, now);
     }
     st.lapScale = nextScale;
+
+    if (sameLapPrefixDrop(st, flags)) {
+      flags = {
+        exact: false,
+        pit: flags.pit,
+        hold: flags.hold,
+        hide: flags.hide,
+        outlap: flags.outlap,
+        lapScale: flags.lapScale,
+        freshLap: false,
+        arc: flags.arc,
+        sector: st.sector,
+        doneSegs: st.doneSegs
+      };
+      if (st.lastTarget != null && isFinite(st.lastTarget)) target = st.lastTarget;
+    } else {
+      noteTiming(st, flags, !!flags.freshLap);
+    }
 
     // 三赛段全亮时进度会落到起点。车若还在半圈上，多半是后两段留着上一圈的颜色，不要拉回去。
     if (flags.freshLap) {
@@ -2064,6 +2183,7 @@
     PACE_CORNER: PACE_CORNER,
     paceFactorAt: paceFactorAt,
     ratchetCap: ratchetCap,
+    ratchetLapProgress: ratchetLapProgress,
     progressFromTiming: progressFromTiming,
     parseGap: parseGap,
     sessionUsesTimeGaps: sessionUsesTimeGaps,

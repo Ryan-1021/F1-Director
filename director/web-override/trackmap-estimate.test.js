@@ -100,6 +100,41 @@ assert(enterS3.freshLap === false && enterS3.sector === 2 && enterS3.exact === f
   'S3 reset is not the start line ' + JSON.stringify(enterS3));
 near(enterS3.frac, (2 + 0.03) / 3, 0.01, 'S3 entrance floor');
 
+function s2Car(s2segs) {
+  return {
+    number: 1, tla: 'VER', position: 1, gap: 'LEADER',
+    sectors: [
+      { value: '28.100', segments: [2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048] },
+      { value: '', segments: s2segs },
+      { value: '', segments: [0, 0, 0, 0] }
+    ]
+  };
+}
+
+// 前缀断开：前面已灰、后面仍亮。不能按残留格子 exact 回拉。
+var holed = E.progressFromTiming(s2Car([0, 0, 2048, 2048, 2048, 0, 0, 0]));
+assert(holed.sector === 1 && holed.exact === false, 'holed S2 is a floor ' + JSON.stringify(holed));
+assert(holed.hole === true, 'holed S2 reports hole');
+assert(holed.doneSegs === 0, 'holes do not count residual lit cells as doneSegs');
+near(holed.frac, 1 / 3 + 0.01, 0.03, 'holed S2 uses sector floor');
+assert(holed.frac < 1 / 3 + 3 / 8 / 3 - 0.02, 'holed S2 does not exact-pull from residual cells');
+
+var midHole = E.progressFromTiming(s2Car([2048, 2048, 0, 2048, 2048, 0, 0, 0]));
+assert(midHole.sector === 1 && midHole.exact === false, 'broken prefix is not exact ' + JSON.stringify(midHole));
+assert(midHole.hole === true, 'gap after a prefix is a hole');
+near(midHole.frac, 1 / 3 + 0.01, 0.03, 'broken prefix uses sector floor not residual cells');
+
+var lit4 = E.progressFromTiming(s2Car([2048, 2048, 2048, 2048, 0, 0, 0, 0]));
+assert(lit4.sector === 1 && lit4.exact && lit4.doneSegs === 4, 'contiguous prefix of 4 is exact');
+var faded3 = E.progressFromTiming(s2Car([2048, 2048, 2048, 0, 0, 0, 0, 0]));
+assert(faded3.exact && faded3.doneSegs === 3, 'shortened contiguous prefix is still a snapshot of 3');
+assert(faded3.frac < lit4.frac, 'raw frac drops when the prefix shortens');
+var keptFade = E.ratchetLapProgress(lit4, faded3, false);
+assert(keptFade.exact === false && keptFade.doneSegs === 4, 'same-lap ratchet keeps doneSegs');
+near(keptFade.frac, lit4.frac, 1e-9, 'same-lap ratchet keeps measured frac');
+var lapReset = E.ratchetLapProgress(lit4, newLap, false);
+assert(lapReset.sector === 0 && lapReset.doneSegs === 2, 'sector wrap to S1 is a lap reset ' + JSON.stringify(lapReset));
+
 var quali = E.planField([
   { number: 1, tla: 'VER', position: 1, gap: '+0.200', sectors: [{ value: '', segments: [] }, {}, {}] },
   { number: 44, tla: 'HAM', position: 2, gap: '+0.800', inPit: true, sectors: [{}, {}, {}] }
@@ -246,6 +281,101 @@ var fadeLater = E.sampleMotion(fade, 4000, 90000, false);
 fade = E.stepMotion(fade, 0.50, 0.515, 4000, 90000, false, { exact: true });
 var fadeBack = E.sampleMotion(fade, 4000, 90000, false);
 assert(fadeBack + 1e-6 >= fadeLater, 'restored mini-sectors do not yank ' + fadeBack + ' from ' + fadeLater);
+
+function stepFromProg(st, prog, now) {
+  return E.stepMotion(st, prog.frac, prog.cap, now, 90000, false, {
+    exact: prog.exact,
+    sector: prog.sector,
+    doneSegs: prog.doneSegs,
+    freshLap: prog.freshLap
+  });
+}
+
+// 前缀 4→3 仍 exact：同圈棘轮，画面不回退。
+var prefix4 = E.progressFromTiming(s2Car([2048, 2048, 2048, 2048, 0, 0, 0, 0]));
+var prefixSt = stepFromProg(null, prefix4, 0);
+var prefixShown = E.sampleMotion(prefixSt, 400, 90000, false);
+var prefix3 = E.progressFromTiming(s2Car([2048, 2048, 2048, 0, 0, 0, 0, 0]));
+assert(prefix3.exact && prefix3.doneSegs === 3 && prefix3.frac < prefix4.frac, 'raw 4→3 still exact');
+prefixSt = stepFromProg(prefixSt, prefix3, 400);
+var prefixKept = E.sampleMotion(prefixSt, 400, 90000, false);
+assert(prefixKept + 1e-6 >= prefixShown, 'fading prefix 4→3 does not rewind display ' + prefixKept + ' from ' + prefixShown);
+assert(prefixSt.doneSegs === 4, 'motion keeps ratcheted doneSegs after 4→3');
+assert(prefixSt.easeTo == null, '4→3 fade does not start a HOLD_BACK ease');
+
+// 前缀缩短超过 HOLD_BACK（7→1）也不回退。
+var prefix7 = E.progressFromTiming(s2Car([2048, 2048, 2048, 2048, 2048, 2048, 2048, 0]));
+var holdSt = stepFromProg(null, prefix7, 0);
+var holdShown = E.sampleMotion(holdSt, 200, 90000, false);
+var prefix1 = E.progressFromTiming(s2Car([2048, 0, 0, 0, 0, 0, 0, 0]));
+assert(prefix1.exact && prefix1.doneSegs === 1, 'raw 7→1 still exact');
+assert(prefix7.frac - prefix1.frac > E.HOLD_BACK, '7→1 drop exceeds HOLD_BACK');
+holdSt = stepFromProg(holdSt, prefix1, 200);
+var holdKept = E.sampleMotion(holdSt, 200, 90000, false);
+assert(holdKept + 1e-6 >= holdShown, 'prefix fade beyond HOLD_BACK does not rewind ' + holdKept);
+assert(holdSt.easeTo == null, 'prefix fade does not ease back to the shortened cell');
+assert(holdSt.doneSegs === 7, 'doneSegs ratchet survives a HOLD_BACK-sized fade');
+
+// 空洞：exact false，残留亮格不拉画面。
+var holeProg = E.progressFromTiming(s2Car([0, 0, 2048, 2048, 2048, 0, 0, 0]));
+assert(holeProg.exact === false && holeProg.hole, 'live hole snapshot is not exact');
+var holeSt = stepFromProg(null, prefix4, 0);
+var holeShown = E.sampleMotion(holeSt, 300, 90000, false);
+holeSt = stepFromProg(holeSt, holeProg, 300);
+var holeKept = E.sampleMotion(holeSt, 300, 90000, false);
+assert(holeKept + 1e-6 >= holeShown, 'holed leftover cells do not exact-rewind ' + holeKept);
+assert(holeSt.easeTo == null, 'hole floor does not HOLD_BACK ease');
+assert(E.wrapDelta(holeKept - holeProg.frac) > 0.05, 'display stays ahead of the hole floor');
+
+// 换圈 / 进站仍允许不连续。
+var rollSt = stepFromProg(null, prefix4, 0);
+E.sampleMotion(rollSt, 500, 90000, false);
+rollSt = stepFromProg(rollSt, newLap, 500);
+assert(rollSt.easeTo != null || E.wrapDelta(newLap.frac - prefix4.frac) > -E.HOLD_BACK,
+  'lap sector wrap may ease or jump');
+var rollMid = E.sampleMotion(rollSt, 900, 90000, false);
+assert(rollMid < prefix4.frac - 0.05, 'lap rollover is allowed to leave S2 ' + rollMid);
+
+var pitJump = stepFromProg(null, prefix4, 0);
+var pitBefore2 = E.sampleMotion(pitJump, 400, 90000, false);
+pitJump = E.stepMotion(pitJump, 0.90, 0.95, 400, 90000, false, {
+  exact: true, pit: true, sector: prefix4.sector, doneSegs: prefix4.doneSegs
+});
+near(E.sampleMotion(pitJump, 400, 90000, false), pitBefore2, 0.002, 'pit still freezes on fade-aware flags');
+assert(pitJump.pit === true, 'pit flag still sticks');
+
+var fadePlan0 = E.planField([s2Car([2048, 2048, 2048, 2048, 0, 0, 0, 0])], 'Practice 1', 'Started');
+var fadePlan1 = E.planField([s2Car([2048, 2048, 2048, 0, 0, 0, 0, 0])], 'Practice 1', 'Started', null, fadePlan0);
+near(fadePlan1.cars[0].frac, fadePlan0.cars[0].frac, 1e-9, 'planField same-lap ratchet keeps leader frac');
+assert(fadePlan1.cars[0].exact === false, 'planField faded prefix is no longer exact');
+assert(fadePlan1.cars[0].doneSegs === 4, 'planField keeps doneSegs');
+
+var raceLead4 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', bestLap: '1:30.000',
+  sectors: [
+    { value: '30.000', segments: [2048, 2048, 2048] },
+    { value: '', segments: [2048, 2048, 2048, 2048, 0, 0, 0, 0] },
+    { value: '', segments: [] }
+  ]
+};
+var raceLead3 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', bestLap: '1:30.000',
+  sectors: [
+    { value: '30.000', segments: [2048, 2048, 2048] },
+    { value: '', segments: [2048, 2048, 2048, 0, 0, 0, 0, 0] },
+    { value: '', segments: [] }
+  ]
+};
+function raceGapCar(gap) {
+  return {
+    number: 16, tla: 'LEC', position: 2, gap: gap, bestLap: '1:30.200',
+    sectors: [{ value: '30.100', segments: [] }, { value: '', segments: [] }, { value: '', segments: [] }]
+  };
+}
+var raceFade0 = E.planField([raceLead4, raceGapCar('+1.500')], 'Race', 'Green');
+var raceFade1 = E.planField([raceLead3, raceGapCar('+1.500')], 'Race', 'Green', null, raceFade0);
+near(raceFade1.cars[0].frac, raceFade0.cars[0].frac, 1e-9, 'race leader prefix fade does not drop frac');
+near(raceFade1.cars[1].frac, raceFade0.cars[1].frac, 1e-9, 'gap cars keep the ratcheted leader');
 
 // 正赛差距在 1s 一拍里抖动：外推点不能跟着 cap 往回夹。
 function gapCar(gap) {
@@ -467,7 +597,9 @@ assert(E.wrapDelta(capLater - capTick) < 0.05, 'cap leap chase is accel-limited 
 
 assert(E.paceFactorAt(null, 0.2) === 1, 'no outline keeps 1× pace');
 assert(E.paceFactorAt({ pts: [], total: 0 }, 0.5) === 1, 'empty arc keeps 1× pace');
-assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.2, 'straight ratio in the 1.0–1.2× band');
+assert(E.PACE_STRAIGHT === 1.05, 'straight ratio is 1.05×');
+assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.1, 'straight ratio in the 1.0–1.1× band');
+assert(E.PACE_CORNER === 0.45, 'corner ratio is 0.45×');
 assert(E.PACE_CORNER >= 0.35 && E.PACE_CORNER <= 0.55, 'corner ratio in the 0.35–0.55× band');
 
 var paceSq = E.buildArc([
@@ -504,7 +636,7 @@ var sqFreeS = cruiseVisX(paceSq, 0.125, 0.32, 200, 1200);
 assert(sqFreeC.visX < sqFreeS.visX * 0.7,
   'chase reference pace is lower in a corner than on a straight ' + sqFreeC.visX + ' vs ' + sqFreeS.visX);
 assert(sqFreeC.visX > 0.30 && sqFreeC.visX < 0.70, 'corner chase stays in the corner band visX=' + sqFreeC.visX);
-assert(sqFreeS.visX > 0.95 && sqFreeS.visX < 1.35, 'straight chase stays in the straight band visX=' + sqFreeS.visX);
+assert(sqFreeS.visX > 0.95 && sqFreeS.visX < 1.20, 'straight chase stays in the 1.05× band visX=' + sqFreeS.visX);
 
 var sqPinC = cruiseVisX(paceSq, 0, 0.004, 400, 1400);
 var sqPinS = cruiseVisX(paceSq, 0.125, 0.129, 400, 1400);
@@ -513,7 +645,7 @@ assert(sqPinC.st.coasting === false && sqPinS.st.coasting === false,
 assert(sqPinC.visX < sqPinS.visX * 0.7,
   'pinned-cap hold-cruise still uses the curvature factor ' + sqPinC.visX + ' vs ' + sqPinS.visX);
 assert(sqPinC.visX > 0.30 && sqPinC.visX < 0.70, 'pinned corner visX=' + sqPinC.visX);
-assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.40, 'pinned straight visX=' + sqPinS.visX);
+assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.25, 'pinned straight visX=' + sqPinS.visX);
 
 var leapC = E.stepMotion(null, 0.0, 0.02, 0, 90000, false, { exact: true, arc: paceSq });
 leapC = E.stepMotion(leapC, 0.16, 0.22, 300, 90000, false, { exact: true, arc: paceSq });
@@ -554,6 +686,10 @@ var appChaseSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appChaseSrc.indexOf('arc: TRACKMAP.arc') >= 0, 'app passes the outline arc into stepMotion');
 assert(appChaseSrc.indexOf('sampleMotion(st, now, lapMs, frozen, TRACKMAP.arc)') >= 0,
   'app samples chase with the outline arc');
+assert(appChaseSrc.indexOf('sector: p.sector') >= 0 && appChaseSrc.indexOf('doneSegs: p.doneSegs') >= 0,
+  'app passes sector/doneSegs into stepMotion for the same-lap ratchet');
+assert(appChaseSrc.indexOf('phase && phase.sectors, TRACKMAP.planMeta') >= 0,
+  'app feeds the previous plan into planField');
 
 // 重置仍允许不连续：进站冻住；过起终点数值可回绕（沿圈仍向前）。
 var pitReset = E.stepMotion(null, 0.44, 0.55, 0, 90000, false, { exact: true });

@@ -2951,7 +2951,7 @@
     var statusText = [race.status, race.session, track.label, track.detail, track.message]
       .filter(function (x) { return x != null && x !== ''; }).join(' ');
     var phase = circuitPhase(TRACKMAP.svgRel);
-    var plan = E.planField(cars, race.session, statusText, phase && phase.sectors);
+    var plan = E.planField(cars, race.session, statusText, phase && phase.sectors, TRACKMAP.planMeta);
     TRACKMAP.planMeta = plan;
     var frozen = plan.pace === 0;
     var lapMs = plan.pace > 0 ? (plan.lapSeconds / plan.pace) * 1000 : (TRACKMAP.estLapMs || 90000);
@@ -2990,7 +2990,9 @@
           outlap: p.outlap,
           lapScale: p.lapScale,
           freshLap: p.freshLap,
-          arc: TRACKMAP.arc
+          arc: TRACKMAP.arc,
+          sector: p.sector,
+          doneSegs: p.doneSegs
         }
       );
       st.tla = p.tla || p.number;
