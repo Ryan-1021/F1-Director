@@ -465,6 +465,96 @@ var capLater = E.sampleMotion(capLeap, 6360, 90000, false);
 assert(E.wrapDelta(capLater - capTick) > 0.001, 'cap leap starts chasing ' + capLater);
 assert(E.wrapDelta(capLater - capTick) < 0.05, 'cap leap chase is accel-limited ' + capLater);
 
+assert(E.paceFactorAt(null, 0.2) === 1, 'no outline keeps 1× pace');
+assert(E.paceFactorAt({ pts: [], total: 0 }, 0.5) === 1, 'empty arc keeps 1× pace');
+assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.2, 'straight ratio in the 1.0–1.2× band');
+assert(E.PACE_CORNER >= 0.35 && E.PACE_CORNER <= 0.55, 'corner ratio in the 0.35–0.55× band');
+
+var paceSq = E.buildArc([
+  { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 0, y: 0 }
+]);
+assert(paceSq.pace && paceSq.pace.factor && paceSq.pace.n >= 32, 'buildArc attaches a pace profile');
+var sqCorner = E.paceFactorAt(paceSq, 0);
+var sqStraight = E.paceFactorAt(paceSq, 0.125);
+assert(sqCorner < sqStraight, 'high-turn square corner is slower than a side ' + sqCorner + ' vs ' + sqStraight);
+near(sqCorner, E.PACE_CORNER, 0.06, 'square corner hits the corner ratio');
+near(sqStraight, E.PACE_STRAIGHT, 0.06, 'square side hits the straight ratio');
+var sqBlend = E.paceFactorAt(paceSq, 0.012);
+assert(sqBlend > sqCorner && sqBlend < sqStraight,
+  'transition blend sits between corner and straight ' + sqBlend);
+
+function cruiseVisX(arc, frac, cap, t0, t1) {
+  var st = E.stepMotion(null, frac, cap, 0, 90000, false, { exact: true, arc: arc });
+  var prev = E.sampleMotion(st, t0, 90000, false, arc);
+  var t;
+  var sum = 0;
+  var n = 0;
+  for (t = t0 + 16; t <= t1; t += 16) {
+    var pos = E.sampleMotion(st, t, 90000, false, arc);
+    sum += E.wrapDelta(pos - prev);
+    n++;
+    prev = pos;
+  }
+  var visX = n ? sum / ((n * 16) / 90000) : 0;
+  return { st: st, visX: visX };
+}
+
+var sqFreeC = cruiseVisX(paceSq, 0, 0.20, 200, 1200);
+var sqFreeS = cruiseVisX(paceSq, 0.125, 0.32, 200, 1200);
+assert(sqFreeC.visX < sqFreeS.visX * 0.7,
+  'chase reference pace is lower in a corner than on a straight ' + sqFreeC.visX + ' vs ' + sqFreeS.visX);
+assert(sqFreeC.visX > 0.30 && sqFreeC.visX < 0.70, 'corner chase stays in the corner band visX=' + sqFreeC.visX);
+assert(sqFreeS.visX > 0.95 && sqFreeS.visX < 1.35, 'straight chase stays in the straight band visX=' + sqFreeS.visX);
+
+var sqPinC = cruiseVisX(paceSq, 0, 0.004, 400, 1400);
+var sqPinS = cruiseVisX(paceSq, 0.125, 0.129, 400, 1400);
+assert(sqPinC.st.coasting === false && sqPinS.st.coasting === false,
+  'curvature cruise at a pinned cap is not deep coast');
+assert(sqPinC.visX < sqPinS.visX * 0.7,
+  'pinned-cap hold-cruise still uses the curvature factor ' + sqPinC.visX + ' vs ' + sqPinS.visX);
+assert(sqPinC.visX > 0.30 && sqPinC.visX < 0.70, 'pinned corner visX=' + sqPinC.visX);
+assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.40, 'pinned straight visX=' + sqPinS.visX);
+
+var leapC = E.stepMotion(null, 0.0, 0.02, 0, 90000, false, { exact: true, arc: paceSq });
+leapC = E.stepMotion(leapC, 0.16, 0.22, 300, 90000, false, { exact: true, arc: paceSq });
+var leapC0 = E.sampleMotion(leapC, 300, 90000, false, paceSq);
+var leapC1 = E.sampleMotion(leapC, 1300, 90000, false, paceSq);
+assert(E.wrapDelta(leapC1 - leapC0) > 0.05,
+  'corner catch-up still uses unscaled vmax ' + E.wrapDelta(leapC1 - leapC0));
+
+// 回贴 / 大后撤 / HOLD_BACK：有轮廓时行为与 #34 相同，不走曲率物理。
+var rewindArc = E.stepMotion(null, 0.55, 0.62, 0, 90000, false, { exact: true, arc: paceSq });
+rewindArc = E.stepMotion(rewindArc, 0.30, 0.36, 1000, 90000, false, { exact: true, arc: paceSq });
+assert(rewindArc.easeTo != null && rewindArc.easeTo === 0.30, 'bigRewind still eases with an outline');
+var rewindArcMid = E.sampleMotion(rewindArc, 1400, 90000, false, paceSq);
+assert(rewindArcMid < 0.52 && rewindArcMid > 0.30, 'large rearward sample still eases back with arc ' + rewindArcMid);
+var rewindArcEnd = E.sampleMotion(rewindArc, 2000, 90000, false, paceSq);
+near(rewindArcEnd, 0.30, 0.02, 'large rearward ease still lands on the new sample with arc');
+near(rewindArc.cap, 0.36, 0.001, 'large rewind still lowers the cap with arc');
+
+var holdSnap = E.stepMotion(null, 0.30, 0.90, 0, 90000, false, { exact: true, arc: paceSq });
+holdSnap.display = 0.50;
+holdSnap.belief = 0.30;
+holdSnap.anchor = 0.30;
+holdSnap.at = 0;
+holdSnap.seen = 0;
+holdSnap.vel = 1 / 90000;
+holdSnap.coasting = false;
+var holdSnapped = E.sampleMotion(holdSnap, 16, 90000, false, paceSq);
+near(holdSnapped, 0.30, 0.002, 'HOLD_BACK still snaps shown = belief with arc');
+
+var chaseSrc = fs.readFileSync(path.join(__dirname, 'trackmap-estimate.js'), 'utf8');
+assert(chaseSrc.indexOf('if (err <= -HOLD_BACK)') >= 0, 'HOLD_BACK chase branch still present');
+assert(chaseSrc.split('if (err <= -HOLD_BACK)')[1].indexOf('shown = belief') >= 0,
+  'HOLD_BACK path still assigns shown = belief');
+assert(chaseSrc.indexOf('var bigRewind = err < -HOLD_BACK') >= 0, 'bigRewind threshold unchanged');
+assert(chaseSrc.indexOf('applyMeasuredCap(st, cap, bigRewind || modeChanged)') >= 0,
+  'bigRewind still allowed to lower the cap');
+var appChaseSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+assert(appChaseSrc.indexOf('arc: TRACKMAP.arc') >= 0, 'app passes the outline arc into stepMotion');
+assert(appChaseSrc.indexOf('sampleMotion(st, now, lapMs, frozen, TRACKMAP.arc)') >= 0,
+  'app samples chase with the outline arc');
+
 // 重置仍允许不连续：进站冻住；过起终点数值可回绕（沿圈仍向前）。
 var pitReset = E.stepMotion(null, 0.44, 0.55, 0, 90000, false, { exact: true });
 var pitBefore = E.sampleMotion(pitReset, 1500, 90000, false);
@@ -698,6 +788,9 @@ var austinCue = E.directionCue(E.buildArc(austinOriented), function (x, y) { ret
 assert(austinCue && austinCue.frac > 0.002 && austinCue.frac < 0.05, 'Austin cue is shortly after S/F');
 assert(hyp(austinCue.origin, austinT1) < hyp(austinZero, austinT1), 'Austin arrow leaves the line toward Turn 1');
 assert(hyp(austinCue.tip, austinT1) < hyp(austinCue.origin, austinT1), 'Austin arrow tip is further toward Turn 1');
+var austinPaceArc = E.buildArc(austinOriented);
+assert(E.paceFactorAt(austinPaceArc, 0.25) < E.paceFactorAt(austinPaceArc, 0.58),
+  'Austin schematic esses are slower than the back straight');
 
 var appSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appSrc.indexOf('multiviewer.app') < 0, 'runtime does not call MultiViewer');

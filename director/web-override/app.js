@@ -2964,7 +2964,7 @@
       Object.keys(TRACKMAP.motion).forEach(function (num) {
         var prev = TRACKMAP.motion[num];
         if (!prev) return;
-        var shown = E.sampleMotion(prev, now, prevMs, !!TRACKMAP.estFrozen);
+        var shown = E.sampleMotion(prev, now, prevMs, !!TRACKMAP.estFrozen, TRACKMAP.arc);
         E.rebaseMotion(prev, shown, now);
       });
     }
@@ -2989,7 +2989,8 @@
           hide: p.hide,
           outlap: p.outlap,
           lapScale: p.lapScale,
-          freshLap: p.freshLap
+          freshLap: p.freshLap,
+          arc: TRACKMAP.arc
         }
       );
       st.tla = p.tla || p.number;
@@ -3600,7 +3601,7 @@
       items.push({
         num: num,
         st: st,
-        frac: E.sampleMotion(st, now, lapMs, frozen),
+        frac: E.sampleMotion(st, now, lapMs, frozen, TRACKMAP.arc),
         pit: !!st.pit,
         hide: !!st.hide
       });
