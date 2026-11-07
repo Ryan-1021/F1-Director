@@ -84,12 +84,12 @@
   // 否则 8× × 3s 会一次跳 ~0.27 圈。
   var CHASE_DT_MS = 12;
   // 示意图折线曲率 → 参考巡航倍数。不是官方弯角 / 测距。
-  // 直线快于 1×（1.15），弯角略快于半速（0.55）；k∈[6, 56] 从直到弯。
+  // 直线快于 1×（1.15），弯角略快于半速（0.55）；k∈[10, 48] 从直到弯。
   // 过渡用平滑插值 + 短时滞。
   var PACE_STRAIGHT = 1.15;
   var PACE_CORNER = 0.55;
-  var PACE_K_LO = 6;
-  var PACE_K_HI = 56;
+  var PACE_K_LO = 10;
+  var PACE_K_HI = 48;
   var PACE_WIN = 0.022;
   var PACE_SAMPLES = 256;
   var PACE_SMOOTH = 3;
