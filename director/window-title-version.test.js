@@ -39,26 +39,26 @@ vm.runInContext(helperSrc, sandbox);
 function short(raw) { return sandbox.directorShortVersion(raw); }
 function title(raw) { return sandbox.directorWindowTitle(raw); }
 
-assert(short('0.2.12+20261107') === '0.2.12', 'strip +build metadata');
-assert(short('  0.2.12+20261107\n') === '0.2.12', 'trim whitespace');
-assert(short('\uFEFF0.2.12+20261107') === '0.2.12', 'strip UTF-8 BOM');
-assert(short('v0.2.12+build') === '0.2.12', 'drop leading v before re-prefix');
+assert(short('0.2.13+20261107') === '0.2.13', 'strip +build metadata');
+assert(short('  0.2.13+20261107\n') === '0.2.13', 'trim whitespace');
+assert(short('\uFEFF0.2.13+20261107') === '0.2.13', 'strip UTF-8 BOM');
+assert(short('v0.2.13+build') === '0.2.13', 'drop leading v before re-prefix');
 assert(short('V1.0.0') === '1.0.0', 'drop leading V');
-assert(short('0.2.12') === '0.2.12', 'plain semver');
-assert(short('0.2.12-rc.1+exp.sha') === '0.2.12-rc.1', 'keep pre-release, drop build');
+assert(short('0.2.13') === '0.2.13', 'plain semver');
+assert(short('0.2.13-rc.1+exp.sha') === '0.2.13-rc.1', 'keep pre-release, drop build');
 assert(short('') === '', 'empty');
 assert(short('   ') === '', 'blank');
 assert(short(null) === '', 'null');
 
-assert(title('0.2.12+20261107') === 'F1 导播台 · Director · v0.2.12',
-  'approved title A for 0.2.12+build');
-assert(title('v0.2.12') === 'F1 导播台 · Director · v0.2.12',
+assert(title('0.2.13+20261107') === 'F1 导播台 · Director · v0.2.13',
+  'approved title A for 0.2.13+build');
+assert(title('v0.2.13') === 'F1 导播台 · Director · v0.2.13',
   'no double-v');
 assert(title('') === 'F1 导播台 · Director', 'empty keeps base title');
 
 var liveShort = short(versionRaw);
-assert(liveShort === '0.2.12', 'repo VERSION short is 0.2.12 (got ' + liveShort + ')');
-assert(title(versionRaw) === 'F1 导播台 · Director · v0.2.12',
+assert(liveShort === '0.2.13', 'repo VERSION short is 0.2.13 (got ' + liveShort + ')');
+assert(title(versionRaw) === 'F1 导播台 · Director · v0.2.13',
   'repo VERSION stamps the exact window title');
 
 assert(/<title>F1 导播台 · Director<\/title>/.test(html),
@@ -102,8 +102,8 @@ function stampLikePs1(src, raw) {
 }
 
 var published = stampLikePs1(html, versionRaw);
-assert(published.indexOf('<title>F1 导播台 · Director · v0.2.12</title>') !== -1,
-  'published copy title is exactly F1 导播台 · Director · v0.2.12');
+assert(published.indexOf('<title>F1 导播台 · Director · v0.2.13</title>') !== -1,
+  'published copy title is exactly F1 导播台 · Director · v0.2.13');
 assert(published.indexOf('<div class="logo"><span class="dot"></span> F1 导播台</div>') !== -1,
   'stamping title does not touch the topbar logo');
 assert((published.match(/<title>/g) || []).length === 1, 'still a single <title>');
@@ -111,7 +111,7 @@ assert((published.match(/<title>/g) || []).length === 1, 'still a single <title>
 var restamp = stampLikePs1(published, '0.3.0+20990101');
 assert(restamp.indexOf('<title>F1 导播台 · Director · v0.3.0</title>') !== -1,
   'restamp replaces the previous short version');
-assert(restamp.indexOf('v0.2.12') === -1, 'old short version is gone after restamp');
+assert(restamp.indexOf('v0.2.13') === -1, 'old short version is gone after restamp');
 
 var snippetStart = html.indexOf('(function () {\n  var DIRECTOR_TITLE_BASE');
 var snippetEnd = html.indexOf('})();', snippetStart) + 5;
@@ -140,8 +140,8 @@ vm.runInContext(html.slice(snippetStart, snippetEnd), runtime);
 function finish() {
   assert(fetchCalls.length === 1 && fetchCalls[0].url === 'VERSION', 'runtime fetches VERSION');
   assert(fetchCalls[0].opts && fetchCalls[0].opts.cache === 'no-store', 'VERSION fetch is no-store');
-  assert(doc.title === 'F1 导播台 · Director · v0.2.12',
-    'runtime document.title is exactly F1 导播台 · Director · v0.2.12 (got ' + doc.title + ')');
+  assert(doc.title === 'F1 导播台 · Director · v0.2.13',
+    'runtime document.title is exactly F1 导播台 · Director · v0.2.13 (got ' + doc.title + ')');
 
   if (failed) {
     console.error(failed + ' failed');
