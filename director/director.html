@@ -767,6 +767,28 @@
     font-weight: 700;
   }
   .p-head .spacer { flex: 1; min-width: 4px; }
+  /* Sectors empty-state — quiet title-row chrome, same slot as 「列」 / .tm-head */
+  .p-head .sectors-head-tip {
+    display: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.2;
+    color: var(--muted2);
+    opacity: 0.9;
+  }
+  .p-head .sectors-head-tip.show { display: block; }
+  .p-head:has(.sectors-head-tip.show) .spacer {
+    flex: 0 0 0;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+  }
   .p-head .win-btns {
     display: flex; gap: 3px; flex-shrink: 0;
   }
@@ -2130,6 +2152,7 @@
     }
     syncTimingColsTog(el, boardId);
     syncTrackmapHead(el, boardId);
+    syncSectorsHeadTip(el, boardId);
   }
 
   /** Prefer in-place board switch (keeps the iframe and its trackmap cache).
@@ -2146,6 +2169,7 @@
       pushThemeToFrame(iframe);
       if (boardId === 'trackmap') requestTrackmapUi(el);
       if (boardId === 'timing') pushTimingColsToFrame(el, loadTimingColsVis());
+      if (boardId === 'sectors') requestSectorsNote(el);
       syncBoardChrome(el, boardId);
     }
 
@@ -2783,6 +2807,39 @@
     }
   }
 
+  function setSectorsHeadTipShow(el, show) {
+    if (!el) return;
+    el.__sectorsNoteShow = !!show;
+    var tip = el.querySelector('[data-sectors-tip]');
+    if (!tip) return;
+    var iframe = el.querySelector('iframe');
+    var boardId = (iframe && iframe.getAttribute('data-board')) || '';
+    tip.classList.toggle('show', boardId === 'sectors' && !!show);
+  }
+
+  function syncSectorsHeadTip(el, boardId) {
+    var tip = el && el.querySelector('[data-sectors-tip]');
+    if (!tip) return;
+    var isSectors = (boardId || '') === 'sectors';
+    tip.classList.toggle('show', isSectors && !!el.__sectorsNoteShow);
+    if (isSectors) requestSectorsNote(el);
+  }
+
+  function requestSectorsNote(el) {
+    var iframe = el && el.querySelector('iframe');
+    if (!iframe) return;
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1 && typeof w.F1.getSectorsNoteVisible === 'function') {
+        setSectorsHeadTipShow(el, w.F1.getSectorsNoteVisible());
+        return;
+      }
+    } catch (e) {}
+    try {
+      iframe.contentWindow.postMessage({ type: 'f1-sectors-note-req' }, '*');
+    } catch (e2) {}
+  }
+
   function updateTrackmapHeadUi(el, data) {
     var head = el && el.querySelector('[data-tm-head]');
     if (!head || !data) return;
@@ -2845,9 +2902,15 @@
   window.addEventListener('message', function (ev) {
     var d = ev && ev.data;
     if (!d || typeof d !== 'object') return;
-    if (d.type !== 'f1-trackmap-ui') return;
-    var panel = findPanelByFrameSource(ev.source);
-    if (panel) updateTrackmapHeadUi(panel, d);
+    if (d.type === 'f1-trackmap-ui') {
+      var tmPanel = findPanelByFrameSource(ev.source);
+      if (tmPanel) updateTrackmapHeadUi(tmPanel, d);
+      return;
+    }
+    if (d.type === 'f1-sectors-note') {
+      var secPanel = findPanelByFrameSource(ev.source);
+      if (secPanel) setSectorsHeadTipShow(secPanel, d.show);
+    }
   });
 
   function loadTimingColsVis() {
@@ -3102,6 +3165,7 @@
       '<div class="p-head" data-drag>' +
         boardDdHtml(st.board) +
         '<span class="spacer"></span>' +
+        '<span class="sectors-head-tip" data-sectors-tip title="本场次暂无赛段数据">本场次暂无赛段数据</span>' +
         '<span class="tm-head" data-tm-head>' +
           '<span class="tm-est" title="位置按计时估计，不是官方 GPS。赛段或正赛时间差沿轮廓推算；维修区只是向内侧偏一点。">估计</span>' +
           '<span class="tm-hint" role="img" aria-label="赛道图操作说明" title="滚轮缩放\nShift+滚轮或右键拖：旋转\n双击或 Ctrl+0：复位">ℹ</span>' +
@@ -3170,6 +3234,7 @@
       }
       syncTrackmapHead(el, st.board || 'timing');
     }
+    syncSectorsHeadTip(el, st.board || 'timing');
 
     el.querySelectorAll('.resize-handle').forEach(function (h) {
       h.addEventListener('mousedown', function (e) {
