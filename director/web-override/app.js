@@ -2199,8 +2199,8 @@
     viewZoom: 1.05,
     viewPanX: 0,
     viewPanY: 0,
-    viewRotDeg: 0,   // 总转角 = 自动默认 + 用户偏移
-    baseRotDeg: 0,   // 自动朝向：较长一边横铺（竖向 +90°）
+    viewRotDeg: 0,   // 总转角 = 默认朝向 + 用户偏移
+    baseRotDeg: 0,   // 默认朝向：官方 Track 图标覆盖，否则较长一边横铺（竖向 +90°）
     motion: {},
     nodes: {},
     carsG: null,
@@ -2275,6 +2275,30 @@
   function circuitPhase(rel) {
     if (!rel || !CIRCUIT_PHASE[rel]) return null;
     return CIRCUIT_PHASE[rel];
+  }
+
+  // 官方 F1.com Track 图标默认朝向（viewRotDeg，CCW、y-up，与 rotatePoint / wrapTrackmapRot 同空间）。
+  // 只覆盖和长边横铺自动朝向差大约 15° 以上的赛道；其余仍走 autoOrientDeg。
+  var CIRCUIT_VIEW_ROT = {
+    'circuits/baku-1.svg': 338,
+    'circuits/catalunya-6.svg': 302,
+    'circuits/hungaroring-3.svg': 33,
+    'circuits/interlagos-2.svg': 286,
+    'circuits/melbourne-2.svg': 46,
+    'circuits/mexico-city-3.svg': 33,
+    'circuits/monaco-6.svg': 339,
+    'circuits/montreal-6.svg': 230,
+    'circuits/shanghai-1.svg': 336,
+    'circuits/spielberg-3.svg': 20,
+    'circuits/suzuka-2.svg': 233,
+    'circuits/yas-marina-2.svg': 261
+  };
+
+  function officialViewRotDeg(rel) {
+    if (!rel || CIRCUIT_VIEW_ROT[rel] == null) return null;
+    var deg = Number(CIRCUIT_VIEW_ROT[rel]);
+    if (!isFinite(deg)) return null;
+    return wrapTrackmapRot(deg);
   }
 
   function phaseKey() {
@@ -2359,12 +2383,14 @@
   }
 
   function autoOrientDegFor(pts) {
+    var official = officialViewRotDeg(TRACKMAP.svgRel);
+    if (official != null) return official;
     var E = window.TrackmapEstimate;
     if (!E || typeof E.autoOrientDeg !== 'function' || !pts || pts.length < 3) return 0;
     return wrapTrackmapRot(E.autoOrientDeg(pts));
   }
 
-  /** 轮廓换了时重算默认朝向。用户仍停在上一条默认上则跟上新默认，否则保留偏移。 */
+  /** 轮廓换了时重算默认朝向。有官方 Track 图标覆盖则用它，否则长边横铺。用户仍停在上一条默认上则跟上新默认，否则保留偏移。 */
   function applyTrackmapAutoOrient(pts, force) {
     var next = autoOrientDegFor(pts);
     var prev = wrapTrackmapRot(TRACKMAP.baseRotDeg);

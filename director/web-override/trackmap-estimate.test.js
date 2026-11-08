@@ -950,7 +950,12 @@ assert(appSrc.indexOf('computeFitBounds') >= 0, 'app rotate-then-fits before sca
 assert(appSrc.indexOf('viewRotDeg = wrapTrackmapRot(TRACKMAP.baseRotDeg)') >= 0,
   'reset restores the auto default, not hard 0');
 assert(appSrc.indexOf('TRACKMAP.viewRotDeg = 0') < 0, 'reset does not force 0°');
+assert(appSrc.indexOf('var CIRCUIT_VIEW_ROT') >= 0, 'app has official Track-icon view rotations');
+assert(appSrc.indexOf('officialViewRotDeg') >= 0, 'app looks up official default rotation');
+assert(appSrc.indexOf('if (official != null) return official') >= 0,
+  'official Track-icon rotation overrides autoOrient when present');
 var phaseSrc = appSrc.split('var CIRCUIT_PHASE')[1].split('function circuitPhase')[0];
+var viewRotSrc = appSrc.split('var CIRCUIT_VIEW_ROT')[1].split('function officialViewRotDeg')[0];
 var svgSrc = appSrc.split('var CIRCUIT_SVG')[1].split('};')[0];
 function parsePhases(block) {
   var re = /'(circuits\/[^']+\.svg)'\s*:\s*\{([^}]+)\}/g;
@@ -972,6 +977,14 @@ function parsePhases(block) {
   return out;
 }
 var phases = parsePhases(phaseSrc);
+function parseViewRots(block) {
+  var re = /'(circuits\/[^']+\.svg)'\s*:\s*(-?\d+)/g;
+  var out = {};
+  var m;
+  while ((m = re.exec(block))) out[m[1]] = +m[2];
+  return out;
+}
+var viewRots = parseViewRots(viewRotSrc);
 var svgTargets = {};
 var svgRe = /'(circuits\/[^']+\.svg)'/g;
 var sm;
@@ -1195,6 +1208,39 @@ svgKeys.forEach(function (rel) {
   }
 });
 assert(got90 === 9, 'nine portrait circuits auto-orient +90, got ' + got90);
+
+var officialViewRot = {
+  'circuits/baku-1.svg': 338,
+  'circuits/catalunya-6.svg': 302,
+  'circuits/hungaroring-3.svg': 33,
+  'circuits/interlagos-2.svg': 286,
+  'circuits/melbourne-2.svg': 46,
+  'circuits/mexico-city-3.svg': 33,
+  'circuits/monaco-6.svg': 339,
+  'circuits/montreal-6.svg': 230,
+  'circuits/shanghai-1.svg': 336,
+  'circuits/spielberg-3.svg': 20,
+  'circuits/suzuka-2.svg': 233,
+  'circuits/yas-marina-2.svg': 261
+};
+assert(Object.keys(viewRots).length === 12, 'exactly 12 official view-rot overrides, got ' + Object.keys(viewRots).length);
+Object.keys(officialViewRot).forEach(function (rel) {
+  assert(viewRots[rel] === officialViewRot[rel],
+    rel + ' official default ' + viewRots[rel] + ' vs ' + officialViewRot[rel]);
+  assert(svgTargets[rel], rel + ' is a mapped circuit');
+});
+svgKeys.forEach(function (rel) {
+  if (officialViewRot[rel]) return;
+  assert(viewRots[rel] == null, rel + ' stays on autoOrient, got override ' + viewRots[rel]);
+});
+function defaultViewRotDeg(rel, pts) {
+  if (viewRots[rel] != null) return ((viewRots[rel] % 360) + 360) % 360;
+  return E.autoOrientDeg(pts);
+}
+assert(viewRots['circuits/interlagos-2.svg'] === 286, 'Interlagos default is official 286°');
+assert(viewRots['circuits/suzuka-2.svg'] === 233, 'Suzuka default is official 233°');
+assert(viewRots['circuits/monaco-6.svg'] === 339, 'Monaco default is official 339°');
+assert(viewRots['circuits/miami-1.svg'] == null, 'Miami has no official override');
 
 var square = E.buildArc([
   { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 0, y: 0 }
@@ -1454,14 +1500,31 @@ function fittedSpan(pts, w, h, zoom, rotDeg) {
 var interlagosPts = flipY(E.outlineFromSvg(
   fs.readFileSync(path.join(__dirname, 'circuits/interlagos-2.svg'), 'utf8'), 4));
 assert(E.autoOrientDeg(interlagosPts) === 90, 'Interlagos is portrait');
+assert(defaultViewRotDeg('circuits/interlagos-2.svg', interlagosPts) === 286,
+  'Interlagos default view uses official 286°, not auto 90°');
 var inter0 = fittedSpan(interlagosPts, 420, 240, 1.05, 0);
 var inter90 = fittedSpan(interlagosPts, 420, 240, 1.05, 90);
+var interOff = fittedSpan(interlagosPts, 420, 240, 1.05, 286);
 assert(inter90.w > inter0.w * 1.15, 'rotate-then-fit refills Interlagos width ' +
   inter0.w.toFixed(1) + ' → ' + inter90.w.toFixed(1));
 assert(inter90.w > inter90.h, 'Interlagos long axis is horizontal after +90');
+assert(interOff.w > inter0.w * 1.15, 'official 286° still rotate-then-fits Interlagos width');
+assert(interOff.w > interOff.h, 'Interlagos long axis stays horizontal at official 286°');
+var suzukaPts = flipY(E.outlineFromSvg(
+  fs.readFileSync(path.join(__dirname, 'circuits/suzuka-2.svg'), 'utf8'), 4));
+assert(E.autoOrientDeg(suzukaPts) === 0, 'Suzuka autoOrient stays landscape 0°');
+assert(defaultViewRotDeg('circuits/suzuka-2.svg', suzukaPts) === 233,
+  'Suzuka default view uses official 233°');
+var monacoPts = flipY(E.outlineFromSvg(
+  fs.readFileSync(path.join(__dirname, 'circuits/monaco-6.svg'), 'utf8'), 4));
+assert(E.autoOrientDeg(monacoPts) === 90, 'Monaco autoOrient is portrait +90');
+assert(defaultViewRotDeg('circuits/monaco-6.svg', monacoPts) === 339,
+  'Monaco default view uses official 339°');
 var miamiPts = flipY(E.outlineFromSvg(
   fs.readFileSync(path.join(__dirname, 'circuits/miami-1.svg'), 'utf8'), 4));
 assert(E.autoOrientDeg(miamiPts) === 0, 'Miami stays 0');
+assert(defaultViewRotDeg('circuits/miami-1.svg', miamiPts) === 0,
+  'Miami default stays on autoOrient 0°');
 var miami0 = fittedSpan(miamiPts, 420, 240, 1.05, 0);
 assert(miami0.w > miami0.h, 'landscape Miami already fills horizontally');
 
