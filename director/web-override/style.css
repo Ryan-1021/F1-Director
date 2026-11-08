@@ -822,15 +822,53 @@ table.timing.rank-swapping tr.rank-swap-down {
   height: auto;
   overflow: auto;
 }
+/* Legacy bottom note: never reclaim space if an old build left one. */
+.sectors-note,
 .panel[data-board="sectors"] > .sectors-note {
-  flex: 0 0 auto;
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  flex: 0 0 0 !important;
+  border: 0 !important;
 }
-.sectors-note {
-  padding: 4px 6px 6px;
+/* Title-row chrome (standalone b-head / ptitle). Director uses .p-head .sectors-head-tip. */
+.sectors-head-tip {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 10px;
-  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.2;
   color: var(--muted2);
-  flex: 0 0 auto;
+  opacity: 0.9;
+  flex: 1 1 auto;
+}
+.sectors-head-tip.show { display: block; }
+.b-head .sectors-head-tip {
+  margin-left: 8px;
+}
+.ptitle .sectors-head-tip {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.ptitle:has(> .sectors-head-tip.show) > .sectors-head-tip {
+  margin-left: auto;
+  order: 2;
+}
+.ptitle:has(> .sectors-head-tip.show) > .p-pop {
+  margin-left: 6px;
+  order: 3;
+}
+.ptitle:has(> .sectors-head-tip.show) > .ptitle-text {
+  order: 1;
 }
 /* Narrow sectors: horizontal pad only; density via --board-* / --sec-* */
 .sectors-wrap.compact table.timing th { padding-left: 3px; padding-right: 3px; }

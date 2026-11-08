@@ -1946,16 +1946,91 @@
     if (tr && tr.children[0]) tr.children[0].textContent = c.position || '';
   }
 
+  var SECTORS_NOTE_TEXT = '本场次暂无赛段数据';
+  var lastSectorsNoteShow = false;
+
+  function sectorsInDirectorParent() {
+    return !!(ONCE && window.parent && window.parent !== window);
+  }
+
+  function dropLegacySectorsNote(box) {
+    if (!box || !box.querySelectorAll) return;
+    var notes = box.querySelectorAll('.sectors-note');
+    for (var i = 0; i < notes.length; i++) notes[i].remove();
+  }
+
+  function notifySectorsParentNote(show) {
+    lastSectorsNoteShow = !!show;
+    if (!sectorsInDirectorParent()) return;
+    try {
+      window.parent.postMessage({ type: 'f1-sectors-note', show: !!show }, '*');
+    } catch (e) { /* ignore */ }
+  }
+
+  function buildSectorsHeadTip() {
+    var tip = el('span', 'sectors-head-tip');
+    tip.setAttribute('data-sectors-tip', '');
+    tip.textContent = SECTORS_NOTE_TEXT;
+    tip.title = SECTORS_NOTE_TEXT;
+    return tip;
+  }
+
+  /** Put the empty-state tip in the title row (b-head / ptitle).
+   *  Director iframe (?once=1): parent .p-head owns the chrome. */
+  function placeSectorsHeadTip(box) {
+    if (!box) return null;
+    var root = box.parentElement;
+    if (root) {
+      var stale = root.querySelectorAll('.b-box > .sectors-head-tip');
+      for (var s = 0; s < stale.length; s++) stale[s].remove();
+    }
+    var boxKids = box.children;
+    for (var k = boxKids.length - 1; k >= 0; k--) {
+      if (boxKids[k].classList && boxKids[k].classList.contains('sectors-head-tip')) {
+        box.removeChild(boxKids[k]);
+      }
+    }
+
+    var head = root && root.querySelector('.b-head');
+    if (head) {
+      var existingHead = head.querySelector('[data-sectors-tip]');
+      if (existingHead) return existingHead;
+      var tipHead = buildSectorsHeadTip();
+      var sub = head.querySelector('.b-sub');
+      if (sub) head.insertBefore(tipHead, sub);
+      else {
+        var all = head.querySelector('.p-pop-all');
+        if (all) head.insertBefore(tipHead, all);
+        else head.appendChild(tipHead);
+      }
+      return tipHead;
+    }
+
+    var title = box.querySelector('.ptitle');
+    if (!title) {
+      title = titleRow('赛段成绩', box.getAttribute('data-board'));
+      box.insertBefore(title, box.firstChild);
+    }
+    var existingTitle = title.querySelector('[data-sectors-tip]');
+    if (existingTitle) return existingTitle;
+    var tipTitle = buildSectorsHeadTip();
+    var pop = title.querySelector('.p-pop');
+    if (pop) title.insertBefore(tipTitle, pop);
+    else title.appendChild(tipTitle);
+    return tipTitle;
+  }
+
   function syncSectorsNote(box, anySector) {
-    var note = box.querySelector('.sectors-note');
-    if (anySector) {
-      if (note) note.remove();
+    dropLegacySectorsNote(box);
+    var show = !anySector;
+    lastSectorsNoteShow = show;
+    if (sectorsInDirectorParent()) {
+      notifySectorsParentNote(show);
       return;
     }
-    if (!note) {
-      box.appendChild(el('div', 'sub sectors-note',
-        '本场次暂无 S1–S3 / 本圈时间（字段已接通，有分段后会自动填色）'));
-    }
+    if (ONCE) return;
+    var tip = placeSectorsHeadTip(box);
+    if (tip) tip.classList.toggle('show', show);
   }
 
   function syncSectorsTable(table, cars, bests) {
@@ -1998,9 +2073,8 @@
     var table = wrap && wrap.querySelector('table.timing');
     if (wrap && table && table.getAttribute('data-live') === '1') {
       if (!cars.length) {
-        var emptyNote = box.querySelector('.sectors-note');
-        if (emptyNote) emptyNote.remove();
         ensureBoardEmpty(wrap);
+        syncSectorsNote(box, true);
       } else {
         removeBoardEmpty(wrap);
         ensureBoardHeader(table, SECTOR_HEAD_COLS);
@@ -2027,6 +2101,7 @@
     box.appendChild(wrap);
     if (!cars.length) {
       ensureBoardEmpty(wrap);
+      syncSectorsNote(box, true);
     } else {
       ensureBoardHeader(t, SECTOR_HEAD_COLS);
       var bests = computeSectorFieldBests(cars);
@@ -4311,6 +4386,10 @@
         notifyTrackmapParentUi();
         return;
       }
+      if (d.type === 'f1-sectors-note-req') {
+        notifySectorsParentNote(lastSectorsNoteShow);
+        return;
+      }
       if (d.type === 'f1-theme' && d.theme) {
         applyTheme(d.theme);
         try { localStorage.setItem(STORAGE_THEME, d.theme === 'day' ? 'day' : 'night'); } catch (e) {}
@@ -4384,7 +4463,8 @@
     rotateTrackmap: rotateTrackmapBy,
     setTrackmapRot: setTrackmapRotDeg,
     getTrackmapRot: function () { return wrapTrackmapRot(TRACKMAP.viewRotDeg); },
-    getTrackmapStatus: trackmapStatusText
+    getTrackmapStatus: trackmapStatusText,
+    getSectorsNoteVisible: function () { return !!lastSectorsNoteShow; }
   };
 
   document.addEventListener('DOMContentLoaded', function () {
