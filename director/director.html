@@ -770,8 +770,9 @@
   /* Sectors empty-state — quiet title-row chrome, same slot as 「列」 / .tm-head */
   .p-head .sectors-head-tip {
     display: none;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: min(52%, 280px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -781,14 +782,9 @@
     line-height: 1.2;
     color: var(--muted2);
     opacity: 0.9;
+    margin-right: 2px;
   }
-  .p-head .sectors-head-tip.show { display: block; }
-  .p-head:has(.sectors-head-tip.show) .spacer {
-    flex: 0 0 0;
-    min-width: 0;
-    width: 0;
-    overflow: hidden;
-  }
+  .p-head .sectors-head-tip.show { display: inline-block; }
   .p-head .win-btns {
     display: flex; gap: 3px; flex-shrink: 0;
   }
