@@ -838,6 +838,7 @@ table.timing.rank-swapping tr.rank-swap-down {
 .sectors-head-tip {
   display: none;
   min-width: 0;
+  max-width: min(52%, 280px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -848,9 +849,9 @@ table.timing.rank-swapping tr.rank-swap-down {
   line-height: 1.2;
   color: var(--muted2);
   opacity: 0.9;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
 }
-.sectors-head-tip.show { display: block; }
+.sectors-head-tip.show { display: inline-block; }
 .b-head .sectors-head-tip {
   margin-left: 8px;
 }
