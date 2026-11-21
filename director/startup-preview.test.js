@@ -21,11 +21,17 @@ var sync = fs.readFileSync(path.join(root, 'Sync-WebPublish.ps1'), 'utf8');
 var sources = require('./test-director-sources').loadDirectorSources();
 
 assert(ps1.indexOf('function Open-DirectorBrowser') !== -1, 'Run-Director has Open-DirectorBrowser');
-var openPos = ps1.indexOf('Open-DirectorBrowser');
-var waitPos = ps1.indexOf("Write-Host 'Waiting for http://127.0.0.1:8720/api/health");
-assert(openPos >= 0 && waitPos > openPos, 'browser opens before health wait loop');
-assert(ps1.indexOf('Start-Process -FilePath $browser') < waitPos ||
-  ps1.indexOf('Open-DirectorBrowser') < waitPos, 'no second browser launch after health wait');
+assert(ps1.indexOf('function Invoke-F1DirectorStartupCleanup') !== -1, 'conditional startup cleanup');
+assert(/if \(-not \(Test-DirectorPort8720Free\)\) \{[\s\S]*Invoke-F1DirectorStartupCleanup/.test(ps1),
+  'skip cleanup when 8720 already free');
+assert(ps1.indexOf('Test-DirectorBindLikelyFailed') !== -1, 'bind-fail detection for one-shot retry');
+var loopPos = ps1.indexOf('for ($startAttempt = 0; $startAttempt -lt 2; $startAttempt++)');
+var openPos = ps1.indexOf('Open-DirectorBrowser', loopPos);
+var waitPos = ps1.indexOf("Write-Host 'Waiting for http://127.0.0.1:8720/api/health", loopPos);
+assert(loopPos >= 0 && openPos > loopPos && waitPos > openPos,
+  'inside start loop: Java start, then browser, then health wait');
+assert((ps1.match(/Start-Process -FilePath \$browser/g) || []).length === 1,
+  'single browser launch via Open-DirectorBrowser');
 
 assert(ps1.indexOf('-XX:+TieredCompilation') !== -1, 'JVM TieredCompilation flag');
 assert(ps1.indexOf('-XX:TieredStopAtLevel=1') !== -1, 'JVM TieredStopAtLevel=1 flag');
