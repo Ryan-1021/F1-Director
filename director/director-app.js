@@ -2733,8 +2733,69 @@
     };
   }
 
+  /** Pixel slack when comparing a scaled preset to the live stage (matches viewport snap). */
+  var LAYOUT_GEOM_EPS = 2;
+
+  function layoutGeomNear(a, b) {
+    return Math.abs((a || 0) - (b || 0)) <= LAYOUT_GEOM_EPS;
+  }
+
+  function snapshotPanelMatchesLive(expected, live) {
+    if (!live) return false;
+    if (panelTypeOf(expected) !== panelTypeOf(live)) return false;
+    if (panelTypeOf(expected) === 'board') {
+      var eb = expected.board || 'timing';
+      var lb = live.board || 'timing';
+      if (eb !== lb) return false;
+    }
+    if (!!expected.minimized !== !!live.minimized) return false;
+    if (!layoutGeomNear(expected.x, live.x)) return false;
+    if (!layoutGeomNear(expected.y, live.y)) return false;
+    if (!layoutGeomNear(expected.w, live.w)) return false;
+    if (!layoutGeomNear(expected.h, live.h)) return false;
+    if ((expected.z || 10) !== (live.z || 10)) return false;
+    return true;
+  }
+
+  /** Compare preset panels (design viewport) to live serialized panels on the given stage. */
+  function layoutSnapshotMatchesLivePanels(snap, livePanels, stageW, stageH) {
+    if (!snap || !Array.isArray(snap.panels) || !snap.panels.length) return false;
+    if (!stageW || !stageH || stageW < 80 || stageH < 80) return false;
+    var scaled = scalePanelsList(
+      ensureLiveInList(snap.panels.slice()),
+      snap.vw || 0,
+      snap.vh || 0,
+      stageW,
+      stageH
+    );
+    var liveMap = {};
+    (livePanels || []).forEach(function (p) {
+      if (p && p.id) liveMap[p.id] = p;
+    });
+    if (scaled.length !== Object.keys(liveMap).length) return false;
+    for (var i = 0; i < scaled.length; i++) {
+      var exp = scaled[i];
+      if (!exp || !exp.id) return false;
+      if (!snapshotPanelMatchesLive(exp, liveMap[exp.id])) return false;
+    }
+    return true;
+  }
+
+  function layoutSnapshotMatchesCurrent(snap) {
+    var s = stageSize();
+    return layoutSnapshotMatchesLivePanels(snap, serialize(), s.w, s.h);
+  }
+
   function applyLayoutSnapshot(snap) {
     if (!snap || !Array.isArray(snap.panels) || !snap.panels.length) return false;
+    if (layoutSnapshotMatchesCurrent(snap)) {
+      if (snap.theme === 'day' || snap.theme === 'night') {
+        var curTheme = document.documentElement.getAttribute('data-theme') || 'night';
+        curTheme = curTheme === 'day' ? 'day' : 'night';
+        if (curTheme !== snap.theme) applyTheme(snap.theme, true);
+      }
+      return true;
+    }
     setLayoutBaselineFromPlain({
       vw: snap.vw || 0,
       vh: snap.vh || 0,
