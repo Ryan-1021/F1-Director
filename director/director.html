@@ -590,12 +590,18 @@
   .fpanel.live-panel.minimized .live-toolbar-clip { display: none; }
   /* Hide without display:none so the fade can run. Pointer-events drop immediately;
      visibility waits out the 1s so the bar cannot take clicks after it is gone.
-     Normal mode also collapses the clip; fill mode is an overlay and must not. */
-  .fpanel.live-panel.live-toolbar-hidden .live-toolbar {
+     「地址」 and 铺满裁切 share this same in-flow bar: it fades and the clip
+     collapses. Fill never switches it to position:absolute, so enter/exit do
+     not redraw a second copy. A bar the user already collapsed stays collapsed. */
+  .fpanel.live-panel.live-toolbar-hidden .live-toolbar,
+  .fpanel.live-panel.live-media-fill .live-toolbar {
     opacity: 0;
     transform: translateY(-6px);
     pointer-events: none;
     visibility: hidden;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom-width: 0;
     transition:
       opacity 1s cubic-bezier(0.22, 1, 0.36, 1),
       transform 1s cubic-bezier(0.22, 1, 0.36, 1),
@@ -604,19 +610,17 @@
       border-bottom-width 1s cubic-bezier(0.22, 1, 0.36, 1),
       visibility 0s linear 1s;
   }
-  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar-clip {
+  .fpanel.live-panel.live-toolbar-hidden .live-toolbar-clip,
+  .fpanel.live-panel.live-media-fill .live-toolbar-clip {
     grid-template-rows: 0fr;
     pointer-events: none;
   }
-  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar {
-    padding-top: 0;
-    padding-bottom: 0;
-    border-bottom-width: 0;
-  }
-  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar-clip,
-  .fpanel.live-panel.live-tb-anim:not(.live-media-fill) .live-toolbar-clip,
-  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar,
-  .fpanel.live-panel.live-tb-anim:not(.live-media-fill) .live-toolbar {
+  .fpanel.live-panel.live-toolbar-hidden .live-toolbar-clip,
+  .fpanel.live-panel.live-media-fill .live-toolbar-clip,
+  .fpanel.live-panel.live-tb-anim .live-toolbar-clip,
+  .fpanel.live-panel.live-toolbar-hidden .live-toolbar,
+  .fpanel.live-panel.live-media-fill .live-toolbar,
+  .fpanel.live-panel.live-tb-anim .live-toolbar {
     overflow: hidden;
   }
   .p-head .win-btns button.live-url-tog {
@@ -1143,143 +1147,8 @@
   .p-head .win-btns button.live-fs.on {
     color: var(--live);
   }
-  /* 铺满裁切：地址/延迟栏浮在画面上，不占位、不退出 live-media-fill。隐藏仍由 .live-toolbar-hidden 控制。 */
-  .fpanel.live-panel.live-media-fill .live-toolbar-clip {
-    height: 0;
-    grid-template-rows: 0fr;
-    overflow: visible;
-  }
-  .fpanel.live-panel.live-media-fill .live-toolbar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    padding-right: 168px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
-  }
-  .fpanel.live-panel .p-head {
-    transition:
-      background 1s cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 1s cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 1s cubic-bezier(0.22, 1, 0.36, 1),
-      padding 1s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .fpanel.live-panel.live-media-fill .p-head {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: auto;
-    z-index: 12;
-    width: auto;
-    height: auto;
-    padding: 7px 8px;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-  }
-  .fpanel.live-panel .p-head .live-badge,
-  .fpanel.live-panel .p-head .title,
-  .fpanel.live-panel .p-head .tag,
-  .fpanel.live-panel .p-head .spacer,
-  .fpanel.live-panel .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
-    transition-property: opacity, width, min-width, padding, margin, border-width, display;
-    transition-duration: 1s;
-    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    transition-behavior: allow-discrete;
-  }
-  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .live-badge,
-  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .title,
-  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .tag,
-  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .spacer,
-  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
-    display: none !important;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
-    width: 0;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border-width: 0;
-    overflow: hidden;
-  }
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .live-badge,
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .title,
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .tag,
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .spacer,
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
-    animation: liveChromeIn 1s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  @keyframes liveChromeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  /* Leave keeps the overlay for the whole 1s, but grows it into the normal
-     title bar / address row / picture box so dropping .live-media-fill does not snap. */
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head {
-    left: 0;
-    right: 0;
-    width: auto;
-    height: var(--head-h);
-    padding: 0 8px 0 12px;
-    background: transparent;
-    border-bottom: 1px solid var(--border);
-  }
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background: linear-gradient(180deg, var(--panel-elev), var(--panel-head));
-    opacity: 0;
-    animation: liveHeadBar 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  }
-  @keyframes liveHeadBar {
-    to { opacity: 1; }
-  }
-  .fpanel.live-panel.live-media-fill.live-fill-leave .live-toolbar {
-    padding-right: 8px;
-    animation: liveBarSettle 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  }
-  @keyframes liveBarSettle {
-    from { top: 0; }
-    to { top: var(--live-restore-head, var(--head-h)); }
-  }
-  /* A hidden address bar is an invisible overlay in fill. Collapse it before the
-     class drop, or its padding re-enters the flow and the picture jumps. */
-  .fpanel.live-panel.live-toolbar-hidden.live-media-fill.live-fill-leave .live-toolbar {
-    height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    border-bottom-width: 0;
-    overflow: hidden;
-    animation: none;
-    transition: none;
-  }
-  .fpanel.live-panel.live-media-fill.live-fill-leave #liveFsRoot {
-    margin-top: calc(var(--live-restore-head, var(--head-h)) + var(--live-restore-bar, 0px));
-    transition: margin-top 1s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button.live-fs,
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button.live-url-tog {
-    background: transparent;
-    border-color: transparent;
-    color: var(--muted);
-  }
-  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button.live-url-tog.on {
-    color: var(--teal);
-    background: var(--teal-dim);
-    border-color: rgba(225, 6, 0, 0.28);
-  }
-  .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-fs,
-  .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-url-tog {
-    background: rgba(0,0,0,.55);
-    border-color: rgba(255,255,255,.18);
-    color: #fff;
-  }
+  /* 铺满裁切不改标题栏的定位。地址栏用上面的同一条 in-flow 收起；
+     画面是 flex 剩余空间，只跟着格子变高变矮，播放器节点不重建。 */
   #liveFsRoot {
     --live-crop-scale: 1.45;
     --live-crop-x: 6%;
@@ -1288,9 +1157,6 @@
   #liveIframe {
     transform-origin: center center;
     transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .fpanel.live-panel.live-media-fill.live-fill-leave #liveIframe {
-    transform: none;
   }
   .fpanel.live-panel.live-media-fill #liveFsRoot {
     background: #000;
@@ -1338,7 +1204,7 @@
       opacity 1s cubic-bezier(0.22, 1, 0.36, 1),
       visibility 0s linear 1s;
   }
-  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) #liveFsRoot.has-iframe .live-crop-ui {
+  .fpanel.live-panel.live-media-fill #liveFsRoot.has-iframe .live-crop-ui {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -4695,58 +4561,16 @@
     return document.fullscreenElement || document.webkitFullscreenElement || null;
   }
 
-  var LIVE_FILL_MS = 1000;
-  var liveFillLeaveTimer = 0;
-
-  function cancelLiveFillLeaveTimer() {
-    if (!liveFillLeaveTimer) return;
-    clearTimeout(liveFillLeaveTimer);
-    liveFillLeaveTimer = 0;
-  }
-
   function isLiveMediaFill() {
     var panel = getLivePanelEl();
-    return !!(panel && panel.classList.contains('live-media-fill') && !panel.classList.contains('live-fill-leave'));
-  }
-
-  function liveRestoreHeadPx(panel) {
-    var head = 32;
-    try {
-      var n = parseFloat(getComputedStyle(panel).getPropertyValue('--head-h'));
-      if (n) head = n;
-    } catch (e) {}
-    return head;
-  }
-
-  function liveRestoreBarPx(panel) {
-    if (!panel || panel.classList.contains('live-toolbar-hidden')) return 0;
-    var bar = panel.querySelector('.live-toolbar');
-    if (!bar) return 0;
-    var h = bar.getBoundingClientRect().height;
-    return h > 1 ? h : 0;
-  }
-
-  function setLiveFillRestoreVars(panel) {
-    if (!panel) return;
-    panel.style.setProperty('--live-restore-head', liveRestoreHeadPx(panel) + 'px');
-    panel.style.setProperty('--live-restore-bar', liveRestoreBarPx(panel) + 'px');
-  }
-
-  function clearLiveFillRestoreVars(panel) {
-    if (!panel) return;
-    panel.style.removeProperty('--live-restore-head');
-    panel.style.removeProperty('--live-restore-bar');
+    return !!(panel && panel.classList.contains('live-media-fill'));
   }
 
   function clearLiveMediaFill() {
-    cancelLiveFillLeaveTimer();
     var panel = getLivePanelEl();
-    if (panel) {
-      panel.classList.remove('live-media-fill', 'live-fill-leave');
-      clearLiveFillRestoreVars(panel);
-    }
+    if (panel) panel.classList.remove('live-media-fill');
     var root = getLiveFsRoot();
-    if (root) root.classList.remove('live-media-fill', 'live-fill-leave');
+    if (root) root.classList.remove('live-media-fill');
     updateLiveFsButton();
   }
 
@@ -4824,44 +4648,22 @@
       return;
     }
     on = !!on;
+    if (panel.classList.contains('live-media-fill') === on) {
+      updateLiveFsButton();
+      return;
+    }
     if (on) {
-      cancelLiveFillLeaveTimer();
-      clearLiveFillRestoreVars(panel);
-      panel.classList.remove('live-fill-leave');
-      root.classList.remove('live-fill-leave');
-      panel.classList.add('live-media-fill');
-      root.classList.add('live-media-fill');
-      applyLiveCropVars();
-      updateLiveFsButton();
-      return;
+      closeStreamUrlHistory();
+      var active = document.activeElement;
+      if (active && active.closest && active.closest('.live-toolbar')) active.blur();
     }
-    if (!panel.classList.contains('live-media-fill') || panel.classList.contains('live-fill-leave')) {
-      updateLiveFsButton();
-      return;
-    }
-    if (prefersReducedMotion()) {
-      panel.classList.remove('live-media-fill', 'live-fill-leave');
-      root.classList.remove('live-media-fill', 'live-fill-leave');
-      clearLiveFillRestoreVars(panel);
-      updateLiveFsButton();
-      return;
-    }
-    // Ease the picture box back to the in-flow size while the crop unwinds.
-    // Dropping .live-media-fill only after that avoids the end-of-exit snap.
-    setLiveFillRestoreVars(panel);
-    panel.classList.add('live-fill-leave');
-    root.classList.add('live-fill-leave');
+    // Arm the clip transition before the class flip, and only when the bar is
+    // actually showing. A collapsed 「地址」 stays collapsed on the way out.
+    if (!panel.classList.contains('live-toolbar-hidden')) armLiveToolbarAnim(panel);
+    panel.classList.toggle('live-media-fill', on);
+    root.classList.toggle('live-media-fill', on);
+    if (on) applyLiveCropVars();
     updateLiveFsButton();
-    liveFillLeaveTimer = setTimeout(function () {
-      liveFillLeaveTimer = 0;
-      var p = getLivePanelEl();
-      var r = getLiveFsRoot();
-      if (!p || !p.classList.contains('live-fill-leave')) return;
-      p.classList.remove('live-media-fill', 'live-fill-leave');
-      clearLiveFillRestoreVars(p);
-      if (r) r.classList.remove('live-media-fill', 'live-fill-leave');
-      updateLiveFsButton();
-    }, LIVE_FILL_MS);
   }
 
   var LIVE_FS_TITLE_OFF = '铺满裁切：放大播放器区域并裁切网页四周；站点布局不同时用左下角微调。播放器自带全屏会被退出。快捷键 F / Esc 退出';
@@ -4991,10 +4793,12 @@
   }
 
   function armLiveToolbarAnim(panel) {
-    if (!panel || panel.classList.contains('live-media-fill')) return;
+    if (!panel) return;
     if (prefersReducedMotion()) return;
     if (liveTbAnimTimer) clearTimeout(liveTbAnimTimer);
     panel.classList.add('live-tb-anim');
+    // Commit the transition rule before the caller flips the clip open or shut.
+    void panel.offsetWidth;
     liveTbAnimTimer = setTimeout(function () {
       liveTbAnimTimer = 0;
       panel.classList.remove('live-tb-anim');
