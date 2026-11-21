@@ -41,6 +41,9 @@ assert(syncPs1.indexOf('Test-DirectorTitleNeedsStamp') !== -1,
 assert(syncPs1.indexOf('[char]0x00B7') !== -1, 'Sync uses U+00B7 via numeric code');
 assert(!/[\u00b7\u2022]/.test(syncPs1.replace(/0x00B7/g, '')),
   'Sync ps1 has no literal middle-dot/bullet in source');
+assert(syncPs1.indexOf('GetFullPath($WebDir)') !== -1, 'Sync-WebPublish normalizes WebDir');
+assert(syncPs1.indexOf('GetFullPath($DirectorRoot)') !== -1,
+  'Sync-WebPublish normalizes DirectorRoot');
 assert(syncPs1.indexOf('Prune-MappedDest') !== -1, 'Sync-WebPublish prunes mapped dest without source');
 assert(syncPs1.indexOf('pruneRootFiles') !== -1, 'prune list includes retired root publishes');
 var rootFilesBlock = syncPs1.slice(
@@ -199,6 +202,42 @@ try {
   assert(!fs.existsSync(path.join(tmpStamp, 'fonts-boot.js')),
     'pwsh prune removes stale fonts-boot.js');
   assert(/PUBLISH_CHANGED=1/.test(out4), 'prune counts as publish change');
+
+  var dotDir = path.join(root, 'dotdot-fixture');
+  fs.mkdirSync(dotDir, { recursive: true });
+  var dotShare = path.join(root, '..', 'publish-dotdot-share');
+  var dotWeb = path.join(dotShare, 'web');
+  fs.mkdirSync(dotWeb, { recursive: true });
+  var dotWebArg = dotDir + path.sep + '..' + path.sep + '..' + path.sep +
+    'publish-dotdot-share' + path.sep + 'web';
+  var circuitsDir = path.join(dotWeb, 'circuits');
+  fs.mkdirSync(circuitsDir, { recursive: true });
+  var woCircuits = path.join(root, 'web-override', 'circuits');
+  var realBaku = path.join(woCircuits, 'baku-1.svg');
+  if (fs.existsSync(realBaku)) {
+    fs.copyFileSync(realBaku, path.join(circuitsDir, 'baku-1.svg'));
+    fs.writeFileSync(path.join(circuitsDir, 'aku-1.svg'), '<!-- truncated leftover -->');
+    assert(dotWebArg.indexOf('..') !== -1, 'fixture WebDir arg still has .. segments');
+    var outDot = cp.execSync(
+      '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
+        path.join(root, 'Sync-WebPublish.ps1') +
+        '" -DirectorRoot "' + root + '" -WebDir "' + dotWebArg + '"',
+      { encoding: 'utf8' }
+    );
+    assert(!fs.existsSync(path.join(circuitsDir, 'aku-1.svg')),
+      'unresolved WebDir: prune removes dest-only truncated circuits leftover');
+    assert(fs.existsSync(path.join(circuitsDir, 'baku-1.svg')),
+      'unresolved WebDir: real circuit file remains');
+    assert(/PUBLISH_CHANGED=1/.test(outDot), 'unresolved WebDir: prune counts as change');
+    var dotHtml = fs.readFileSync(path.join(dotWeb, 'director.html'), 'utf8');
+    assert(dotHtml.indexOf('\u00b7 v' + shortVersion(versionRaw)) !== -1,
+      'unresolved WebDir: stamp still applies U+00B7 version in title');
+  } else {
+    console.log('skip dotdot prune (baku-1.svg source missing)');
+  }
+  try { fs.rmSync(dotShare, { recursive: true, force: true }); } catch (eDot) {}
+  try { fs.rmSync(dotDir, { recursive: true, force: true }); } catch (eDotDir) {}
+
   try { fs.rmSync(tmpStamp, { recursive: true, force: true }); } catch (eTmp) {}
   pwshOk = true;
 } catch (e) {

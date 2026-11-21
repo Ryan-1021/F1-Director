@@ -15,6 +15,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if (-not (Test-Path -LiteralPath $WebDir)) {
+    New-Item -ItemType Directory -Path $WebDir -Force | Out-Null
+}
+$WebDir = [System.IO.Path]::GetFullPath($WebDir)
+$DirectorRoot = [System.IO.Path]::GetFullPath($DirectorRoot)
+
 function Get-FileSha256([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
@@ -134,12 +140,13 @@ function Sync-OneFile([string]$Src, [string]$DstRel, [switch]$TrackDirectorHtml,
 
 function Sync-Tree([string]$SrcDir, [string]$DstRelDir) {
   if (-not (Test-Path -LiteralPath $SrcDir)) { return }
-  $dstRoot = Join-Path $WebDir $DstRelDir
+  $srcRoot = [System.IO.Path]::GetFullPath($SrcDir)
+  $dstRoot = [System.IO.Path]::GetFullPath((Join-Path $WebDir $DstRelDir))
   if (-not (Test-Path -LiteralPath $dstRoot)) {
     New-Item -ItemType Directory -Path $dstRoot -Force | Out-Null
   }
-  Get-ChildItem -LiteralPath $SrcDir -File -Recurse | ForEach-Object {
-    $rel = $_.FullName.Substring($SrcDir.Length).TrimStart('\', '/')
+  Get-ChildItem -LiteralPath $srcRoot -File -Recurse | ForEach-Object {
+    $rel = $_.FullName.Substring($srcRoot.Length).TrimStart('\', '/')
     $relCombined = if ($DstRelDir) { Join-Path $DstRelDir $rel } else { $rel }
     Sync-OneFile -Src $_.FullName -DstRel $relCombined
   }
@@ -171,12 +178,16 @@ function Prune-MappedDest([string]$DstRel, [string]$Src) {
 }
 
 function Prune-MappedTree([string]$SrcDir, [string]$DstRelDir) {
-  $dstRoot = Join-Path $WebDir $DstRelDir
+  $dstRoot = [System.IO.Path]::GetFullPath((Join-Path $WebDir $DstRelDir))
   if (-not (Test-Path -LiteralPath $dstRoot)) { return }
+  $srcRoot = $null
+  if ($SrcDir -and (Test-Path -LiteralPath $SrcDir)) {
+    $srcRoot = [System.IO.Path]::GetFullPath($SrcDir)
+  }
   Get-ChildItem -LiteralPath $dstRoot -File -Recurse | ForEach-Object {
     $rel = $_.FullName.Substring($dstRoot.Length).TrimStart('\', '/')
     $relCombined = if ($DstRelDir) { Join-Path $DstRelDir $rel } else { $rel }
-    $srcFile = if ($SrcDir) { Join-Path $SrcDir $rel } else { $null }
+    $srcFile = if ($srcRoot) { Join-Path $srcRoot $rel } else { $null }
     if (-not $srcFile -or -not (Test-Path -LiteralPath $srcFile)) {
       Write-Host ("Prune publish: removing {0}" -f $_.FullName)
       Remove-Item -LiteralPath $_.FullName -Force
@@ -188,10 +199,6 @@ function Prune-MappedTree([string]$SrcDir, [string]$DstRelDir) {
 
 $dir = $DirectorRoot.TrimEnd('\', '/')
 $wo = Join-Path $dir 'web-override'
-
-if (-not (Test-Path -LiteralPath $WebDir)) {
-  New-Item -ItemType Directory -Path $WebDir -Force | Out-Null
-}
 
 $rootFiles = @(
   @{ Src = (Join-Path $wo 'app.js'); Dst = 'app.js' },
