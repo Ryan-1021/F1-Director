@@ -73,7 +73,7 @@
       var box = document.createElement('div');
       box.id = 'jserr';
       box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;'
-        + 'color:#fff;padding:6px 10px;font-size:12px;z-index:99;font-family:"Noto Sans SC",sans-serif';
+        + 'color:#fff;padding:6px 10px;font-size:12px;z-index:99;font-family:Segoe UI,PingFang SC,Microsoft YaHei,system-ui,sans-serif';
       box.textContent = '界面脚本出错：' + msg;
       (document.body || document.documentElement).appendChild(box);
     } catch (e) { /* 连报错都失败了，只能算了 */ }
@@ -461,7 +461,7 @@
     var day = document.documentElement.getAttribute('data-theme') === 'day';
     if (!n) {
       g.fillStyle = day ? '#5b6b7c' : '#546e7a';
-      g.font = '600 13px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
+      g.font = '600 13px Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif';
       g.textAlign = 'center';
       g.fillText('还没有区段数据', cx, cy);
       return;
@@ -499,7 +499,7 @@
       if ((2 * Math.PI * rIn) / n >= 16) {
         // Labels sit on colored sectors (dark/yellow/red); keep light ink.
         g.fillStyle = '#eceff1';
-        g.font = '600 11px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
+        g.font = '600 11px Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif';
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.fillText(String(sec), lx, ly);
@@ -511,11 +511,11 @@
     g.arc(cx, cy, rIn * 0.92, 0, Math.PI * 2);
     g.fill();
     g.fillStyle = argb(track.textColor);
-    g.font = '700 15px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
+    g.font = '700 15px Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillText(track.label || '', cx, cy - 8);
-    g.font = '11px "Noto Sans SC", Segoe UI, Microsoft YaHei, system-ui, sans-serif';
+    g.font = '11px Segoe UI, PingFang SC, Microsoft YaHei, system-ui, sans-serif';
     g.fillText(ago(track.updatedAt), cx, cy + 12);
   }
 

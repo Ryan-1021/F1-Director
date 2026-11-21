@@ -1,6 +1,6 @@
 /*
  * node director/fonts-first-paint.test.js
- * No blocking Google Fonts on first paint; async optional Noto.
+ * System UI font stack only — no Google Fonts / fonts-boot / Noto network path.
  */
 'use strict';
 
@@ -20,26 +20,34 @@ var director = fs.readFileSync(path.join(root, 'director.html'), 'utf8');
 var index = fs.readFileSync(path.join(root, 'web-override', 'index.html'), 'utf8');
 var board = fs.readFileSync(path.join(root, 'web-override', 'board.html'), 'utf8');
 var css = fs.readFileSync(path.join(root, 'web-override', 'style.css'), 'utf8');
-var boot = fs.readFileSync(path.join(root, 'web-override', 'fonts-boot.js'), 'utf8');
+var appJs = fs.readFileSync(path.join(root, 'web-override', 'app.js'), 'utf8');
 
-function noBlockingFonts(src, label) {
-  assert(src.indexOf('fonts.googleapis.com/css2') === -1, label + ' has no blocking Google stylesheet');
+function assertNoGoogleFonts(src, label) {
+  assert(src.indexOf('fonts.googleapis.com') === -1, label + ' has no fonts.googleapis.com');
+  assert(src.indexOf('fonts.gstatic.com') === -1, label + ' has no fonts.gstatic.com');
   assert(src.indexOf('@import url("https://fonts.googleapis.com') === -1, label + ' has no @import fonts');
 }
 
-noBlockingFonts(director, 'director.html');
-noBlockingFonts(index, 'index.html');
-noBlockingFonts(board, 'board.html');
-noBlockingFonts(css, 'style.css');
+assertNoGoogleFonts(director, 'director.html');
+assertNoGoogleFonts(index, 'index.html');
+assertNoGoogleFonts(board, 'board.html');
+assertNoGoogleFonts(css, 'style.css');
+assertNoGoogleFonts(appJs, 'app.js');
 
-assert(director.indexOf('fonts-boot.js') !== -1, 'director loads fonts-boot.js');
-assert(index.indexOf('/fonts-boot.js') !== -1, 'index loads fonts-boot.js');
-assert(board.indexOf('/fonts-boot.js') !== -1, 'board loads fonts-boot.js');
-assert(css.indexOf('html.fonts-noto-loaded') !== -1, 'CSS upgrades stack when Noto loads');
-assert(css.indexOf('"Segoe UI"') === 0 || css.indexOf('--font: "Segoe UI"') !== -1,
-  'first-paint stack leads with system UI');
-assert(boot.indexOf('requestIdleCallback') !== -1, 'optional font load is idle-deferred');
-assert(boot.indexOf('display=optional') !== -1, 'Google path uses font-display optional');
+assert(director.indexOf('fonts-boot.js') === -1, 'director does not load fonts-boot.js');
+assert(index.indexOf('fonts-boot.js') === -1, 'index does not load fonts-boot.js');
+assert(board.indexOf('fonts-boot.js') === -1, 'board does not load fonts-boot.js');
+assert(!fs.existsSync(path.join(root, 'web-override', 'fonts-boot.js')), 'fonts-boot.js removed');
+
+assert(director.indexOf('fonts-noto-loaded') === -1, 'director has no Noto class hook');
+assert(css.indexOf('fonts-noto-loaded') === -1, 'style.css has no Noto class hook');
+assert(director.indexOf('Noto Sans SC') === -1, 'director.html has no Noto family name');
+assert(css.indexOf('Noto') === -1, 'style.css has no Noto references');
+
+var stack = '--font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';
+assert(css.indexOf(stack) !== -1, 'style.css first-paint stack is system UI');
+assert(director.indexOf('"Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif') !== -1,
+  'director shell uses same system stack');
 
 if (failed) {
   console.error(failed + ' failed');
