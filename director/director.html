@@ -9,9 +9,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark" id="colorSchemeMeta">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="fonts-boot.js"></script>
 <title>F1 导播台 · Director</title>
 <script>
 (function () {
@@ -70,7 +68,7 @@
     --r-sm: 6px;
     --shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
     --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
-    --font: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
     --topbar-bg: linear-gradient(180deg, #0f141c 0%, #0a0e14 100%);
     --input-bg: rgba(0, 0, 0, 0.35);
     --btn-bg: rgba(255, 255, 255, 0.04);
@@ -91,6 +89,9 @@
     --theme-active-fg: #e10600;
     --status-ok-border: rgba(225, 6, 0, 0.35);
     --status-ok-bg: rgba(225, 6, 0, 0.10);
+  }
+  html.fonts-noto-loaded {
+    --font: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   }
   html[data-theme="day"] {
     color-scheme: light;
@@ -828,7 +829,7 @@
     overflow: hidden; text-overflow: ellipsis;
     max-width: 72px;
     opacity: 0.75;
-    font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-family: var(--font);
   }
   /* Custom board-type dropdown (native <option> contrast is unreliable on Windows) */
   .board-dd {
@@ -982,7 +983,7 @@
   .p-head .tm-head.show { display: inline-flex; }
   .p-head .tm-est {
     flex: 0 0 auto;
-    font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-family: var(--font);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.06em;
@@ -1702,6 +1703,35 @@
   var LIVE_MIN_W = 280;
   var LIVE_MIN_H = 250;
   var HEAD_H = 32;
+
+  var BOARD_MOUNT_STAGGER_MS = 72;
+  var boardMountStaggerToken = 0;
+  var boardMountStaggerSeq = 0;
+  var deferredBoardMountTimers = [];
+
+  function boardMountStaggerTier(boardId) {
+    if (boardId === 'timing') return 0;
+    if (boardId === 'flags') return 1;
+    return 2;
+  }
+
+  function scheduleStaggeredBoardMount(el, boardId, delayMs) {
+    var token = boardMountStaggerToken;
+    var timer = setTimeout(function () {
+      if (token !== boardMountStaggerToken) return;
+      if (!el || !el.isConnected) return;
+      applyBoardToPanel(el, boardId);
+    }, Math.max(0, delayMs));
+    deferredBoardMountTimers.push(timer);
+  }
+
+  function resetBoardMountStagger() {
+    boardMountStaggerToken += 1;
+    boardMountStaggerSeq = 0;
+    while (deferredBoardMountTimers.length) {
+      clearTimeout(deferredBoardMountTimers.pop());
+    }
+  }
 
   var BOARD_OPTS = [
     { id: 'timing', label: '成绩榜' },
@@ -3402,7 +3432,7 @@
     return el;
   }
 
-  function createBoardPanel(st) {
+  function createBoardPanel(st, mountOpts) {
     var el = document.createElement('section');
     el.className = 'fpanel';
     el.dataset.panelId = st.id;
@@ -3431,7 +3461,21 @@
     stage.appendChild(el);
     // Build iframe via applyBoardToPanel so onload + once=1 + push work the same
     // as dropdown switches (avoids blank panels from SSE connection starvation).
-    applyBoardToPanel(el, st.board || 'timing');
+    var boardId = st.board || 'timing';
+    if (mountOpts && mountOpts.staggerBoardMounts) {
+      var tier = boardMountStaggerTier(boardId);
+      if (tier === 0) {
+        applyBoardToPanel(el, boardId);
+      } else if (tier === 1) {
+        scheduleStaggeredBoardMount(el, boardId, 0);
+      } else {
+        var seq = boardMountStaggerSeq;
+        boardMountStaggerSeq += 1;
+        scheduleStaggeredBoardMount(el, boardId, 48 + seq * BOARD_MOUNT_STAGGER_MS);
+      }
+    } else {
+      applyBoardToPanel(el, boardId);
+    }
     return el;
   }
 
@@ -3954,11 +3998,11 @@
 
   /** Mount panels scaled from a design viewport into the current stage.
    *  If the stage is not ready yet, defer until adaptToStageSize / resize. */
-  function mountLayoutForViewport(list, fromW, fromH) {
+  function mountLayoutForViewport(list, fromW, fromH, mountOpts) {
     list = ensureLiveInList(list);
     var s = stageSize();
     if (s.w < 80 || s.h < 80) {
-      pendingMount = { list: list, vw: fromW || 0, vh: fromH || 0 };
+      pendingMount = { list: list, vw: fromW || 0, vh: fromH || 0, mountOpts: mountOpts || null };
       return false;
     }
     pendingMount = null;
@@ -3967,7 +4011,10 @@
     if (fromW > 0 && fromH > 0) {
       list = scalePanelsList(list, fromW, fromH, s.w, s.h);
     }
-    mountLayout(list, scaled ? { skipClamp: true } : null);
+    var opts = scaled ? { skipClamp: true } : {};
+    if (mountOpts && mountOpts.staggerBoardMounts) opts.staggerBoardMounts = true;
+    if (opts.staggerBoardMounts) resetBoardMountStagger();
+    mountLayout(list, opts);
     lastViewport = { w: s.w, h: s.h };
     // Faithful letterbox must not re-open gaps via GAP-aware untangle / min-size clamp.
     if (!scaled) resolveAllOverlaps();
@@ -3999,7 +4046,7 @@
     // Finish a deferred first mount now that the stage has a real size.
     if (pendingMount) {
       var pm = pendingMount;
-      if (mountLayoutForViewport(pm.list, pm.vw, pm.vh)) {
+      if (mountLayoutForViewport(pm.list, pm.vw, pm.vh, pm.mountOpts)) {
         if (forceSave && !layoutLocked) saveLayout();
       }
       return;
@@ -4134,7 +4181,7 @@
         _prevH: raw._prevH
       };
       if (st.z > maxZ) maxZ = st.z;
-      bindPanel(st, createBoardPanel(st), opts);
+      bindPanel(st, createBoardPanel(st, opts), opts);
     });
     if (liveRaw && !reusedLive) {
       var stLive = {
@@ -4184,13 +4231,14 @@
         var parsed = normalizeSaved(JSON.parse(raw));
         if (parsed && parsed.panels.length) {
           setLayoutBaselineFromPlain(parsed);
-          mountLayoutForViewport(parsed.panels, parsed.vw, parsed.vh);
+          mountLayoutForViewport(parsed.panels, parsed.vw, parsed.vh, { staggerBoardMounts: true });
           if (!layoutLocked) saveLayout();
           return;
         }
       } catch (e) {}
     }
-    mountLayout(defaultLayout());
+    resetBoardMountStagger();
+    mountLayout(defaultLayout(), { staggerBoardMounts: true });
     resolveAllOverlaps();
     rememberViewport();
     setLayoutBaselineFromPlain(currentLayoutPlain());
@@ -5188,7 +5236,7 @@
     if (!(cur && cur.panels && cur.panels.length)) return false;
     try { localStorage.setItem(STORAGE_LAYOUT, JSON.stringify(cur)); } catch (e) {}
     setLayoutBaselineFromPlain(cur);
-    mountLayoutForViewport(cur.panels, cur.vw, cur.vh);
+    mountLayoutForViewport(cur.panels, cur.vw, cur.vh, { staggerBoardMounts: true });
     // Iframes mount async; onload also pushes cols — nudge once for already-ready frames.
     if (Array.isArray(data.timingColumns)) pushTimingColsToAllBoards();
     return true;
