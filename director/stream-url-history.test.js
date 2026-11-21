@@ -192,6 +192,10 @@ assert(html.indexOf('#liveIframe') !== -1 && /#liveIframe\s*\{[^}]*transition:\s
 assert(/visibility 0s linear 1s/.test(html), 'hidden address bar stays unclickable after the 1s fade');
 assert(/live-fill-leave #liveIframe\s*\{[^}]*transform:\s*none/.test(html),
   'leaving fill eases the crop back');
+assert(/live-fill-leave #liveFsRoot\s*\{[^}]*margin-top\s*:/.test(html),
+  'leaving fill eases the picture box before the fill class drops');
+assert(html.indexOf('setLiveFillRestoreVars(panel)') !== -1,
+  'exit measures the in-flow head and address bar before the ease');
 assert(/\.live-crop-ui\s*\{[^}]*opacity:\s*0/.test(html), 'crop controls can fade');
 assert(/live-media-fill:not\(\.live-fill-leave\) #liveFsRoot\.has-iframe \.live-crop-ui/.test(html),
   'crop controls show only while fill is settled');
