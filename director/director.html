@@ -391,6 +391,10 @@
     display: grid;
     grid-template-rows: 1fr;
     min-height: 0;
+    /* Above the scaled iframe (z-index auto) while the 1s fade runs.
+       Under resize handles (5) and the panel accent (6). */
+    position: relative;
+    z-index: 4;
   }
   .fpanel.live-panel.live-tb-anim .live-toolbar-clip {
     transition: grid-template-rows 1s cubic-bezier(0.22, 1, 0.36, 1);
@@ -1157,11 +1161,20 @@
     min-height: var(--head-h);
     max-height: var(--head-h);
     contain: layout;
+    /* Stay above leftover crop paint. Same band as the address clip (4),
+       under resize handles (5) and the panel accent (6). */
+    position: relative;
+    z-index: 4;
   }
+  /* Clip the crop for the whole 1s ease, not only while .live-media-fill is on.
+     Exit drops that class immediately; the iframe is still translate+scale(~1.45)
+     and would paint over this title bar once overflow returns to visible. */
   #liveFsRoot {
     --live-crop-scale: 1.45;
     --live-crop-x: 6%;
     --live-crop-y: 4%;
+    position: relative;
+    overflow: hidden;
   }
   #liveIframe {
     transform-origin: center center;
@@ -1170,7 +1183,6 @@
   }
   .fpanel.live-panel.live-media-fill #liveFsRoot {
     background: #000;
-    overflow: hidden;
   }
   .fpanel.live-panel.live-media-fill #liveVideo {
     object-fit: contain;

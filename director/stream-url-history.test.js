@@ -6,6 +6,8 @@
  * 铺满不把地址栏从文档流换成浮层，也不在动画结束时改定位。
  * 用户已收起「地址」时，退出铺满不会把那条栏再淡回来。
  * 标题栏按钮文案始终是「铺满裁切」，不用「退出铺满」去改按钮宽度。
+ * 画面盒始终 overflow:hidden，退出时仍在回缩的放大 iframe 不能盖住标题栏。
+ * 标题栏和地址条层级高于画面，退出的 1s 里也不会被画上去。
  */
 'use strict';
 
@@ -224,6 +226,23 @@ assert(!/\.live-media-fill[^{]*\.live-frame[^{]*\{[^}]*position\s*:\s*absolute/.
   'fill does not switch the picture to position:absolute');
 assert(/\.p-body iframe,\s*\.p-body video\s*\{[^}]*position:\s*absolute;\s*inset:\s*0/.test(html),
   'the player is already absolute in both modes and only refits');
+
+var rootRule = html.match(/(?:^|\n)\s*#liveFsRoot\s*\{[^}]*\}/);
+assert(!!rootRule, '#liveFsRoot base rule found');
+assert(rootRule && /overflow:\s*hidden/.test(rootRule[0]),
+  'picture box clips the scaled iframe in both modes, not only while fill is on');
+assert(rootRule && /position:\s*relative/.test(rootRule[0]),
+  'picture box stays a containing block for the absolute iframe');
+assert(!/\.live-media-fill #liveFsRoot\s*\{[^}]*overflow:\s*hidden/.test(html),
+  'fill mode is not the only clip; removing the class must not unclip the exit ease');
+assert(/\.fpanel\.live-panel > \.p-head\s*\{[^}]*position:\s*relative/.test(html),
+  'live title bar is positioned so it can stack above the iframe');
+assert(/\.fpanel\.live-panel > \.p-head\s*\{[^}]*z-index:\s*4/.test(html),
+  'live title bar stays above leftover crop paint');
+var clipRule = html.match(/(?:^|\n)\s*\.live-toolbar-clip\s*\{[^}]*\}/);
+assert(!!clipRule, 'address clip base rule found');
+assert(clipRule && /position:\s*relative/.test(clipRule[0]) && /z-index:\s*4/.test(clipRule[0]),
+  'address clip stays above overflowing video while it fades');
 
 if (failed) {
   console.error(failed + ' failed');
