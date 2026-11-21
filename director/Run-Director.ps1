@@ -89,6 +89,28 @@ function Test-Health {
     } catch { return $false }
 }
 
+function Test-DirectorPort8720Free {
+    try {
+        $listen = Get-NetTCPConnection -LocalPort 8720 -State Listen -ErrorAction SilentlyContinue
+        return -not $listen
+    } catch {
+        return $true
+    }
+}
+
+function Wait-DirectorPort8720Free {
+    param(
+        [int]$PollIntervalMs = 50,
+        [int]$TimeoutMs = 2000
+    )
+    if (Test-DirectorPort8720Free) { return }
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Milliseconds $PollIntervalMs
+        if (Test-DirectorPort8720Free) { return }
+    }
+}
+
 function Quote-ProcessArg([string]$s) {
     # CommandLineToArgvW quoting (java.exe), not cmd.exe quoting.
     if ([string]::IsNullOrEmpty($s)) { return '""' }
@@ -408,7 +430,7 @@ function Pump-HeartbeatListener {
 
 Write-Host 'Cleaning up any previous Director instance...'
 Stop-F1Director
-Start-Sleep -Milliseconds 500
+Wait-DirectorPort8720Free
 
 # Tiny local heartbeat server (director.html pings this; tab close => stop Java)
 Write-Host ("Starting heartbeat listener on {0} ..." -f $HeartbeatPrefix)
