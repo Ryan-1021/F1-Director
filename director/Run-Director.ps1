@@ -1,13 +1,14 @@
 # Launch F1 Director (upstream jar + shell) in Edge/Chrome app mode (--app=).
-# Java is a child of this console (no second window). Its stdout/stderr stay
-# attached here, so server logs show in the one window Start.cmd titles
-# "F1 Director Console".
-# chcp 65001 before java starts keeps those logs UTF-8. The Windows launcher
-# sets sun.stdout.encoding from the console code page only when stdout is a
-# real console (cp65001 on older JREs, UTF-8 on newer ones). The jar also
-# rewrites System.out/err as UTF-8 when that property starts with cp65001.
-# A pipe would skip both, so Java inherits this console instead of a second
-# window. Quoting is done in-process; the old temp launcher cmd is not used.
+# One window, titled "F1 Director Console" by Start.cmd. Java is a child of
+# this console (no second window) so closing it still delivers CTRL_CLOSE.
+# Its stdout/stderr are pipes, not the console screen. Writing UTF-8 bytes
+# with WriteFile into a console whose code page was switched to 65001 doubles
+# every CJK character (ASCII stays single-width, so paths and numbers look
+# fine) and shifts the following columns. The old F1-Director-Server cmd did
+# chcp 65001 before java and did not share a PowerShell host, so it did not
+# hit that. Here the bytes stay UTF-8 on the pipe (-Dsun.stdout.encoding is
+# kept, because a pipe is not a console) and each line is painted once with
+# WriteConsoleW. Do not chcp this window.
 # Lifecycle: director.html pings a local heartbeat port every 4s. Closing the
 # tab/window sends /goodbye (fetchLater + visibility hidden + pagehide);
 # if no heartbeat returns within GoodbyeGraceSec, Java is stopped.
@@ -101,20 +102,94 @@ function Set-DirectorConsoleTitle {
     try { $Host.UI.RawUI.WindowTitle = 'F1 Director Console' } catch {}
 }
 
-function Enable-Utf8Console {
-    # Code page first, then the .NET encoders, so Java and Write-Host agree.
+function Initialize-DirectorConsoleWriter {
+    if ('DirectorConsoleWriter' -as [type]) {
+        $script:DirectorConsoleWriterReady = $true
+        return
+    }
     try {
-        $chcp = Join-Path $env:SystemRoot 'System32\chcp.com'
-        if (Test-Path -LiteralPath $chcp) {
-            & $chcp 65001 > $null
-        }
-    } catch {}
-    try {
-        $utf8 = New-Object System.Text.UTF8Encoding $false
-        [Console]::OutputEncoding = $utf8
-        [Console]::InputEncoding = $utf8
-        $global:OutputEncoding = $utf8
-    } catch {}
+        Add-Type -ErrorAction Stop -WarningAction SilentlyContinue -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class DirectorConsoleWriter {
+    const int STD_OUTPUT_HANDLE = -11;
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr GetStdHandle(int nStdHandle);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool WriteConsoleW(
+        IntPtr hConsole, string text, uint nChars, out uint written, IntPtr reserved);
+    public static bool WriteLine(string text) {
+        IntPtr handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (handle == IntPtr.Zero || handle == (IntPtr)(-1)) return false;
+        string line = (text ?? string.Empty) + "\r\n";
+        uint written;
+        return WriteConsoleW(handle, line, (uint)line.Length, out written, IntPtr.Zero);
+    }
+}
+'@
+        $script:DirectorConsoleWriterReady = $true
+    } catch {
+        $script:DirectorConsoleWriterReady = $false
+    }
+}
+
+function Write-DirectorLine([string]$Text) {
+    # WriteConsoleW emits each Unicode character once. It does not depend on
+    # the console code page, so we never chcp 65001 in this window.
+    if ($script:DirectorConsoleWriterReady) {
+        try {
+            if ([DirectorConsoleWriter]::WriteLine($Text)) { return }
+        } catch {}
+    }
+    Write-Host $Text
+}
+
+function Write-JavaLogs {
+    $queue = $script:JavaLines
+    if (-not $queue) { return }
+    while ($queue.Count -gt 0) {
+        Write-DirectorLine ([string]$queue.Dequeue())
+    }
+}
+
+function Start-JavaLogPump {
+    param($Reader, $Queue)
+    $rs = [runspacefactory]::CreateRunspace()
+    $rs.Open()
+    $ps = [powershell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        param($Reader, $Queue)
+        try {
+            while ($true) {
+                $line = $Reader.ReadLine()
+                if ($null -eq $line) { break }
+                [void]$Queue.Enqueue($line)
+            }
+        } catch {}
+    }).AddArgument($Reader).AddArgument($Queue)
+    return [pscustomobject]@{
+        Runspace   = $rs
+        PowerShell = $ps
+        Handle     = $ps.BeginInvoke()
+    }
+}
+
+function Stop-JavaPumps {
+    if (-not $script:JavaPumps) { return }
+    foreach ($pump in @($script:JavaPumps)) {
+        if (-not $pump) { continue }
+        try {
+            if ($pump.Handle -and -not $pump.Handle.IsCompleted) {
+                [void]$pump.Handle.AsyncWaitHandle.WaitOne(1000)
+            }
+        } catch {}
+        try { if ($pump.PowerShell) { $pump.PowerShell.Stop() } } catch {}
+        try { if ($pump.PowerShell) { $pump.PowerShell.Dispose() } } catch {}
+        try { if ($pump.Runspace) { $pump.Runspace.Close() } } catch {}
+        try { if ($pump.Runspace) { $pump.Runspace.Dispose() } } catch {}
+    }
+    $script:JavaPumps = @()
 }
 
 function Get-DirectorJavaArguments {
@@ -152,16 +227,22 @@ function Start-DirectorJava {
         [string]$ExtraArgs
     )
     Set-DirectorConsoleTitle
-    Enable-Utf8Console
+    Initialize-DirectorConsoleWriter
 
+    $utf8 = New-Object System.Text.UTF8Encoding $false
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $JavaExe
     $psi.Arguments = (Get-DirectorJavaArguments -Jar $Jar -WebDir $WebDir -ExtraArgs $ExtraArgs)
     $psi.UseShellExecute = $false
-    # Inherit this console. CreateNoWindow or another cmd would hide the logs
-    # or open a second window, and a pipe would skip the console code page
-    # the JRE uses for sun.stdout.encoding.
+    # Attached to this console (no extra window, CTRL_CLOSE on close) but
+    # stdout/stderr are pipes. A pipe is not FILE_TYPE_CHAR, so the JRE keeps
+    # -Dsun.stdout.encoding=UTF-8 instead of replacing it with the console code page.
     $psi.CreateNoWindow = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.RedirectStandardInput = $true
+    $psi.StandardOutputEncoding = $utf8
+    $psi.StandardErrorEncoding = $utf8
     $cwd = [System.IO.Directory]::GetCurrentDirectory()
     if ($cwd) { $psi.WorkingDirectory = $cwd }
 
@@ -171,21 +252,31 @@ function Start-DirectorJava {
         throw 'Java process did not start.'
     }
     $script:JavaProc = $proc
+    # Hold stdin open so the server does not see EOF.
+    $script:JavaStdin = $proc.StandardInput
+    $script:JavaLines = [System.Collections.Queue]::Synchronized((New-Object System.Collections.Queue))
+    $script:JavaPumps = @(
+        (Start-JavaLogPump -Reader $proc.StandardOutput -Queue $script:JavaLines),
+        (Start-JavaLogPump -Reader $proc.StandardError -Queue $script:JavaLines)
+    )
     Set-DirectorConsoleTitle
 }
 
 function Stop-TrackedJava {
     $proc = $script:JavaProc
-    if (-not $proc) { return }
-    try {
-        if ($proc.HasExited) { return }
-    } catch { return }
-    try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch {}
-    try {
-        if (-not $proc.HasExited) {
-            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    if ($proc) {
+        $alive = $false
+        try { $alive = -not $proc.HasExited } catch { $alive = $false }
+        if ($alive) {
+            try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch {}
+            try {
+                if (-not $proc.HasExited) {
+                    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                }
+            } catch {}
         }
-    } catch {}
+    }
+    try { if ($script:JavaStdin) { $script:JavaStdin.Close() } } catch {}
 }
 
 function Test-DirectorJavaExited {
@@ -329,7 +420,7 @@ if (-not $hb.Ok) {
     Write-Host '  Heartbeat listener ready.'
 }
 
-Write-Host 'Starting F1 Director server in this console (UTF-8)...'
+Write-Host 'Starting F1 Director server in this console...'
 Write-Host ("  {0}" -f $JavaExe)
 try {
     $null = Start-DirectorJava -JavaExe $JavaExe -Jar $Jar -WebDir $WebDir -ExtraArgs $ExtraArgs
@@ -341,10 +432,15 @@ try {
 Write-Host 'Waiting for http://127.0.0.1:8720 ...'
 $ready = $false
 for ($i = 0; $i -lt 45; $i++) {
+    Write-JavaLogs
     if (Test-DirectorJavaExited) { break }
     if (Test-Health) { $ready = $true; break }
-    Start-Sleep -Seconds 1
+    for ($slice = 0; $slice -lt 5; $slice++) {
+        Start-Sleep -Milliseconds 200
+        Write-JavaLogs
+    }
 }
+Write-JavaLogs
 Set-DirectorConsoleTitle
 if (-not $ready) {
     if ($script:JavaExitNoted) {
@@ -393,6 +489,7 @@ $stopReason = 'enter'
 try {
     while ($true) {
         Pump-HeartbeatListener -State $hb
+        Write-JavaLogs
         $null = Test-DirectorJavaExited
 
         # Enter: non-blocking check (ignore if host has no console)
@@ -454,4 +551,7 @@ if ($stopReason -eq 'goodbye') {
     Write-Host 'Stopping Director server...'
 }
 Stop-F1Director
+Start-Sleep -Milliseconds 150
+Write-JavaLogs
+Stop-JavaPumps
 Write-Host 'Stopped.'
