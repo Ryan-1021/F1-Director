@@ -3,7 +3,13 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.15+20261121**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.16+20261121**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+
+相对 **v0.2.15**（**v0.2.16** 尚未打 Release）：
+
+- Publish-Web 同步末尾自动盖窗口标题：`Sync-WebPublish` 直接调 `Stamp-WindowTitle.ps1`，不再经 cmd `for /f` 解析 `NEEDS_STAMP`；标题分隔符用 `[char]0x00B7`（U+00B7），GBK 代码页不误码
+- 增量发布路径：`WebDir` / `DirectorRoot` 与 prune 相对路径在 `GetFullPath` 后再算，`director\..\share\web` 等不再 Substring 抛错，prune 与盖章能跑完
+- #69 清理：去掉 `Test-DirectorTitleNeedsStamp` 等遗留跟踪；`Stamp-WindowTitle` 缺 VERSION 用 `return`；按需拷贝 web 内 `VERSION`；`Publish-Web.cmd` / `Start.cmd` 在 sync 失败时正确 `errorlevel` 退出
 
 相对 **v0.2.14**（**v0.2.15** Release）：
 
