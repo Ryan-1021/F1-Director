@@ -3,13 +3,16 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.13+20261107**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.14+20261121**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
-相对 **v0.2.12**：
+相对 **v0.2.13**：
 
-- **锁定**本版估计赛道图观感（#38–#42，不再改算法）：Scheme 3 加速度限制追赶测量信念，迷你赛段 tick 之间在 cap 上 **hold-cruise**；同一圈迷你赛段棘轮 + 空洞不信任；曲率巡航 **PACE_STRAIGHT 1.15** / **PACE_CORNER 0.55** / K 带 **10–48** / **TAU 120ms**。示意图：本地 SVG 折线曲率，不是 GPS
-- 系统窗口标题从 `VERSION` 短号写成 `F1 导播台 · Director · v0.2.13`（去掉 `+build`）；页内顶栏 logo 不含版本
-- 共享 `translations.rctrans` 覆盖车手/用语（#36）
+- `CIRCUIT_VIEW_ROT`（#44）：12 条赛道用官方 F1.com Track 图标 `bestMatchDeg` 作为默认 `viewRot`（baku 338、catalunya 302、hungaroring 33、interlagos 286、melbourne 46、mexico 33、monaco 339、montreal 230、shanghai 336、spielberg 20、suzuka 233、yas-marina 261）。已与官方一致的赛道仍走 `autoOrientDeg`，不改
+- 赛段成绩空提示挪进导播面板 `.p-head`（标题栏右侧，#45），文案「本场次暂无赛段数据」；一旦出现任意 S1/S2/S3/本圈赛段数据即隐藏；底部 `.sectors-note` 已去掉
+- 该提示与成绩榜「列」一样右对齐（#46，`flex: 0 1 auto`，spacer 保留）
+- 系统窗口标题短号随壳版本：`F1 导播台 · Director · v0.2.14`（仍从 `VERSION` 去掉 `+build`；页内顶栏 logo 不含版本）
+
+0.2.13 已有：锁定估计赛道图观感（#38–#42，不再改算法：Scheme 3 hold-cruise、同一圈迷你赛段棘轮 + 空洞不信任、曲率巡航 PACE_STRAIGHT 1.15 / PACE_CORNER 0.55 / K 带 10–48 / TAU 120ms；本地 SVG 折线曲率，不是 GPS）、窗口标题从 VERSION 短号写入、共享 `translations.rctrans` 覆盖车手/用语（#36）。
 
 0.2.12 已有：Scheme 3 追赶巡航、rotate-then-fit 朝向、flagBounds 旗语、布局保活赛道图 iframe、空状态「等待成绩数据」、心跳 4s / goodbye ~3s / 失联 ~5s、排名换行 1s。
 
