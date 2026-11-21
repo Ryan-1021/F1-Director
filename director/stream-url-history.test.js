@@ -2,7 +2,7 @@
  * node director/stream-url-history.test.js
  * 直播地址历史：载入记入新 key、去重、上限、单条删除；清除只停当前流。
  * 铺满裁切不再无条件藏起地址栏，「地址」不退出 live-media-fill。
- * 「地址」与铺满裁切带短过渡：地址栏淡入下滑，普通模式收起高度；铺满退出等动画结束再摘 class。
+ * 「地址」与铺满裁切过渡与日夜圆形切换同速（1s）：地址栏淡入下滑，普通模式收起高度；铺满退出等动画结束再摘 class。
  */
 'use strict';
 
@@ -185,8 +185,11 @@ assert(fillFn.indexOf('setTimeout') !== -1, 'exit fill waits before dropping the
 assert(fillFn.indexOf("p.classList.remove('live-media-fill', 'live-fill-leave')") !== -1,
   'live-media-fill is removed only after the leave timer');
 assert(fillFn.indexOf('LIVE_FILL_MS') !== -1, 'leave wait uses the fill duration');
-assert(html.indexOf('#liveIframe') !== -1 && /#liveIframe\s*\{[^}]*transition:\s*transform 220ms/.test(html),
-  'iframe crop transform eases over 220ms');
+assert(html.indexOf('var LIVE_FILL_MS = 1000;') !== -1, 'fill leave waits 1000ms, same as the theme wipe');
+assert(html.indexOf('var LIVE_TOOLBAR_MS = 1000;') !== -1, 'address bar animates for 1000ms');
+assert(html.indexOf('#liveIframe') !== -1 && /#liveIframe\s*\{[^}]*transition:\s*transform 1s/.test(html),
+  'iframe crop transform eases over 1s');
+assert(/visibility 0s linear 1s/.test(html), 'hidden address bar stays unclickable after the 1s fade');
 assert(/live-fill-leave #liveIframe\s*\{[^}]*transform:\s*none/.test(html),
   'leaving fill eases the crop back');
 assert(/\.live-crop-ui\s*\{[^}]*opacity:\s*0/.test(html), 'crop controls can fade');
