@@ -77,8 +77,9 @@ assert(/<title>F1 Director · 看板<\/title>/.test(boardHtml), 'board popout ti
 
 assert(publish.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Publish-Web stamps window title');
 assert(publish.indexOf('VERSION') !== -1, 'Publish-Web copies VERSION');
-assert(start.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Start.cmd stamps window title');
-assert(start.indexOf('VERSION') !== -1, 'Start.cmd copies VERSION');
+assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd incremental publish');
+assert(start.indexOf('NEEDS_STAMP') !== -1, 'Start.cmd stamps only when needed');
+assert(start.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Start.cmd still can stamp window title');
 assert(stampPs1.indexOf('Get-DirectorShortVersion') !== -1, 'stamp script has short-version helper');
 assert(stampPs1.indexOf("IndexOf([char]43)") !== -1, 'stamp script splits on +');
 assert(stampPs1.indexOf("' · v'") !== -1, 'stamp script prefixes v with a middle-dot');
