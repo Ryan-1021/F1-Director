@@ -5,6 +5,7 @@
  * 「地址」与铺满裁切过渡与日夜圆形切换同速（1s）：同一条地址栏淡入下滑并收起高度。
  * 铺满不把地址栏从文档流换成浮层，也不在动画结束时改定位。
  * 用户已收起「地址」时，退出铺满不会把那条栏再淡回来。
+ * 标题栏按钮文案始终是「铺满裁切」，不用「退出铺满」去改按钮宽度。
  */
 'use strict';
 
@@ -199,6 +200,30 @@ assert(/\.live-crop-ui\s*\{[^}]*opacity:\s*0/.test(html), 'crop controls can fad
 assert(/\.fpanel\.live-panel\.live-media-fill #liveFsRoot\.has-iframe \.live-crop-ui/.test(html),
   'crop controls show while fill is on');
 assert(html.indexOf('prefers-reduced-motion: reduce') !== -1, 'reduced motion still skips transitions');
+
+var fsBtnStart = html.indexOf('function updateLiveFsButton()');
+var fsBtnEnd = html.indexOf('function exitAnyFullscreen()', fsBtnStart);
+assert(fsBtnStart >= 0 && fsBtnEnd > fsBtnStart, 'updateLiveFsButton found');
+var fsBtnFn = html.slice(fsBtnStart, fsBtnEnd);
+assert(fsBtnFn.indexOf('textContent') === -1, 'fill button label is not rewritten');
+assert(fsBtnFn.indexOf("btn.classList.toggle('on', on)") !== -1, 'fill button uses the .on style');
+assert(fsBtnFn.indexOf("btn.setAttribute('aria-pressed'") !== -1, 'fill button sets aria-pressed');
+assert(fsBtnFn.indexOf('btn.title = on ? LIVE_FS_TITLE_ON : LIVE_FS_TITLE_OFF') !== -1,
+  'fill button uses the title tooltip for the active state');
+assert(html.indexOf('LIVE_FS_LABEL_ON') === -1 && html.indexOf('LIVE_FS_LABEL_OFF') === -1,
+  'there is no second fill-button label');
+assert(html.indexOf('>⛶ 铺满裁切</button>') !== -1, 'visible label stays 铺满裁切');
+assert(html.indexOf('退出铺满</button>') === -1, 'the button is never labeled 退出铺满');
+assert(html.indexOf("LIVE_FS_TITLE_ON = '退出铺满：恢复面板内正常显示。Esc / F'") !== -1,
+  'active state keeps the exit tooltip');
+assert(/\.fpanel\.live-panel > \.p-head\s*\{[^}]*flex:\s*0 0 var\(--head-h\)/.test(html),
+  'live title bar keeps a fixed flex basis');
+assert(/\.fpanel\.live-panel > \.p-head\s*\{[^}]*contain:\s*layout/.test(html),
+  'live title bar layout is contained');
+assert(!/\.live-media-fill[^{]*\.live-frame[^{]*\{[^}]*position\s*:\s*absolute/.test(html),
+  'fill does not switch the picture to position:absolute');
+assert(/\.p-body iframe,\s*\.p-body video\s*\{[^}]*position:\s*absolute;\s*inset:\s*0/.test(html),
+  'the player is already absolute in both modes and only refits');
 
 if (failed) {
   console.error(failed + ' failed');
