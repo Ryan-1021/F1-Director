@@ -17,23 +17,25 @@ function assert(cond, msg) {
 }
 
 var root = __dirname;
-var html = fs.readFileSync(path.join(root, 'director.html'), 'utf8');
+var sources = require('./test-director-sources').loadDirectorSources();
+var html = sources.bundle;
+var app = sources.app;
 var ps1 = fs.readFileSync(path.join(root, 'Run-Director.ps1'), 'utf8');
 var readme = fs.readFileSync(path.join(root, '..', 'README.md'), 'utf8');
 
-var interval = html.match(/var HB_INTERVAL_MS = (\d+);/);
-var pulse = html.match(/var HB_ALIVE_PULSE_MS = (\d+);/);
+var interval = app.match(/var HB_INTERVAL_MS = (\d+);/);
+var pulse = app.match(/var HB_ALIVE_PULSE_MS = (\d+);/);
 assert(interval && Number(interval[1]) === 4000, 'HB_INTERVAL_MS is 4000');
 assert(pulse && Number(pulse[1]) === 1200, 'HB_ALIVE_PULSE_MS is 1200');
-assert(html.indexOf('setInterval(sendDirectorHeartbeat, HB_INTERVAL_MS)') !== -1, 'main setInterval uses HB_INTERVAL_MS');
-assert(html.indexOf('postMessage(1); }, \' + HB_INTERVAL_MS') !== -1, 'Worker timer uses HB_INTERVAL_MS');
+assert(app.indexOf('setInterval(sendDirectorHeartbeat, HB_INTERVAL_MS)') !== -1, 'main setInterval uses HB_INTERVAL_MS');
+assert(app.indexOf('postMessage(1); }, \' + HB_INTERVAL_MS') !== -1, 'Worker timer uses HB_INTERVAL_MS');
 
-assert(/fetchLater\(HB_GOODBYE/.test(html), 'queues fetchLater /goodbye while alive');
-assert(/visibilityState === 'hidden'/.test(html), 'goodbye on visibility hidden');
-assert(/pulseIfStillAlive\(\)/.test(html), 'hidden path pulses still-alive heartbeat');
-assert(/addEventListener\('pagehide'/.test(html), 'pagehide still sends goodbye');
-assert(/addEventListener\('beforeunload'/.test(html) === false, 'no beforeunload listener (avoids --app cancel race)');
-assert(/sendBeacon\(HB\)/.test(html) === false, 'heartbeat uses Blob payload, not empty sendBeacon');
+assert(/fetchLater\(HB_GOODBYE/.test(app), 'queues fetchLater /goodbye while alive');
+assert(/visibilityState === 'hidden'/.test(app), 'goodbye on visibility hidden');
+assert(/pulseIfStillAlive\(\)/.test(app), 'hidden path pulses still-alive heartbeat');
+assert(/addEventListener\('pagehide'/.test(app), 'pagehide still sends goodbye');
+assert(/addEventListener\('beforeunload'/.test(app) === false, 'no beforeunload listener (avoids --app cancel race)');
+assert(/sendBeacon\(HB\)/.test(app) === false, 'heartbeat uses Blob payload, not empty sendBeacon');
 
 var miss = ps1.match(/\$MissGraceSec = (\d+)/);
 var bye = ps1.match(/\$GoodbyeGraceSec = (\d+)/);
@@ -67,12 +69,12 @@ try {
   assert(false, 'Worker source parses: ' + e.message);
 }
 
-var lifeStart = html.lastIndexOf('var HB_INTERVAL_MS');
-var lifeEnd = html.indexOf('connectFeed();', lifeStart);
+var lifeStart = app.lastIndexOf('var HB_INTERVAL_MS');
+var lifeEnd = app.indexOf('connectFeed();', lifeStart);
 assert(lifeStart >= 0 && lifeEnd > lifeStart, 'lifecycle snippet markers');
 if (lifeStart >= 0 && lifeEnd > lifeStart) {
   try {
-    new vm.Script(html.slice(lifeStart, lifeEnd), { filename: 'lifecycle.js' });
+    new vm.Script(app.slice(lifeStart, lifeEnd), { filename: 'lifecycle.js' });
   } catch (e) {
     assert(false, 'lifecycle snippet parses: ' + e.message);
   }

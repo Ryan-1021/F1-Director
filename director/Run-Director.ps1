@@ -236,13 +236,29 @@ function Stop-JavaPumps {
     $script:JavaPumps = @()
 }
 
+function Open-DirectorBrowser {
+    $browser = Find-AppBrowser
+    if ($browser) {
+        $appArg = "--app=$DirectorUrl"
+        Write-Host ("Opening director in app mode: {0} {1}" -f $browser, $appArg)
+        Start-Process -FilePath $browser -ArgumentList @($appArg)
+    } else {
+        Write-Host ("[!] Edge/Chrome not found; falling back to default browser: {0}" -f $DirectorUrl)
+        Start-Process $DirectorUrl
+    }
+}
+
 function Get-DirectorJavaArguments {
     param(
         [string]$Jar,
         [string]$WebDir,
         [string]$ExtraArgs
     )
+    # JVM startup tradeoff: TieredStopAtLevel=1 speeds cold start; peak throughput
+    # may be slightly lower until warmup (fine for long race-day runs).
     $parts = @(
+        '-XX:+TieredCompilation',
+        '-XX:TieredStopAtLevel=1',
         '-Dfile.encoding=UTF-8',
         '-Dsun.stdout.encoding=UTF-8',
         '-Dsun.stderr.encoding=UTF-8',
@@ -464,6 +480,8 @@ if (-not $hb.Ok) {
     Write-Host '  Heartbeat listener ready.'
 }
 
+$script:DirectorBrowserOpened = $false
+$openedUtc = $null
 $ready = $false
 for ($startAttempt = 0; $startAttempt -lt 2; $startAttempt++) {
     if ($startAttempt -gt 0) {
@@ -482,7 +500,14 @@ for ($startAttempt = 0; $startAttempt -lt 2; $startAttempt++) {
         Write-Host ("[!] Failed to start Java: {0}" -f $_.Exception.Message)
     }
 
-    Write-Host 'Waiting for http://127.0.0.1:8720 ...'
+    if (-not $script:DirectorBrowserOpened) {
+        Write-Host 'Opening director window (server may still be starting)...'
+        Open-DirectorBrowser
+        $script:DirectorBrowserOpened = $true
+        $openedUtc = [DateTime]::UtcNow
+    }
+
+    Write-Host 'Waiting for http://127.0.0.1:8720/api/health (console timeout/log) ...'
     $ready = $false
     for ($i = 0; $i -lt 45; $i++) {
         Write-JavaLogs
@@ -500,22 +525,12 @@ for ($startAttempt = 0; $startAttempt -lt 2; $startAttempt++) {
     if (-not (Test-DirectorBindLikelyFailed)) { break }
 }
 
-if (-not $ready) {
-    if ($script:JavaExitNoted) {
-        Write-Host '[!] Director server is not running; opening the page anyway.'
-    } else {
-        Write-Host '[!] Health check timed out; opening director anyway.'
-    }
-}
-
-$browser = Find-AppBrowser
-if ($browser) {
-    $appArg = "--app=$DirectorUrl"
-    Write-Host ("Opening director in app mode: {0} {1}" -f $browser, $appArg)
-    Start-Process -FilePath $browser -ArgumentList @($appArg)
+if ($ready) {
+    Write-Host '  Director server is ready.'
+} elseif ($script:JavaExitNoted) {
+    Write-Host '[!] Director server is not running; the page will keep retrying.'
 } else {
-    Write-Host ("[!] Edge/Chrome not found; falling back to default browser: {0}" -f $DirectorUrl)
-    Start-Process $DirectorUrl
+    Write-Host '[!] Health check timed out; the page will keep retrying.'
 }
 
 Write-Host ''
@@ -542,7 +557,6 @@ try {
     } | Out-Null
 } catch {}
 
-$openedUtc = [DateTime]::UtcNow
 $stopReason = 'enter'
 try {
     while ($true) {

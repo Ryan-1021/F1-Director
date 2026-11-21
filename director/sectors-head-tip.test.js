@@ -15,29 +15,33 @@ function assert(cond, msg) {
   }
 }
 
-var html = fs.readFileSync(path.join(__dirname, 'director.html'), 'utf8');
+var sources = require('./test-director-sources').loadDirectorSources();
+var html = sources.html;
+var directorCss = sources.css;
+var directorApp = sources.app;
 var app = fs.readFileSync(path.join(__dirname, 'web-override', 'app.js'), 'utf8');
 var css = fs.readFileSync(path.join(__dirname, 'web-override', 'style.css'), 'utf8');
+var bundle = sources.bundle;
 
-assert(html.indexOf('data-sectors-tip') >= 0, 'director .p-head hosts data-sectors-tip');
-assert(html.indexOf('本场次暂无赛段数据') >= 0, 'director chrome uses the short copy');
-assert(html.indexOf('class="sectors-head-tip"') >= 0, 'director tip class is sectors-head-tip');
-assert(/boardDdHtml\(st\.board\)[\s\S]*sectors-head-tip[\s\S]*data-tm-head[\s\S]*timing-cols-tog/.test(html),
+assert(bundle.indexOf('data-sectors-tip') >= 0, 'director .p-head hosts data-sectors-tip');
+assert(bundle.indexOf('本场次暂无赛段数据') >= 0, 'director chrome uses the short copy');
+assert(bundle.indexOf('class="sectors-head-tip"') >= 0, 'director tip class is sectors-head-tip');
+assert(/boardDdHtml\(st\.board\)[\s\S]*sectors-head-tip[\s\S]*data-tm-head[\s\S]*timing-cols-tog/.test(bundle),
   'tip sits in .p-head between dropdown/spacer and win-btns chrome');
-assert(html.indexOf('.p-head .sectors-head-tip') >= 0, 'director CSS targets .p-head .sectors-head-tip');
-var tipCssStart = html.indexOf('.p-head .sectors-head-tip {');
-var tipCssEnd = html.indexOf('.p-head .win-btns', tipCssStart);
+assert(directorCss.indexOf('.p-head .sectors-head-tip') >= 0, 'director CSS targets .p-head .sectors-head-tip');
+var tipCssStart = directorCss.indexOf('.p-head .sectors-head-tip {');
+var tipCssEnd = directorCss.indexOf('.p-head .win-btns', tipCssStart);
 assert(tipCssStart >= 0 && tipCssEnd > tipCssStart, 'director tip CSS block found');
-var tipCss = html.slice(tipCssStart, tipCssEnd);
+var tipCss = directorCss.slice(tipCssStart, tipCssEnd);
 assert(tipCss.indexOf('text-overflow: ellipsis') >= 0, 'director tip truncates with ellipsis');
 assert(tipCss.indexOf('white-space: nowrap') >= 0, 'director tip does not wrap');
-assert(html.indexOf('function syncSectorsHeadTip(') >= 0, 'syncSectorsHeadTip exists');
-assert(html.indexOf('function setSectorsHeadTipShow(') >= 0, 'setSectorsHeadTipShow exists');
-assert(html.indexOf('function requestSectorsNote(') >= 0, 'requestSectorsNote exists');
-assert(html.indexOf("d.type === 'f1-sectors-note'") >= 0, 'parent listens for f1-sectors-note');
-assert(html.indexOf("type: 'f1-sectors-note-req'") >= 0, 'parent can request tip state');
-assert(html.indexOf('syncSectorsHeadTip(el, boardId)') >= 0, 'board chrome syncs sectors tip');
-assert(html.indexOf('F1.getSectorsNoteVisible') >= 0, 'parent reads F1.getSectorsNoteVisible');
+assert(directorApp.indexOf('function syncSectorsHeadTip(') >= 0, 'syncSectorsHeadTip exists');
+assert(directorApp.indexOf('function setSectorsHeadTipShow(') >= 0, 'setSectorsHeadTipShow exists');
+assert(directorApp.indexOf('function requestSectorsNote(') >= 0, 'requestSectorsNote exists');
+assert(directorApp.indexOf("d.type === 'f1-sectors-note'") >= 0, 'parent listens for f1-sectors-note');
+assert(directorApp.indexOf("type: 'f1-sectors-note-req'") >= 0, 'parent can request tip state');
+assert(directorApp.indexOf('syncSectorsHeadTip(el, boardId)') >= 0, 'board chrome syncs sectors tip');
+assert(directorApp.indexOf('F1.getSectorsNoteVisible') >= 0, 'parent reads F1.getSectorsNoteVisible');
 
 assert(app.indexOf("SECTORS_NOTE_TEXT = '本场次暂无赛段数据'") >= 0, 'app.js short copy');
 assert(app.indexOf('本场次暂无 S1') === -1, 'old long bottom sentence is gone');

@@ -16,7 +16,7 @@ function assert(cond, msg) {
   }
 }
 
-var html = fs.readFileSync(path.join(__dirname, 'director.html'), 'utf8');
+var html = require('./test-director-sources').loadDirectorSources().bundle;
 
 assert(html.indexOf('BOARD_MOUNT_STAGGER_MS') !== -1, 'stagger constant defined');
 assert(html.indexOf('staggerBoardMounts') !== -1, 'stagger opt wired');
