@@ -30,7 +30,7 @@ var publish = fs.readFileSync(path.join(root, 'Publish-Web.cmd'), 'utf8');
 assert(syncPs1.indexOf('SHA256') !== -1, 'Sync-WebPublish compares SHA256');
 assert(syncPs1.indexOf('Test-SameFile') !== -1, 'Sync-WebPublish has same-file helper');
 assert(syncPs1.indexOf('NEEDS_STAMP') !== -1, 'Sync-WebPublish emits NEEDS_STAMP');
-assert(syncPs1.indexOf('fonts-boot.js') !== -1, 'Sync publishes fonts-boot.js');
+assert(syncPs1.indexOf('fonts-boot.js') === -1, 'Sync does not publish fonts-boot.js');
 assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd uses Sync-WebPublish');
 assert(start.indexOf('NEEDS_STAMP') !== -1, 'Start.cmd reads NEEDS_STAMP');
 assert(start.indexOf('xcopy') === -1, 'Start.cmd no longer bulk xcopy');
