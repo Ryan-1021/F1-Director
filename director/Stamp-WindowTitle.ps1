@@ -22,7 +22,7 @@ function Get-DirectorShortVersion([string]$Raw) {
 
 if (-not (Test-Path -LiteralPath $VersionFile)) {
     Write-Host "VERSION not found, skip window-title stamp: $VersionFile"
-    exit 0
+    return
 }
 
 $utf8 = New-Object System.Text.UTF8Encoding $false
@@ -30,12 +30,13 @@ $raw = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $VersionFile), $
 $short = Get-DirectorShortVersion $raw
 if (-not $short) {
     Write-Host 'VERSION empty, skip window-title stamp'
-    exit 0
+    return
 }
 
 $dot = [char]0x00B7
 $dotV = ' ' + $dot + ' v'
 
+$titleRewritten = $false
 $htmlPath = Join-Path $WebDir 'director.html'
 if (Test-Path -LiteralPath $htmlPath) {
     $html = [System.IO.File]::ReadAllText($htmlPath, $utf8)
@@ -58,9 +59,22 @@ if (Test-Path -LiteralPath $htmlPath) {
         if ($cur -ne $next) {
             $html = $html.Substring(0, $start) + $open + $next + $html.Substring($end)
             [System.IO.File]::WriteAllText($htmlPath, $html, $utf8)
+            $titleRewritten = $true
         }
     }
 }
 
-Copy-Item -LiteralPath $VersionFile -Destination (Join-Path $WebDir 'VERSION') -Force
-Write-Host ("Window title stamped v{0}" -f $short)
+$destVersion = Join-Path $WebDir 'VERSION'
+$copyVersion = $true
+if (Test-Path -LiteralPath $destVersion) {
+    $hSrc = (Get-FileHash -LiteralPath $VersionFile -Algorithm SHA256).Hash
+    $hDst = (Get-FileHash -LiteralPath $destVersion -Algorithm SHA256).Hash
+    if ($hSrc -eq $hDst) { $copyVersion = $false }
+}
+if ($copyVersion) {
+    Copy-Item -LiteralPath $VersionFile -Destination $destVersion -Force
+}
+
+if ($titleRewritten) {
+    Write-Host ("Window title stamped v{0}" -f $short)
+}

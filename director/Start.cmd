@@ -57,6 +57,11 @@ rem the UI is served from http://127.0.0.1:8720/director.html (same origin).
 set "WEBDIR=%SHARE%\web"
 if not exist "%WEBDIR%" mkdir "%WEBDIR%" >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Sync-WebPublish.ps1" -DirectorRoot "%~dp0." -WebDir "%WEBDIR%" -SeedLayouts
+if errorlevel 1 (
+  echo Publish failed ^(Sync-WebPublish.ps1^), error %ERRORLEVEL%.
+  pause
+  exit /b %ERRORLEVEL%
+)
 echo Published web UI to: %WEBDIR%
 echo.
 

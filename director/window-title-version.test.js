@@ -90,10 +90,15 @@ assert(stampPs1.indexOf("IndexOf([char]43)") !== -1, 'stamp script splits on +')
 assert(stampPs1.indexOf('[char]0x00B7') !== -1, 'stamp script uses U+00B7 via numeric code');
 assert(!/[\u00b7\u2022\u8def]/.test(stampPs1.replace(/0x00B7/g, '')),
   'stamp script has no literal middle-dot/bullet in source');
-assert(syncPs1.indexOf('[char]0x00B7') !== -1, 'Sync needs-stamp uses U+00B7 via numeric code');
+assert(syncPs1.indexOf('Test-DirectorTitleNeedsStamp') === -1, 'Sync has no dead needs-stamp helper');
+assert(stampPs1.indexOf('exit 0') === -1, 'stamp script uses return not exit on skip');
 assert(stampPs1.indexOf('director.html') !== -1, 'stamp script edits published director.html');
 assert(stampPs1.indexOf('Copy-Item') !== -1 && stampPs1.indexOf('VERSION') !== -1,
-  'stamp script copies VERSION into web dir');
+  'stamp script copies VERSION when dest differs');
+assert(stampPs1.indexOf('copyVersion') !== -1, 'stamp script skips redundant VERSION copy');
+assert(stampPs1.indexOf('titleRewritten') !== -1, 'stamp script logs only when title changes');
+assert(/if errorlevel 1/i.test(publish), 'Publish-Web checks sync errorlevel');
+assert(/if errorlevel 1/i.test(start), 'Start.cmd checks sync errorlevel');
 
 function stampLikePs1(src, raw) {
   var shortVer = short(raw);
@@ -120,7 +125,7 @@ assert((published.match(/<title>/g) || []).length === 1, 'still a single <title>
 var restamp = stampLikePs1(published, '0.3.0+20990101');
 assert(restamp.indexOf('<title>F1 导播台 · Director · v0.3.0</title>') !== -1,
   'restamp replaces the previous short version');
-assert(restamp.indexOf('v0.2.14') === -1, 'old short version is gone after restamp');
+assert(restamp.indexOf('v' + liveShort) === -1, 'old short version is gone after restamp');
 
 var snippetStart = html.indexOf('(function () {\n  var DIRECTOR_TITLE_BASE');
 var snippetEnd = html.indexOf('})();', snippetStart) + 5;
