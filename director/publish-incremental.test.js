@@ -36,11 +36,14 @@ var versionRaw = fs.readFileSync(path.join(root, '..', 'VERSION'), 'utf8');
 assert(syncPs1.indexOf('SHA256') !== -1, 'Sync-WebPublish compares SHA256');
 assert(syncPs1.indexOf('Test-SameFile') !== -1, 'Sync-WebPublish has same-file helper');
 assert(syncPs1.indexOf('UseSourceSidecar') !== -1, 'director.html uses source sidecar hash gate');
-assert(syncPs1.indexOf('Test-DirectorTitleNeedsStamp') !== -1,
-  'needs-stamp helper for title gap (encoding-safe U+00B7)');
-assert(syncPs1.indexOf('[char]0x00B7') !== -1, 'Sync uses U+00B7 via numeric code');
-assert(!/[\u00b7\u2022]/.test(syncPs1.replace(/0x00B7/g, '')),
-  'Sync ps1 has no literal middle-dot/bullet in source');
+assert(syncPs1.indexOf('Test-DirectorTitleNeedsStamp') === -1, 'Sync has no dead needs-stamp helper');
+assert(syncPs1.indexOf('TrackDirectorHtml') === -1, 'Sync no TrackDirectorHtml tracking');
+assert(syncPs1.indexOf('TrackVersion') === -1, 'Sync no TrackVersion tracking');
+assert(stampPs1.indexOf('[char]0x00B7') !== -1, 'stamp script uses U+00B7 via numeric code');
+assert(/^\s+return\s*$/m.test(stampPs1), 'stamp script uses return not exit on skip');
+assert(stampPs1.indexOf('exit 0') === -1, 'stamp script does not exit parent on skip');
+assert(!/[\u00b7\u2022]/.test(stampPs1.replace(/0x00B7/g, '')),
+  'stamp ps1 has no literal middle-dot/bullet in source');
 assert(syncPs1.indexOf('GetFullPath($WebDir)') !== -1, 'Sync-WebPublish normalizes WebDir');
 assert(syncPs1.indexOf('GetFullPath($DirectorRoot)') !== -1,
   'Sync-WebPublish normalizes DirectorRoot');
@@ -61,6 +64,8 @@ assert(start.indexOf('NEEDS_STAMP') === -1, 'Start.cmd does not read NEEDS_STAMP
 assert(publish.indexOf('NEEDS_STAMP') === -1, 'Publish-Web.cmd does not read NEEDS_STAMP');
 assert(start.indexOf('xcopy') === -1, 'Start.cmd no longer bulk xcopy');
 assert(publish.indexOf('Sync-WebPublish.ps1') !== -1, 'Publish-Web uses Sync-WebPublish');
+assert(/if errorlevel 1/i.test(publish), 'Publish-Web checks sync errorlevel');
+assert(/if errorlevel 1/i.test(start), 'Start.cmd checks sync errorlevel');
 
 function shortVersion(raw) {
   var s = String(raw || '').replace(/^\uFEFF/, '').trim();

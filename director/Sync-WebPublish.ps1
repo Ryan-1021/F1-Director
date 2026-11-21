@@ -70,51 +70,9 @@ function Test-SamePublishedSource([string]$Src, [string]$DstRel, [string]$Dst) {
     return $false
 }
 
-function Get-DirectorShortVersion([string]$Raw) {
-    if ($null -eq $Raw) { return '' }
-    $s = $Raw.Trim().Trim([char]0xFEFF)
-    $plus = $s.IndexOf([char]43) # '+'
-    if ($plus -ge 0) { $s = $s.Substring(0, $plus) }
-    $s = $s.Trim()
-    if ($s.Length -eq 0) { return '' }
-    if ($s.StartsWith('v') -or $s.StartsWith('V')) { $s = $s.Substring(1) }
-    return $s
-}
-
-function Test-DirectorTitleNeedsStamp([string]$HtmlPath, [string]$VersionFile) {
-    if (-not (Test-Path -LiteralPath $VersionFile)) { return $false }
-    if (-not (Test-Path -LiteralPath $HtmlPath)) { return $true }
-    $utf8 = New-Object System.Text.UTF8Encoding $false
-    $raw = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $VersionFile), $utf8)
-    $short = Get-DirectorShortVersion $raw
-    if (-not $short) { return $false }
-    $html = [System.IO.File]::ReadAllText($HtmlPath, $utf8)
-    $open = '<title>'
-    $close = '</title>'
-    $start = $html.IndexOf($open)
-    $end = $html.IndexOf($close)
-    if ($start -lt 0 -or $end -le $start) { return $true }
-    $cur = $html.Substring($start + $open.Length, $end - ($start + $open.Length))
-    $dot = [char]0x00B7
-    $dotV = ' ' + $dot + ' v'
-    $suffix = $dotV + $short
-    $keep = $cur
-    $idx = $cur.LastIndexOf($dotV)
-    if ($idx -ge 0) {
-        $after = $cur.Substring($idx + $dotV.Length)
-        if ($after.Length -gt 0 -and [char]::IsDigit($after[0])) {
-            $keep = $cur.Substring(0, $idx)
-        }
-    }
-    $expected = $keep + $suffix
-    return ($cur -ne $expected)
-}
-
 $script:AnyChanged = $false
-$script:DirectorHtmlChanged = $false
-$script:VersionChanged = $false
 
-function Sync-OneFile([string]$Src, [string]$DstRel, [switch]$TrackDirectorHtml, [switch]$TrackVersion, [switch]$UseSourceSidecar) {
+function Sync-OneFile([string]$Src, [string]$DstRel, [switch]$UseSourceSidecar) {
   if (-not (Test-Path -LiteralPath $Src)) { return }
   $dst = Join-Path $WebDir $DstRel
   $dir = Split-Path -Parent $dst
@@ -134,8 +92,6 @@ function Sync-OneFile([string]$Src, [string]$DstRel, [switch]$TrackDirectorHtml,
     if ($hSrc) { Write-SourceSidecarHash $WebDir $DstRel $hSrc }
   }
   $script:AnyChanged = $true
-  if ($TrackDirectorHtml) { $script:DirectorHtmlChanged = $true }
-  if ($TrackVersion) { $script:VersionChanged = $true }
 }
 
 function Sync-Tree([string]$SrcDir, [string]$DstRelDir) {
@@ -232,13 +188,13 @@ Sync-Tree $assets 'assets'
 
 $directorHtml = Join-Path $dir 'director.html'
 if (Test-Path -LiteralPath $directorHtml) {
-  Sync-OneFile -Src $directorHtml -DstRel 'director.html' -TrackDirectorHtml -UseSourceSidecar
+  Sync-OneFile -Src $directorHtml -DstRel 'director.html' -UseSourceSidecar
 }
 
 $versionFile = Join-Path $dir '..\VERSION'
 $versionFile = [System.IO.Path]::GetFullPath($versionFile)
 if (Test-Path -LiteralPath $versionFile) {
-  Sync-OneFile -Src $versionFile -DstRel 'VERSION' -TrackVersion
+  Sync-OneFile -Src $versionFile -DstRel 'VERSION'
 }
 
 if ($SeedLayouts) {
