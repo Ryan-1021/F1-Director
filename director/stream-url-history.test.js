@@ -2,6 +2,7 @@
  * node director/stream-url-history.test.js
  * 直播地址历史：载入记入新 key、去重、上限、单条删除；清除只停当前流。
  * 铺满裁切不再无条件藏起地址栏，「地址」不退出 live-media-fill。
+ * 「地址」与铺满裁切过渡与日夜圆形切换同速（1s）：地址栏淡入下滑，普通模式收起高度；铺满退出等动画结束再摘 class。
  */
 'use strict';
 
@@ -140,8 +141,21 @@ assert(!/\.live-media-fill \.live-toolbar\s*\{[^}]*display\s*:\s*none/.test(html
 assert(/\.fpanel\.live-panel\.live-media-fill \.live-toolbar\s*\{[^}]*position\s*:\s*absolute/.test(html),
   'fill toolbar is an overlay');
 assert(html.indexOf('button:not(.live-fs):not(.live-url-tog)') !== -1, '地址 stays visible in fill chrome');
-assert(html.indexOf('.fpanel.live-panel.live-toolbar-hidden .live-toolbar { display: none !important; }') !== -1,
-  '地址 toggle still hides the bar');
+assert(html.indexOf('.fpanel.live-panel.live-toolbar-hidden .live-toolbar { display: none !important; }') === -1,
+  '地址 hide is not display:none');
+assert(/\.fpanel\.live-panel\.live-toolbar-hidden \.live-toolbar\s*\{[^}]*opacity\s*:\s*0/.test(html),
+  '地址 hide fades the bar');
+assert(/\.fpanel\.live-panel\.live-toolbar-hidden \.live-toolbar\s*\{[^}]*translateY\(-6px\)/.test(html),
+  '地址 hide slides the bar up');
+assert(/\.fpanel\.live-panel\.live-toolbar-hidden \.live-toolbar\s*\{[^}]*pointer-events\s*:\s*none/.test(html),
+  'hidden address bar does not take clicks');
+assert(/\.fpanel\.live-panel\.live-toolbar-hidden \.live-toolbar\s*\{[^}]*visibility\s*:\s*hidden/.test(html),
+  'hidden address bar is visibility hidden after the fade');
+assert(/\.live-toolbar-hidden:not\(\.live-media-fill\) \.live-toolbar-clip\s*\{[^}]*grid-template-rows\s*:\s*0fr/.test(html),
+  'normal mode collapses toolbar height');
+assert(html.indexOf('.fpanel.live-panel.live-media-fill .live-toolbar-clip') !== -1,
+  'fill mode keeps an overlay clip');
+assert(/\.stream-url-history\s*\{[^}]*transition\s*:/.test(html) === false, 'history dropdown is not transitioned');
 assert(/live-media-fill \.p-head \.win-btns button\.live-fs,\s*\n\s*\.fpanel\.live-panel\.live-media-fill \.p-head \.win-btns button\.live-url-tog \{[^}]*rgba\(0,0,0,\.55\)/.test(html),
   '地址 uses the fill-mode dark chip');
 
@@ -152,6 +166,35 @@ assert(togFn.indexOf('setLiveMediaFill') === -1, '地址 toggle does not exit li
 assert(togFn.indexOf('live-media-fill') === -1, '地址 toggle does not touch the fill class');
 assert(togFn.indexOf('applyLiveToolbarHidden(!isLiveToolbarHidden(), true)') !== -1,
   '地址 still toggles toolbar visibility');
+
+var hideStart = html.indexOf('function applyLiveToolbarHidden(hidden, persist)');
+var hideEnd = html.indexOf('function escapeStreamUrlText(', hideStart);
+assert(hideStart >= 0 && hideEnd > hideStart, 'applyLiveToolbarHidden found');
+var hideFn = html.slice(hideStart, hideEnd);
+assert(hideFn.indexOf('armLiveToolbarAnim(panel)') !== -1, '地址 toggle arms the height clip');
+assert(hideFn.indexOf("panel.classList.contains('live-media-fill')") === -1,
+  'hide helper does not branch on fill; the clip class does');
+assert(hideFn.indexOf('closeStreamUrlHistory()') !== -1, 'hiding the bar still closes history');
+
+var fillStart = html.indexOf('function setLiveMediaFill(on)');
+var fillEnd = html.indexOf('var LIVE_FS_TITLE_OFF', fillStart);
+assert(fillStart >= 0 && fillEnd > fillStart, 'setLiveMediaFill found');
+var fillFn = html.slice(fillStart, fillEnd);
+assert(fillFn.indexOf("panel.classList.add('live-fill-leave')") !== -1, 'exit fill keeps a leave class');
+assert(fillFn.indexOf('setTimeout') !== -1, 'exit fill waits before dropping the class');
+assert(fillFn.indexOf("p.classList.remove('live-media-fill', 'live-fill-leave')") !== -1,
+  'live-media-fill is removed only after the leave timer');
+assert(fillFn.indexOf('LIVE_FILL_MS') !== -1, 'leave wait uses the fill duration');
+assert(html.indexOf('var LIVE_FILL_MS = 1000;') !== -1, 'fill leave waits 1000ms, same as the theme wipe');
+assert(html.indexOf('var LIVE_TOOLBAR_MS = 1000;') !== -1, 'address bar animates for 1000ms');
+assert(html.indexOf('#liveIframe') !== -1 && /#liveIframe\s*\{[^}]*transition:\s*transform 1s/.test(html),
+  'iframe crop transform eases over 1s');
+assert(/visibility 0s linear 1s/.test(html), 'hidden address bar stays unclickable after the 1s fade');
+assert(/live-fill-leave #liveIframe\s*\{[^}]*transform:\s*none/.test(html),
+  'leaving fill eases the crop back');
+assert(/\.live-crop-ui\s*\{[^}]*opacity:\s*0/.test(html), 'crop controls can fade');
+assert(/live-media-fill:not\(\.live-fill-leave\) #liveFsRoot\.has-iframe \.live-crop-ui/.test(html),
+  'crop controls show only while fill is settled');
 
 if (failed) {
   console.error(failed + ' failed');
