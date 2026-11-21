@@ -387,6 +387,7 @@
 
   /* LIVE panel: URL + load/clear + board-data delay on ONE compact row */
   .live-toolbar {
+    position: relative;
     display: flex; align-items: center; gap: 6px;
     flex-shrink: 0;
     flex-wrap: nowrap;
@@ -396,9 +397,14 @@
     min-width: 0;
     z-index: 4;
   }
-  .live-toolbar .stream-url {
+  .live-toolbar .stream-url-field {
+    position: relative;
     flex: 1 1 auto;
     min-width: 100px;
+  }
+  .live-toolbar .stream-url {
+    width: 100%;
+    min-width: 0;
     background: var(--input-bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 999px;
     padding: 5px 10px; outline: none;
@@ -409,6 +415,85 @@
   .live-toolbar .stream-url:focus {
     border-color: rgba(225, 6, 0, 0.45);
     box-shadow: 0 0 0 3px var(--teal-dim);
+  }
+  /* Custom list (not datalist): each row needs its own delete control. */
+  .stream-url-history {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 240px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--dd-bg);
+    color: var(--text);
+    border: 1px solid var(--dd-border);
+    border-radius: 10px;
+    box-shadow: var(--dd-shadow);
+    padding: 4px;
+  }
+  .stream-url-history[hidden] { display: none !important; }
+  .stream-url-history .hist-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border-radius: 7px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .stream-url-history .hist-row:hover,
+  .stream-url-history .hist-row.active {
+    background: var(--theme-active-bg);
+    color: var(--theme-active-fg);
+  }
+  .stream-url-history .hist-pick,
+  .stream-url-history .hist-del {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .stream-url-history .hist-pick {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    padding: 7px 8px;
+    border-radius: 7px;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .stream-url-history .hist-row.active .hist-pick { font-weight: 650; }
+  .stream-url-history .hist-del {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    margin-right: 4px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--muted);
+  }
+  .stream-url-history .hist-row:hover .hist-del,
+  .stream-url-history .hist-row.active .hist-del { color: inherit; }
+  .stream-url-history .hist-pick:hover,
+  .stream-url-history .hist-del:hover {
+    background: transparent;
+    border-color: transparent;
+    color: inherit;
+  }
+  .stream-url-history .hist-del:hover {
+    background: var(--btn-hover);
   }
   .live-toolbar > button {
     padding: 4px 10px;
@@ -500,7 +585,7 @@
   }
   @media (max-width: 900px) {
     .live-toolbar { flex-wrap: wrap; }
-    .live-toolbar .stream-url { flex: 1 1 100%; min-width: 0; }
+    .live-toolbar .stream-url-field { flex: 1 1 100%; min-width: 0; }
   }
   button {
     background: var(--btn-bg);
@@ -1003,18 +1088,25 @@
   .p-head .win-btns button.live-fs.on {
     color: var(--live);
   }
+  /* 铺满裁切：地址/延迟栏浮在画面上，不占位、不退出 live-media-fill。隐藏仍由 .live-toolbar-hidden 控制。 */
   .fpanel.live-panel.live-media-fill .live-toolbar {
-    display: none !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding-right: 168px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
   }
   .fpanel.live-panel.live-media-fill .p-head {
     position: absolute;
     top: 0;
     right: 0;
     left: auto;
-    z-index: 8;
+    z-index: 12;
     width: auto;
     height: auto;
-    padding: 6px;
+    padding: 7px 8px;
     background: transparent;
     border: 0;
     box-shadow: none;
@@ -1023,10 +1115,11 @@
   .fpanel.live-panel.live-media-fill .p-head .title,
   .fpanel.live-panel.live-media-fill .p-head .tag,
   .fpanel.live-panel.live-media-fill .p-head .spacer,
-  .fpanel.live-panel.live-media-fill .p-head .win-btns button:not(.live-fs) {
+  .fpanel.live-panel.live-media-fill .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
     display: none !important;
   }
-  .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-fs {
+  .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-fs,
+  .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-url-tog {
     background: rgba(0,0,0,.55);
     border-color: rgba(255,255,255,.18);
     color: #fff;
@@ -1431,6 +1524,80 @@
   var HB = 'http://' + _rcHost + ':8721/heartbeat';
   var HB_GOODBYE = 'http://' + _rcHost + ':8721/goodbye';
   var STORAGE_URL = 'f1-director-stream-url';
+  /* stream-url-history:start */
+  var STREAM_URL_HISTORY_CAP = 20;
+  var STORAGE_URL_HISTORY = 'f1-director-stream-url-history';
+  function normalizeStreamUrl(url) {
+    if (typeof url !== 'string') return '';
+    return url.trim();
+  }
+  function parseStreamUrlHistory(raw) {
+    if (typeof raw !== 'string' || !raw) return [];
+    var list;
+    try { list = JSON.parse(raw); } catch (e) { return []; }
+    if (!Array.isArray(list)) return [];
+    var next = [];
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var u = normalizeStreamUrl(list[i]);
+      if (!u || seen[u]) continue;
+      seen[u] = true;
+      next.push(u);
+      if (next.length >= STREAM_URL_HISTORY_CAP) break;
+    }
+    return next;
+  }
+  function recordStreamUrlHistory(list, url) {
+    var u = normalizeStreamUrl(url);
+    var src = Array.isArray(list) ? list : [];
+    if (!u) return src.slice();
+    var next = [u];
+    for (var i = 0; i < src.length; i++) {
+      var item = normalizeStreamUrl(src[i]);
+      if (!item || item === u) continue;
+      next.push(item);
+      if (next.length >= STREAM_URL_HISTORY_CAP) break;
+    }
+    return next;
+  }
+  function deleteStreamUrlHistoryItem(list, url) {
+    var u = normalizeStreamUrl(url);
+    var src = Array.isArray(list) ? list : [];
+    var next = [];
+    for (var i = 0; i < src.length; i++) {
+      var item = normalizeStreamUrl(src[i]);
+      if (!item || item === u) continue;
+      next.push(item);
+    }
+    return next;
+  }
+  function readStreamUrlHistory(storage) {
+    try { return parseStreamUrlHistory(storage.getItem(STORAGE_URL_HISTORY)); }
+    catch (e) { return []; }
+  }
+  function writeStreamUrlHistory(storage, list) {
+    try { storage.setItem(STORAGE_URL_HISTORY, JSON.stringify(list || [])); }
+    catch (e) {}
+  }
+  function rememberStreamUrl(storage, url) {
+    var u = normalizeStreamUrl(url);
+    if (!u) return readStreamUrlHistory(storage);
+    var next = recordStreamUrlHistory(readStreamUrlHistory(storage), u);
+    writeStreamUrlHistory(storage, next);
+    return next;
+  }
+  function removeStreamUrlHistoryItem(storage, url) {
+    var next = deleteStreamUrlHistoryItem(readStreamUrlHistory(storage), url);
+    writeStreamUrlHistory(storage, next);
+    return next;
+  }
+  // 清除当前地址：只丢掉正在播放的 URL，历史列表不动。
+  function forgetCurrentStreamUrl(storage, currentKey) {
+    try {
+      if (storage && currentKey) storage.removeItem(currentKey);
+    } catch (e) {}
+  }
+  /* stream-url-history:end */
   var STORAGE_LAYOUT = 'f1-director-layout-v3';
   var STORAGE_PRESETS = 'f1-director-layouts';
   var STORAGE_THEME = 'f1-director-theme';
@@ -3115,7 +3282,10 @@
         '</span>' +
       '</div>' +
       '<div class="live-toolbar" data-no-drag title="延迟只推迟四周看板/左上角场次数据，不改变直播画面速度">' +
-        '<input class="stream-url" id="streamUrl" type="url" placeholder="粘贴直播链接（B站 / 抖音 / Twitch / 直链）" autocomplete="off">' +
+        '<div class="stream-url-field">' +
+          '<input class="stream-url" id="streamUrl" type="url" placeholder="粘贴直播链接（B站 / 抖音 / Twitch / 直链）" autocomplete="off" aria-autocomplete="list" aria-controls="streamUrlHistory" aria-expanded="false">' +
+          '<div class="stream-url-history" id="streamUrlHistory" role="listbox" hidden></div>' +
+        '</div>' +
         '<button class="primary" id="btnApply" type="button">载入</button>' +
         '<button id="btnClear" type="button">清除</button>' +
         '<span class="tb-sep" aria-hidden="true"></span>' +
@@ -4526,6 +4696,11 @@
       document.addEventListener('webkitfullscreenchange', onFsChange);
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
+          if (isStreamUrlHistoryOpen()) {
+            closeStreamUrlHistory();
+            e.preventDefault();
+            return;
+          }
           if (isLiveMediaFill()) setLiveMediaFill(false);
           if (liveFsElement()) exitAnyFullscreen();
           return;
@@ -4556,6 +4731,7 @@
       btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
       btn.title = hidden ? '显示地址与延迟栏' : '隐藏地址与延迟栏';
     }
+    if (hidden) closeStreamUrlHistory();
     if (persist) {
       try {
         if (hidden) localStorage.setItem(STORAGE_LIVE_TB, '1');
@@ -4563,6 +4739,82 @@
       } catch (e) {}
       if (typeof persistLayoutsToFile === 'function') persistLayoutsToFile(false);
     }
+  }
+
+  function escapeStreamUrlText(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function isStreamUrlHistoryOpen() {
+    var menu = document.getElementById('streamUrlHistory');
+    return !!(menu && !menu.hidden);
+  }
+
+  function closeStreamUrlHistory() {
+    var menu = document.getElementById('streamUrlHistory');
+    var input = document.getElementById('streamUrl');
+    if (menu) menu.hidden = true;
+    if (input) input.setAttribute('aria-expanded', 'false');
+  }
+
+  function renderStreamUrlHistory() {
+    var menu = document.getElementById('streamUrlHistory');
+    var input = document.getElementById('streamUrl');
+    if (!menu) return;
+    var list = readStreamUrlHistory(localStorage);
+    var current = input ? normalizeStreamUrl(input.value) : '';
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var u = list[i];
+      var safe = escapeStreamUrlText(u);
+      html += '<div class="hist-row' + (u === current ? ' active' : '') + '" role="option" data-hist-url="' + safe + '">' +
+        '<button type="button" class="hist-pick" title="' + safe + '">' + safe + '</button>' +
+        '<button type="button" class="hist-del" data-hist-del="' + safe + '" title="删除这条历史" aria-label="删除这条历史">×</button>' +
+        '</div>';
+    }
+    menu.innerHTML = html;
+  }
+
+  function openStreamUrlHistory() {
+    var menu = document.getElementById('streamUrlHistory');
+    var input = document.getElementById('streamUrl');
+    if (!menu || !input) return;
+    if (!readStreamUrlHistory(localStorage).length) {
+      closeStreamUrlHistory();
+      return;
+    }
+    renderStreamUrlHistory();
+    menu.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function commitTypedStreamUrl() {
+    var input = document.getElementById('streamUrl');
+    if (!input) return;
+    var url = normalizeStreamUrl(input.value);
+    if (url) rememberStreamUrl(localStorage, url);
+    applyStream(input.value);
+    closeStreamUrlHistory();
+  }
+
+  function loadStreamUrlFromHistory(url) {
+    url = normalizeStreamUrl(url);
+    if (!url) return;
+    var input = document.getElementById('streamUrl');
+    if (input) input.value = url;
+    rememberStreamUrl(localStorage, url);
+    applyStream(url);
+    closeStreamUrlHistory();
+  }
+
+  function deleteStreamUrlFromHistory(url) {
+    var next = removeStreamUrlHistoryItem(localStorage, url);
+    if (!next.length) closeStreamUrlHistory();
+    else renderStreamUrlHistory();
   }
 
   function wireLiveToolbarToggle() {
@@ -4593,20 +4845,54 @@
     streamInput.dataset.wired = '1';
     btnApply.addEventListener('click', function (e) {
       e.stopPropagation();
-      applyStream(streamInput.value);
+      commitTypedStreamUrl();
     });
     btnClear.addEventListener('click', function (e) {
       e.stopPropagation();
       streamInput.value = '';
-      try { localStorage.removeItem(STORAGE_URL); } catch (err) {}
+      forgetCurrentStreamUrl(localStorage, STORAGE_URL);
       hideLive();
+      closeStreamUrlHistory();
     });
     streamInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        applyStream(streamInput.value);
+        commitTypedStreamUrl();
       }
     });
+    streamInput.addEventListener('focus', function () { openStreamUrlHistory(); });
+    streamInput.addEventListener('click', function () { openStreamUrlHistory(); });
+    streamInput.addEventListener('input', function () {
+      if (isStreamUrlHistoryOpen()) renderStreamUrlHistory();
+    });
+    var histMenu = document.getElementById('streamUrlHistory');
+    if (histMenu && histMenu.dataset.wired !== '1') {
+      histMenu.dataset.wired = '1';
+      histMenu.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+      histMenu.addEventListener('click', function (e) {
+        var del = e.target && e.target.closest ? e.target.closest('[data-hist-del]') : null;
+        if (del) {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteStreamUrlFromHistory(del.getAttribute('data-hist-del'));
+          return;
+        }
+        var row = e.target && e.target.closest ? e.target.closest('[data-hist-url]') : null;
+        if (!row) return;
+        e.preventDefault();
+        e.stopPropagation();
+        loadStreamUrlFromHistory(row.getAttribute('data-hist-url'));
+      });
+    }
+    if (!window.__streamUrlHistDocWired) {
+      window.__streamUrlHistDocWired = true;
+      document.addEventListener('mousedown', function (e) {
+        if (!isStreamUrlHistoryOpen()) return;
+        if (e.target && e.target.closest &&
+            (e.target.closest('#streamUrlHistory') || e.target.closest('.stream-url-field'))) return;
+        closeStreamUrlHistory();
+      }, true);
+    }
     // clicking the bar should not start a panel drag
     streamInput.addEventListener('mousedown', function (e) { e.stopPropagation(); });
     btnApply.addEventListener('mousedown', function (e) { e.stopPropagation(); });
