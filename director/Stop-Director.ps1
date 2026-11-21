@@ -17,7 +17,9 @@ function Stop-F1Director {
             $script:killed += $_.ProcessId
         }
 
-    # 2) console windows titled F1-Director-Server*
+    # 2) Leftover consoles from older launches that opened a second
+    #    "F1-Director-Server" window. Current launches have no such window;
+    #    the jar command line above and port 8720 below stop the server.
     & taskkill.exe /FI "WINDOWTITLE eq F1-Director-Server*" /T /F 2>$null | Out-Null
 
     # 3) anything still listening on 8720

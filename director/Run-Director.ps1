@@ -1,11 +1,21 @@
 # Launch F1 Director (upstream jar + shell) in Edge/Chrome app mode (--app=).
+# Java is a child of this console (no second window). Its stdout/stderr stay
+# attached here, so server logs show in the one window Start.cmd titles
+# "F1 Director Console".
+# chcp 65001 before java starts keeps those logs UTF-8. The Windows launcher
+# sets sun.stdout.encoding from the console code page only when stdout is a
+# real console (cp65001 on older JREs, UTF-8 on newer ones). The jar also
+# rewrites System.out/err as UTF-8 when that property starts with cp65001.
+# A pipe would skip both, so Java inherits this console instead of a second
+# window. Quoting is done in-process; the old temp launcher cmd is not used.
 # Lifecycle: director.html pings a local heartbeat port every 4s. Closing the
 # tab/window sends /goodbye (fetchLater + visibility hidden + pagehide);
 # if no heartbeat returns within GoodbyeGraceSec, Java is stopped.
 # MissGraceSec is a longer safety net for crash/kill-tab without beacon.
-# Enter / console close / Stop.cmd remain as backups. F5 is safe: reload
-# heartbeats cancel a pending goodbye within a few seconds. Tab switch /
-# minimize may arm goodbye but a still-alive pulse cancels it.
+# Enter / console close / Stop.cmd remain as backups. Stopping does not
+# require a separate server window. F5 is safe: reload heartbeats cancel a
+# pending goodbye within a few seconds. Tab switch / minimize may arm
+# goodbye but a still-alive pulse cancels it.
 param(
     [Parameter(Mandatory = $true)][string]$JavaExe,
     [Parameter(Mandatory = $true)][string]$Jar,
@@ -17,7 +27,6 @@ $ErrorActionPreference = 'Stop'
 $DirectorUrl = 'http://127.0.0.1:8720/director.html'
 $HeartbeatPort = 8721
 $HeartbeatPrefix = "http://127.0.0.1:$HeartbeatPort/"
-$LaunchCmd = Join-Path $env:TEMP 'F1-Director-Server-Launch.cmd'
 # After /goodbye (visibility hidden / pagehide / fetchLater): if no heartbeat
 # within this window, stop Java. Short enough to feel "close page => stop soon";
 # long enough that F5 reload can reconnect and cancel the pending stop.
@@ -49,6 +58,10 @@ function Find-AppBrowser {
 
 function Stop-F1Director {
     $ErrorActionPreference = 'SilentlyContinue'
+    # Our child, if this session started one. HasExited is checked first so a
+    # reused PID is not killed. Closing this console also delivers CTRL_CLOSE
+    # to Java because it shares the console.
+    Stop-TrackedJava
     Get-CimInstance Win32_Process |
         Where-Object {
             $_.Name -match '^(java|javaw)\.exe$' -and
@@ -56,6 +69,9 @@ function Stop-F1Director {
             ($_.CommandLine -like '*F1-RaceControl-Desktop*.jar*')
         } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+    # Leftover consoles from older launches that opened a second server window.
+    # Current launches have no F1-Director-Server window; the jar command line
+    # above and port 8720 below are what stop the server.
     & taskkill.exe /FI "WINDOWTITLE eq F1-Director-Server*" /T /F 2>$null | Out-Null
     & taskkill.exe /FI "WINDOWTITLE eq F1-RaceControl-Server*" /T /F 2>$null | Out-Null
     try {
@@ -72,9 +88,119 @@ function Test-Health {
     } catch { return $false }
 }
 
-function Quote-Cmd([string]$s) {
-    if ($null -eq $s) { return '""' }
-    return '"' + ($s -replace '"', '""') + '"'
+function Quote-ProcessArg([string]$s) {
+    # CommandLineToArgvW quoting (java.exe), not cmd.exe quoting.
+    if ([string]::IsNullOrEmpty($s)) { return '""' }
+    if ($s -notmatch '[\s"]') { return $s }
+    $escaped = [regex]::Replace($s, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
+}
+
+function Set-DirectorConsoleTitle {
+    try { $Host.UI.RawUI.WindowTitle = 'F1 Director Console' } catch {}
+}
+
+function Enable-Utf8Console {
+    # Code page first, then the .NET encoders, so Java and Write-Host agree.
+    try {
+        $chcp = Join-Path $env:SystemRoot 'System32\chcp.com'
+        if (Test-Path -LiteralPath $chcp) {
+            & $chcp 65001 > $null
+        }
+    } catch {}
+    try {
+        $utf8 = New-Object System.Text.UTF8Encoding $false
+        [Console]::OutputEncoding = $utf8
+        [Console]::InputEncoding = $utf8
+        $global:OutputEncoding = $utf8
+    } catch {}
+}
+
+function Get-DirectorJavaArguments {
+    param(
+        [string]$Jar,
+        [string]$WebDir,
+        [string]$ExtraArgs
+    )
+    $parts = @(
+        '-Dfile.encoding=UTF-8',
+        '-Dsun.stdout.encoding=UTF-8',
+        '-Dsun.stderr.encoding=UTF-8',
+        '-Dstdout.encoding=UTF-8',
+        '-Dstderr.encoding=UTF-8',
+        '-jar',
+        (Quote-ProcessArg $Jar),
+        '--port',
+        '8720',
+        '--web',
+        (Quote-ProcessArg $WebDir),
+        '--no-window'
+    )
+    $line = $parts -join ' '
+    if ($ExtraArgs -and $ExtraArgs.Trim().Length -gt 0) {
+        $line += ' ' + $ExtraArgs.Trim()
+    }
+    return $line
+}
+
+function Start-DirectorJava {
+    param(
+        [string]$JavaExe,
+        [string]$Jar,
+        [string]$WebDir,
+        [string]$ExtraArgs
+    )
+    Set-DirectorConsoleTitle
+    Enable-Utf8Console
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $JavaExe
+    $psi.Arguments = (Get-DirectorJavaArguments -Jar $Jar -WebDir $WebDir -ExtraArgs $ExtraArgs)
+    $psi.UseShellExecute = $false
+    # Inherit this console. CreateNoWindow or another cmd would hide the logs
+    # or open a second window, and a pipe would skip the console code page
+    # the JRE uses for sun.stdout.encoding.
+    $psi.CreateNoWindow = $false
+    $cwd = [System.IO.Directory]::GetCurrentDirectory()
+    if ($cwd) { $psi.WorkingDirectory = $cwd }
+
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
+    if (-not $proc.Start()) {
+        throw 'Java process did not start.'
+    }
+    $script:JavaProc = $proc
+    Set-DirectorConsoleTitle
+}
+
+function Stop-TrackedJava {
+    $proc = $script:JavaProc
+    if (-not $proc) { return }
+    try {
+        if ($proc.HasExited) { return }
+    } catch { return }
+    try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch {}
+    try {
+        if (-not $proc.HasExited) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
+}
+
+function Test-DirectorJavaExited {
+    $proc = $script:JavaProc
+    if (-not $proc) { return $false }
+    try {
+        if (-not $proc.HasExited) { return $false }
+    } catch { return $false }
+    if (-not $script:JavaExitNoted) {
+        $script:JavaExitNoted = $true
+        $code = '?'
+        try { $code = [string]$proc.ExitCode } catch {}
+        Write-Host ("[!] Java exited (code {0})." -f $code)
+    }
+    return $true
 }
 
 function Stop-HeartbeatListener {
@@ -203,42 +329,29 @@ if (-not $hb.Ok) {
     Write-Host '  Heartbeat listener ready.'
 }
 
-# Write a tiny ASCII launcher so quoting + chcp 65001 + java are reliable.
-$lines = New-Object System.Collections.Generic.List[string]
-$lines.Add('@echo off')
-$lines.Add('title F1-Director-Server')
-$lines.Add('chcp 65001 >nul')
-$javaLine = (
-    (Quote-Cmd $JavaExe) +
-    ' -Dfile.encoding=UTF-8' +
-    ' -Dsun.stdout.encoding=UTF-8' +
-    ' -Dsun.stderr.encoding=UTF-8' +
-    ' -Dstdout.encoding=UTF-8' +
-    ' -Dstderr.encoding=UTF-8' +
-    ' -jar ' + (Quote-Cmd $Jar) +
-    ' --port 8720 --web ' + (Quote-Cmd $WebDir) +
-    ' --no-window'
-)
-if ($ExtraArgs -and $ExtraArgs.Trim().Length -gt 0) {
-    $javaLine += ' ' + $ExtraArgs.Trim()
+Write-Host 'Starting F1 Director server in this console (UTF-8)...'
+Write-Host ("  {0}" -f $JavaExe)
+try {
+    $null = Start-DirectorJava -JavaExe $JavaExe -Jar $Jar -WebDir $WebDir -ExtraArgs $ExtraArgs
+    Write-Host ("  java pid {0}" -f $script:JavaProc.Id)
+} catch {
+    Write-Host ("[!] Failed to start Java: {0}" -f $_.Exception.Message)
 }
-$lines.Add($javaLine)
-# UTF-8 no BOM, CRLF — cmd-safe (ASCII only)
-$utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText($LaunchCmd, (($lines -join "`r`n") + "`r`n"), $utf8NoBom)
-
-Write-Host 'Starting F1-Director-Server (UTF-8 console, minimized)...'
-Write-Host ("  launcher: {0}" -f $LaunchCmd)
-Start-Process -FilePath $LaunchCmd -WindowStyle Minimized
 
 Write-Host 'Waiting for http://127.0.0.1:8720 ...'
 $ready = $false
 for ($i = 0; $i -lt 45; $i++) {
+    if (Test-DirectorJavaExited) { break }
     if (Test-Health) { $ready = $true; break }
     Start-Sleep -Seconds 1
 }
+Set-DirectorConsoleTitle
 if (-not $ready) {
-    Write-Host '[!] Health check timed out; opening director anyway.'
+    if ($script:JavaExitNoted) {
+        Write-Host '[!] Director server is not running; opening the page anyway.'
+    } else {
+        Write-Host '[!] Health check timed out; opening director anyway.'
+    }
 }
 
 $browser = Find-AppBrowser
@@ -253,6 +366,7 @@ if ($browser) {
 
 Write-Host ''
 Write-Host 'Director opened in app mode (no address bar / browser chrome).'
+Write-Host '- Server logs                   => this window only'
 Write-Host '- Close the director tab/window  => server stops in ~3s (goodbye); ~5s miss is backup'
 Write-Host '- Heartbeat every 4s'
 Write-Host '- Press Enter here               => stop the Director server'
@@ -279,6 +393,7 @@ $stopReason = 'enter'
 try {
     while ($true) {
         Pump-HeartbeatListener -State $hb
+        $null = Test-DirectorJavaExited
 
         # Enter: non-blocking check (ignore if host has no console)
         try {
