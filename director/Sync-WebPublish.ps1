@@ -4,7 +4,7 @@
 # Unchanged trees (especially circuits/) add no copy work on restart. layouts.json in the
 # web dir is never overwritten when it already exists (Start seeds once).
 # Prune dest files under mapped trees that no longer have a source path.
-# Emits NEEDS_STAMP=1 when director.html or VERSION was copied, or dest title is not current.
+# Stamps share/web/director.html window title when repo VERSION exists (no-op if already current).
 # Emits PUBLISH_CHANGED=1 when any file was copied or pruned.
 # ASCII-only for Windows PowerShell 5.1.
 param(
@@ -89,12 +89,13 @@ function Test-DirectorTitleNeedsStamp([string]$HtmlPath, [string]$VersionFile) {
     $end = $html.IndexOf($close)
     if ($start -lt 0 -or $end -le $start) { return $true }
     $cur = $html.Substring($start + $open.Length, $end - ($start + $open.Length))
-    $suffix = ' · v' + $short
+    $dot = [char]0x00B7
+    $dotV = ' ' + $dot + ' v'
+    $suffix = $dotV + $short
     $keep = $cur
-    $marker = ' · v'
-    $idx = $cur.LastIndexOf($marker)
+    $idx = $cur.LastIndexOf($dotV)
     if ($idx -ge 0) {
-        $after = $cur.Substring($idx + $marker.Length)
+        $after = $cur.Substring($idx + $dotV.Length)
         if ($after.Length -gt 0 -and [char]::IsDigit($after[0])) {
             $keep = $cur.Substring(0, $idx)
         }
@@ -258,8 +259,9 @@ Prune-MappedTree (Join-Path $wo 'circuits') 'circuits'
 Prune-MappedTree (Join-Path $wo 'icons') 'icons'
 Prune-MappedTree $assets 'assets'
 
-$directorDst = Join-Path $WebDir 'director.html'
-$titleNeedsStamp = Test-DirectorTitleNeedsStamp $directorDst $versionFile
-$needsStamp = ($script:DirectorHtmlChanged -or $script:VersionChanged -or $titleNeedsStamp)
+$stampScript = Join-Path $dir 'Stamp-WindowTitle.ps1'
+if ((Test-Path -LiteralPath $versionFile) -and (Test-Path -LiteralPath $stampScript)) {
+    & $stampScript -WebDir $WebDir -VersionFile $versionFile
+}
+
 Write-Output ("PUBLISH_CHANGED={0}" -f ([int]$script:AnyChanged))
-Write-Output ("NEEDS_STAMP={0}" -f ([int]$needsStamp))
