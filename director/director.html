@@ -1216,6 +1216,64 @@
     from { opacity: 0; }
     to { opacity: 1; }
   }
+  /* Leave keeps the overlay for the whole 1s, but grows it into the normal
+     title bar / address row / picture box so dropping .live-media-fill does not snap. */
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head {
+    left: 0;
+    right: 0;
+    width: auto;
+    height: var(--head-h);
+    padding: 0 8px 0 12px;
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+  }
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(180deg, var(--panel-elev), var(--panel-head));
+    opacity: 0;
+    animation: liveHeadBar 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  @keyframes liveHeadBar {
+    to { opacity: 1; }
+  }
+  .fpanel.live-panel.live-media-fill.live-fill-leave .live-toolbar {
+    padding-right: 8px;
+    animation: liveBarSettle 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  @keyframes liveBarSettle {
+    from { top: 0; }
+    to { top: var(--live-restore-head, var(--head-h)); }
+  }
+  /* A hidden address bar is an invisible overlay in fill. Collapse it before the
+     class drop, or its padding re-enters the flow and the picture jumps. */
+  .fpanel.live-panel.live-toolbar-hidden.live-media-fill.live-fill-leave .live-toolbar {
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom-width: 0;
+    overflow: hidden;
+    animation: none;
+    transition: none;
+  }
+  .fpanel.live-panel.live-media-fill.live-fill-leave #liveFsRoot {
+    margin-top: calc(var(--live-restore-head, var(--head-h)) + var(--live-restore-bar, 0px));
+    transition: margin-top 1s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button.live-fs,
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button.live-url-tog {
+    background: transparent;
+    border-color: transparent;
+    color: var(--muted);
+  }
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button.live-url-tog.on {
+    color: var(--teal);
+    background: var(--teal-dim);
+    border-color: rgba(225, 6, 0, 0.28);
+  }
   .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-fs,
   .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-url-tog {
     background: rgba(0,0,0,.55);
@@ -4651,10 +4709,42 @@
     return !!(panel && panel.classList.contains('live-media-fill') && !panel.classList.contains('live-fill-leave'));
   }
 
+  function liveRestoreHeadPx(panel) {
+    var head = 32;
+    try {
+      var n = parseFloat(getComputedStyle(panel).getPropertyValue('--head-h'));
+      if (n) head = n;
+    } catch (e) {}
+    return head;
+  }
+
+  function liveRestoreBarPx(panel) {
+    if (!panel || panel.classList.contains('live-toolbar-hidden')) return 0;
+    var bar = panel.querySelector('.live-toolbar');
+    if (!bar) return 0;
+    var h = bar.getBoundingClientRect().height;
+    return h > 1 ? h : 0;
+  }
+
+  function setLiveFillRestoreVars(panel) {
+    if (!panel) return;
+    panel.style.setProperty('--live-restore-head', liveRestoreHeadPx(panel) + 'px');
+    panel.style.setProperty('--live-restore-bar', liveRestoreBarPx(panel) + 'px');
+  }
+
+  function clearLiveFillRestoreVars(panel) {
+    if (!panel) return;
+    panel.style.removeProperty('--live-restore-head');
+    panel.style.removeProperty('--live-restore-bar');
+  }
+
   function clearLiveMediaFill() {
     cancelLiveFillLeaveTimer();
     var panel = getLivePanelEl();
-    if (panel) panel.classList.remove('live-media-fill', 'live-fill-leave');
+    if (panel) {
+      panel.classList.remove('live-media-fill', 'live-fill-leave');
+      clearLiveFillRestoreVars(panel);
+    }
     var root = getLiveFsRoot();
     if (root) root.classList.remove('live-media-fill', 'live-fill-leave');
     updateLiveFsButton();
@@ -4736,6 +4826,7 @@
     on = !!on;
     if (on) {
       cancelLiveFillLeaveTimer();
+      clearLiveFillRestoreVars(panel);
       panel.classList.remove('live-fill-leave');
       root.classList.remove('live-fill-leave');
       panel.classList.add('live-media-fill');
@@ -4751,11 +4842,13 @@
     if (prefersReducedMotion()) {
       panel.classList.remove('live-media-fill', 'live-fill-leave');
       root.classList.remove('live-media-fill', 'live-fill-leave');
+      clearLiveFillRestoreVars(panel);
       updateLiveFsButton();
       return;
     }
-    // Keep live-media-fill until the ease-out finishes, or the crop/chrome
-    // transitions have no filled state to leave from.
+    // Ease the picture box back to the in-flow size while the crop unwinds.
+    // Dropping .live-media-fill only after that avoids the end-of-exit snap.
+    setLiveFillRestoreVars(panel);
     panel.classList.add('live-fill-leave');
     root.classList.add('live-fill-leave');
     updateLiveFsButton();
@@ -4765,6 +4858,7 @@
       var r = getLiveFsRoot();
       if (!p || !p.classList.contains('live-fill-leave')) return;
       p.classList.remove('live-media-fill', 'live-fill-leave');
+      clearLiveFillRestoreVars(p);
       if (r) r.classList.remove('live-media-fill', 'live-fill-leave');
       updateLiveFsButton();
     }, LIVE_FILL_MS);
