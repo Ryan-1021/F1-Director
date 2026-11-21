@@ -7,7 +7,7 @@
 
 以下已合并进 **`main`**，**尚未**打新 GitHub Release（仍以 **v0.2.14** 为最新 Release，解压 zip 不含这些改动）：
 
-- 启动时仅把内容有变的 UI 拷进 `share/web/`（增量发布；`circuits/` 等未改则跳过）
+- 启动时仅把内容有变的 UI 拷进 `share/web/`（增量发布；`director.html` 标题盖章不触发重复拷贝；源已删的 web 残留会清理；`circuits/` 等未改则跳过）
 - 字体只用系统 UI（Segoe UI / 微软雅黑）；已去掉 Google Fonts
 - 冷启动看板 iframe 错峰挂载（成绩榜先、其余约 72ms 间隔）；切换布局预设仍即时挂载，直播/赛道图保活不变
 - `:8720` 已空闲则跳过残留清理；Java 一起动即开导播台窗，健康检查仍在控制台等

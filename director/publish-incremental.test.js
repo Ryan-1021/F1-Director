@@ -1,6 +1,6 @@
 /*
  * node director/publish-incremental.test.js
- * Incremental publish: SHA256 gate + Start/Publish-Web wiring.
+ * Incremental publish: SHA256 gate, source sidecar for stamped director.html, prune, wiring.
  */
 'use strict';
 
@@ -22,15 +22,30 @@ function sha256File(p) {
   return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 }
 
+function sha256Buf(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
 var root = path.join(__dirname);
 var syncPs1 = fs.readFileSync(path.join(root, 'Sync-WebPublish.ps1'), 'utf8');
+var stampPs1 = fs.readFileSync(path.join(root, 'Stamp-WindowTitle.ps1'), 'utf8');
 var start = fs.readFileSync(path.join(root, 'Start.cmd'), 'utf8');
 var publish = fs.readFileSync(path.join(root, 'Publish-Web.cmd'), 'utf8');
+var versionRaw = fs.readFileSync(path.join(root, '..', 'VERSION'), 'utf8');
 
 assert(syncPs1.indexOf('SHA256') !== -1, 'Sync-WebPublish compares SHA256');
 assert(syncPs1.indexOf('Test-SameFile') !== -1, 'Sync-WebPublish has same-file helper');
+assert(syncPs1.indexOf('UseSourceSidecar') !== -1, 'director.html uses source sidecar hash gate');
+assert(syncPs1.indexOf('Test-DirectorTitleNeedsStamp') !== -1, 'NEEDS_STAMP can follow title-only gap');
+assert(syncPs1.indexOf('Prune-MappedDest') !== -1, 'Sync-WebPublish prunes mapped dest without source');
+assert(syncPs1.indexOf('pruneRootFiles') !== -1, 'prune list includes retired root publishes');
+var rootFilesBlock = syncPs1.slice(
+  syncPs1.indexOf('$rootFiles = @'),
+  syncPs1.indexOf('$pruneRootFiles')
+);
+assert(rootFilesBlock.indexOf('fonts-boot') === -1, 'rootFiles sync list has no fonts-boot');
+assert(syncPs1.indexOf("fonts-boot.js") !== -1, 'prune maps stale fonts-boot.js');
 assert(syncPs1.indexOf('NEEDS_STAMP') !== -1, 'Sync-WebPublish emits NEEDS_STAMP');
-assert(syncPs1.indexOf('fonts-boot.js') === -1, 'Sync does not publish fonts-boot.js');
 assert(syncPs1.indexOf('director.css') !== -1, 'Sync publishes director.css');
 assert(syncPs1.indexOf('director-app.js') !== -1, 'Sync publishes director-app.js');
 assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd uses Sync-WebPublish');
@@ -38,7 +53,69 @@ assert(start.indexOf('NEEDS_STAMP') !== -1, 'Start.cmd reads NEEDS_STAMP');
 assert(start.indexOf('xcopy') === -1, 'Start.cmd no longer bulk xcopy');
 assert(publish.indexOf('Sync-WebPublish.ps1') !== -1, 'Publish-Web uses Sync-WebPublish');
 
+function shortVersion(raw) {
+  var s = String(raw || '').replace(/^\uFEFF/, '').trim();
+  var plus = s.indexOf('+');
+  if (plus >= 0) s = s.slice(0, plus).trim();
+  if (!s) return '';
+  if (s[0] === 'v' || s[0] === 'V') s = s.slice(1);
+  return s;
+}
+
+function stampTitleInHtml(src, raw) {
+  var shortVer = shortVersion(raw);
+  var open = '<title>';
+  var close = '</title>';
+  var startIdx = src.indexOf(open);
+  var endIdx = src.indexOf(close);
+  var cur = src.slice(startIdx + open.length, endIdx);
+  var suffix = ' \u00b7 v' + shortVer;
+  var keep = cur;
+  var marker = ' \u00b7 v';
+  var idx = cur.lastIndexOf(marker);
+  if (idx >= 0 && /^\d/.test(cur.slice(idx + marker.length))) keep = cur.slice(0, idx);
+  return src.slice(0, startIdx) + open + keep + suffix + src.slice(endIdx);
+}
+
+function sidecarPath(webDir, dstRel) {
+  var safe = dstRel.replace(/[\\/]/g, '_');
+  return path.join(webDir, '.publish-hash', safe + '.sha256');
+}
+
+function samePublishedSource(srcPath, webDir, dstRel) {
+  var hSrc = sha256File(srcPath);
+  var side = sidecarPath(webDir, dstRel);
+  if (fs.existsSync(side) && fs.readFileSync(side, 'utf8').trim() === hSrc) return true;
+  var dst = path.join(webDir, dstRel);
+  if (fs.existsSync(dst) && sha256File(dst) === hSrc) {
+    fs.mkdirSync(path.dirname(side), { recursive: true });
+    fs.writeFileSync(side, hSrc);
+    return true;
+  }
+  return false;
+}
+
+var srcHtml = path.join(root, 'director.html');
 var tmpWeb = fs.mkdtempSync(path.join(os.tmpdir(), 'f1-web-'));
+var dstHtml = path.join(tmpWeb, 'director.html');
+fs.copyFileSync(srcHtml, dstHtml);
+var stamped = stampTitleInHtml(fs.readFileSync(srcHtml, 'utf8'), versionRaw);
+fs.writeFileSync(dstHtml, stamped);
+var hashDir = path.dirname(sidecarPath(tmpWeb, 'director.html'));
+fs.mkdirSync(hashDir, { recursive: true });
+fs.writeFileSync(sidecarPath(tmpWeb, 'director.html'), sha256File(srcHtml));
+
+assert(samePublishedSource(srcHtml, tmpWeb, 'director.html'),
+  'stamped dest still matches source via sidecar (skip recopy)');
+assert(sha256File(srcHtml) !== sha256File(dstHtml),
+  'raw dest hash differs from source after stamp');
+assert(stamped.indexOf('<title>F1 \u5bfc\u64ad\u53f0 \u00b7 Director \u00b7 v' + shortVersion(versionRaw)) !== -1,
+  'stamped dest title keeps short version');
+
+var staleBoot = path.join(tmpWeb, 'fonts-boot.js');
+fs.writeFileSync(staleBoot, '/* stale */');
+assert(fs.existsSync(staleBoot), 'fixture stale fonts-boot.js');
+
 var srcA = path.join(tmpWeb, 'a.txt');
 var dstA = path.join(tmpWeb, 'sub', 'a.txt');
 fs.writeFileSync(srcA, 'hello');
@@ -47,6 +124,7 @@ fs.writeFileSync(dstA, 'hello');
 assert(sha256File(srcA) === sha256File(dstA), 'fixture files match');
 
 var ps = process.env.PWSH || 'pwsh';
+var pwshOk = false;
 try {
   var out = cp.execSync(
     '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
@@ -63,12 +141,59 @@ try {
     { encoding: 'utf8' }
   );
   assert(/PUBLISH_CHANGED=0/.test(out2), 'second sync reports no changes');
+
+  var tmpStamp = fs.mkdtempSync(path.join(os.tmpdir(), 'f1-stamp-'));
+  fs.copyFileSync(srcHtml, path.join(tmpStamp, 'director.html'));
+  cp.execSync(
+    '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
+      path.join(root, 'Sync-WebPublish.ps1') +
+      '" -DirectorRoot "' + root + '" -WebDir "' + tmpStamp + '"',
+    { encoding: 'utf8' }
+  );
+  cp.execSync(
+    '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
+      path.join(root, 'Stamp-WindowTitle.ps1') +
+      '" -WebDir "' + tmpStamp + '" -VersionFile "' + path.join(root, '..', 'VERSION') + '"',
+    { encoding: 'utf8' }
+  );
+  var stampedHtml = fs.readFileSync(path.join(tmpStamp, 'director.html'), 'utf8');
+  assert(stampedHtml.indexOf('\u00b7 v' + shortVersion(versionRaw)) !== -1,
+    'pwsh stamp leaves versioned title');
+  var out3 = cp.execSync(
+    '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
+      path.join(root, 'Sync-WebPublish.ps1') +
+      '" -DirectorRoot "' + root + '" -WebDir "' + tmpStamp + '"',
+    { encoding: 'utf8' }
+  );
+  assert(/PUBLISH_CHANGED=0/.test(out3),
+    'after stamp, unchanged source does not recopy director.html');
+  assert(/NEEDS_STAMP=0/.test(out3),
+    'after stamp, title already correct needs no restamp');
+
+  fs.writeFileSync(path.join(tmpStamp, 'fonts-boot.js'), 'stale');
+  var out4 = cp.execSync(
+    '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
+      path.join(root, 'Sync-WebPublish.ps1') +
+      '" -DirectorRoot "' + root + '" -WebDir "' + tmpStamp + '"',
+    { encoding: 'utf8' }
+  );
+  assert(!fs.existsSync(path.join(tmpStamp, 'fonts-boot.js')),
+    'pwsh prune removes stale fonts-boot.js');
+  assert(/PUBLISH_CHANGED=1/.test(out4), 'prune counts as publish change');
+  try { fs.rmSync(tmpStamp, { recursive: true, force: true }); } catch (eTmp) {}
+  pwshOk = true;
 } catch (e) {
   if (e.message.indexOf('ENOENT') >= 0 || e.message.indexOf('not found') >= 0) {
     console.log('skip pwsh integration (pwsh missing on this VM)');
-  } else {
+  } else if (!pwshOk) {
     assert(false, 'pwsh sync run: ' + e.message);
   }
+}
+
+if (!pwshOk) {
+  assert(!fs.existsSync(path.join(root, 'web-override', 'fonts-boot.js')),
+    'fonts-boot source absent (prune target only)');
+  assert(stampPs1.indexOf('director.html') !== -1, 'stamp script still edits director.html');
 }
 
 try { fs.rmSync(tmpWeb, { recursive: true, force: true }); } catch (eRm) {}
