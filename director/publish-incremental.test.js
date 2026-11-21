@@ -36,7 +36,11 @@ var versionRaw = fs.readFileSync(path.join(root, '..', 'VERSION'), 'utf8');
 assert(syncPs1.indexOf('SHA256') !== -1, 'Sync-WebPublish compares SHA256');
 assert(syncPs1.indexOf('Test-SameFile') !== -1, 'Sync-WebPublish has same-file helper');
 assert(syncPs1.indexOf('UseSourceSidecar') !== -1, 'director.html uses source sidecar hash gate');
-assert(syncPs1.indexOf('Test-DirectorTitleNeedsStamp') !== -1, 'NEEDS_STAMP can follow title-only gap');
+assert(syncPs1.indexOf('Test-DirectorTitleNeedsStamp') !== -1,
+  'needs-stamp helper for title gap (encoding-safe U+00B7)');
+assert(syncPs1.indexOf('[char]0x00B7') !== -1, 'Sync uses U+00B7 via numeric code');
+assert(!/[\u00b7\u2022]/.test(syncPs1.replace(/0x00B7/g, '')),
+  'Sync ps1 has no literal middle-dot/bullet in source');
 assert(syncPs1.indexOf('Prune-MappedDest') !== -1, 'Sync-WebPublish prunes mapped dest without source');
 assert(syncPs1.indexOf('pruneRootFiles') !== -1, 'prune list includes retired root publishes');
 var rootFilesBlock = syncPs1.slice(
@@ -45,11 +49,13 @@ var rootFilesBlock = syncPs1.slice(
 );
 assert(rootFilesBlock.indexOf('fonts-boot') === -1, 'rootFiles sync list has no fonts-boot');
 assert(syncPs1.indexOf("fonts-boot.js") !== -1, 'prune maps stale fonts-boot.js');
-assert(syncPs1.indexOf('NEEDS_STAMP') !== -1, 'Sync-WebPublish emits NEEDS_STAMP');
+assert(syncPs1.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Sync-WebPublish invokes stamp script');
+assert(syncPs1.indexOf('NEEDS_STAMP') === -1, 'Sync-WebPublish no longer emits NEEDS_STAMP');
 assert(syncPs1.indexOf('director.css') !== -1, 'Sync publishes director.css');
 assert(syncPs1.indexOf('director-app.js') !== -1, 'Sync publishes director-app.js');
 assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd uses Sync-WebPublish');
-assert(start.indexOf('NEEDS_STAMP') !== -1, 'Start.cmd reads NEEDS_STAMP');
+assert(start.indexOf('NEEDS_STAMP') === -1, 'Start.cmd does not read NEEDS_STAMP');
+assert(publish.indexOf('NEEDS_STAMP') === -1, 'Publish-Web.cmd does not read NEEDS_STAMP');
 assert(start.indexOf('xcopy') === -1, 'Start.cmd no longer bulk xcopy');
 assert(publish.indexOf('Sync-WebPublish.ps1') !== -1, 'Publish-Web uses Sync-WebPublish');
 
@@ -132,8 +138,11 @@ try {
       '" -DirectorRoot "' + root + '" -WebDir "' + tmpWeb + '"',
     { encoding: 'utf8' }
   );
-  assert(/NEEDS_STAMP=0/.test(out) || /NEEDS_STAMP=1/.test(out), 'script prints NEEDS_STAMP');
   assert(/PUBLISH_CHANGED=1/.test(out), 'first sync copies into empty web dir');
+  var firstHtml = fs.readFileSync(path.join(tmpWeb, 'director.html'), 'utf8');
+  assert(firstHtml.indexOf('\u00b7 v' + shortVersion(versionRaw)) !== -1,
+    'first sync stamps title with U+00B7 (not U+8DEF)');
+  assert(firstHtml.indexOf('\u8def v') === -1, 'stamped title must not use U+8DEF (GBK misread)');
   var out2 = cp.execSync(
     '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
       path.join(root, 'Sync-WebPublish.ps1') +
@@ -143,22 +152,34 @@ try {
   assert(/PUBLISH_CHANGED=0/.test(out2), 'second sync reports no changes');
 
   var tmpStamp = fs.mkdtempSync(path.join(os.tmpdir(), 'f1-stamp-'));
-  fs.copyFileSync(srcHtml, path.join(tmpStamp, 'director.html'));
-  cp.execSync(
+  var stampDst = path.join(tmpStamp, 'director.html');
+  fs.copyFileSync(srcHtml, stampDst);
+  var sideForStamp = sidecarPath(tmpStamp, 'director.html');
+  fs.mkdirSync(path.dirname(sideForStamp), { recursive: true });
+  fs.writeFileSync(sideForStamp, sha256File(srcHtml));
+  var unstampedTitle = stampTitleInHtml(fs.readFileSync(srcHtml, 'utf8'), '0.1.0+old');
+  fs.writeFileSync(stampDst, unstampedTitle.replace(
+    '<title>F1 \u5bfc\u64ad\u53f0 \u00b7 Director \u00b7 v0.1.0</title>',
+    '<title>F1 \u5bfc\u64ad\u53f0 \u00b7 Director</title>'));
+  fs.writeFileSync(path.join(tmpStamp, 'VERSION'), '0.1.0+old');
+  var beforeHash = sha256File(stampDst);
+  var outStampOnly = cp.execSync(
     '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
       path.join(root, 'Sync-WebPublish.ps1') +
       '" -DirectorRoot "' + root + '" -WebDir "' + tmpStamp + '"',
     { encoding: 'utf8' }
   );
-  cp.execSync(
-    '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
-      path.join(root, 'Stamp-WindowTitle.ps1') +
-      '" -WebDir "' + tmpStamp + '" -VersionFile "' + path.join(root, '..', 'VERSION') + '"',
-    { encoding: 'utf8' }
-  );
-  var stampedHtml = fs.readFileSync(path.join(tmpStamp, 'director.html'), 'utf8');
+  assert(/PUBLISH_CHANGED=1/.test(outStampOnly),
+    'VERSION-only gap: repo VERSION still copies into web dir');
+  var stampedHtml = fs.readFileSync(stampDst, 'utf8');
   assert(stampedHtml.indexOf('\u00b7 v' + shortVersion(versionRaw)) !== -1,
-    'pwsh stamp leaves versioned title');
+    'sync alone stamps dest title when VERSION differs (no cmd NEEDS_STAMP)');
+  assert(stampedHtml.indexOf('\u8def') === -1, 'stamped separator is U+00B7 not U+8DEF');
+  assert(sha256File(stampDst) !== beforeHash, 'stamp updated dest title in place');
+  assert(sha256File(stampDst) !== sha256File(srcHtml),
+    'dest director.html was not replaced with raw source copy');
+  assert(fs.readFileSync(sideForStamp, 'utf8').trim() === sha256File(srcHtml),
+    'source sidecar hash unchanged after VERSION-only stamp');
   var out3 = cp.execSync(
     '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
       path.join(root, 'Sync-WebPublish.ps1') +
@@ -167,8 +188,6 @@ try {
   );
   assert(/PUBLISH_CHANGED=0/.test(out3),
     'after stamp, unchanged source does not recopy director.html');
-  assert(/NEEDS_STAMP=0/.test(out3),
-    'after stamp, title already correct needs no restamp');
 
   fs.writeFileSync(path.join(tmpStamp, 'fonts-boot.js'), 'stale');
   var out4 = cp.execSync(
@@ -194,6 +213,7 @@ if (!pwshOk) {
   assert(!fs.existsSync(path.join(root, 'web-override', 'fonts-boot.js')),
     'fonts-boot source absent (prune target only)');
   assert(stampPs1.indexOf('director.html') !== -1, 'stamp script still edits director.html');
+  assert(stampPs1.indexOf('[char]0x00B7') !== -1, 'stamp script uses U+00B7 (node static check)');
 }
 
 try { fs.rmSync(tmpWeb, { recursive: true, force: true }); } catch (eRm) {}

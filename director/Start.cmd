@@ -56,13 +56,7 @@ rem Publish director + patched board JS into the jar web/ override so
 rem the UI is served from http://127.0.0.1:8720/director.html (same origin).
 set "WEBDIR=%SHARE%\web"
 if not exist "%WEBDIR%" mkdir "%WEBDIR%" >nul 2>&1
-set "NEEDS_STAMP=0"
-for /f "tokens=1,2 delims==" %%a in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Sync-WebPublish.ps1" -DirectorRoot "%~dp0." -WebDir "%WEBDIR%" -SeedLayouts 2^>nul') do (
-  if /i "%%a"=="NEEDS_STAMP" set "NEEDS_STAMP=%%b"
-)
-if "%NEEDS_STAMP%"=="1" if exist "%~dp0..\VERSION" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Stamp-WindowTitle.ps1" -WebDir "%WEBDIR%" -VersionFile "%~dp0..\VERSION"
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Sync-WebPublish.ps1" -DirectorRoot "%~dp0." -WebDir "%WEBDIR%" -SeedLayouts
 echo Published web UI to: %WEBDIR%
 echo.
 

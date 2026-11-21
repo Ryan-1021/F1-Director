@@ -1,6 +1,6 @@
 # Stamp share/web/director.html <title> from repo VERSION.
 # Short form: strip +build metadata, drop a leading v, then prefix v.
-# Example: 0.2.14+20261121 -> "F1 ... Director · v0.2.14"
+# Example: 0.2.14+20261121 -> "F1 ... Director" + U+00B7 + " v0.2.14"
 # This file is ASCII-only so Windows PowerShell 5.1 can parse it on any code page.
 param(
     [Parameter(Mandatory = $true)][string]$WebDir,
@@ -33,6 +33,9 @@ if (-not $short) {
     exit 0
 }
 
+$dot = [char]0x00B7
+$dotV = ' ' + $dot + ' v'
+
 $htmlPath = Join-Path $WebDir 'director.html'
 if (Test-Path -LiteralPath $htmlPath) {
     $html = [System.IO.File]::ReadAllText($htmlPath, $utf8)
@@ -42,12 +45,11 @@ if (Test-Path -LiteralPath $htmlPath) {
     $end = $html.IndexOf($close)
     if ($start -ge 0 -and $end -gt $start) {
         $cur = $html.Substring($start + $open.Length, $end - ($start + $open.Length))
-        $suffix = ' · v' + $short
+        $suffix = $dotV + $short
         $keep = $cur
-        $marker = ' · v'
-        $idx = $cur.LastIndexOf($marker)
+        $idx = $cur.LastIndexOf($dotV)
         if ($idx -ge 0) {
-            $after = $cur.Substring($idx + $marker.Length)
+            $after = $cur.Substring($idx + $dotV.Length)
             if ($after.Length -gt 0 -and [char]::IsDigit($after[0])) {
                 $keep = $cur.Substring(0, $idx)
             }

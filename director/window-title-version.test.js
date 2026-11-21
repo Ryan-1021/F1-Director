@@ -22,6 +22,7 @@ var html = fs.readFileSync(path.join(__dirname, 'director.html'), 'utf8');
 var publish = fs.readFileSync(path.join(__dirname, 'Publish-Web.cmd'), 'utf8');
 var start = fs.readFileSync(path.join(__dirname, 'Start.cmd'), 'utf8');
 var stampPs1 = fs.readFileSync(path.join(__dirname, 'Stamp-WindowTitle.ps1'), 'utf8');
+var syncPs1 = fs.readFileSync(path.join(__dirname, 'Sync-WebPublish.ps1'), 'utf8');
 var versionRaw = fs.readFileSync(path.join(root, 'VERSION'), 'utf8');
 var indexHtml = fs.readFileSync(path.join(__dirname, 'web-override', 'index.html'), 'utf8');
 var boardHtml = fs.readFileSync(path.join(__dirname, 'web-override', 'board.html'), 'utf8');
@@ -57,8 +58,8 @@ assert(title('v0.2.14') === 'F1 导播台 · Director · v0.2.14',
 assert(title('') === 'F1 导播台 · Director', 'empty keeps base title');
 
 var liveShort = short(versionRaw);
-assert(liveShort === '0.2.14', 'repo VERSION short is 0.2.14 (got ' + liveShort + ')');
-assert(title(versionRaw) === 'F1 导播台 · Director · v0.2.14',
+assert(liveShort.length > 0, 'repo VERSION has a non-empty short form (got ' + liveShort + ')');
+assert(title(versionRaw) === 'F1 导播台 · Director · v' + liveShort,
   'repo VERSION stamps the exact window title');
 
 assert(/<title>F1 导播台 · Director<\/title>/.test(html),
@@ -75,14 +76,21 @@ assert(!/class="logo"[^>]*>[^<]*v\d/.test(html),
 assert(/<title>F1 Director<\/title>/.test(indexHtml), 'index.html window title left alone');
 assert(/<title>F1 Director · 看板<\/title>/.test(boardHtml), 'board popout title left alone');
 
-assert(publish.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Publish-Web stamps window title');
-assert(publish.indexOf('VERSION') !== -1, 'Publish-Web copies VERSION');
+assert(publish.indexOf('Sync-WebPublish.ps1') !== -1, 'Publish-Web runs Sync-WebPublish');
+assert(publish.indexOf('NEEDS_STAMP') === -1, 'Publish-Web does not parse NEEDS_STAMP from cmd');
+assert(publish.indexOf('Stamp-WindowTitle.ps1') === -1,
+  'Publish-Web does not call Stamp-WindowTitle separately');
 assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd incremental publish');
-assert(start.indexOf('NEEDS_STAMP') !== -1, 'Start.cmd stamps only when needed');
-assert(start.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Start.cmd still can stamp window title');
+assert(start.indexOf('NEEDS_STAMP') === -1, 'Start.cmd does not parse NEEDS_STAMP from cmd');
+assert(start.indexOf('Stamp-WindowTitle.ps1') === -1,
+  'Start.cmd does not call Stamp-WindowTitle separately');
+assert(syncPs1.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Sync-WebPublish invokes stamp script');
 assert(stampPs1.indexOf('Get-DirectorShortVersion') !== -1, 'stamp script has short-version helper');
 assert(stampPs1.indexOf("IndexOf([char]43)") !== -1, 'stamp script splits on +');
-assert(stampPs1.indexOf("' · v'") !== -1, 'stamp script prefixes v with a middle-dot');
+assert(stampPs1.indexOf('[char]0x00B7') !== -1, 'stamp script uses U+00B7 via numeric code');
+assert(!/[\u00b7\u2022\u8def]/.test(stampPs1.replace(/0x00B7/g, '')),
+  'stamp script has no literal middle-dot/bullet in source');
+assert(syncPs1.indexOf('[char]0x00B7') !== -1, 'Sync needs-stamp uses U+00B7 via numeric code');
 assert(stampPs1.indexOf('director.html') !== -1, 'stamp script edits published director.html');
 assert(stampPs1.indexOf('Copy-Item') !== -1 && stampPs1.indexOf('VERSION') !== -1,
   'stamp script copies VERSION into web dir');
@@ -103,8 +111,8 @@ function stampLikePs1(src, raw) {
 }
 
 var published = stampLikePs1(html, versionRaw);
-assert(published.indexOf('<title>F1 导播台 · Director · v0.2.14</title>') !== -1,
-  'published copy title is exactly F1 导播台 · Director · v0.2.14');
+assert(published.indexOf('<title>F1 导播台 · Director · v' + liveShort + '</title>') !== -1,
+  'published copy title is exactly F1 导播台 · Director · v' + liveShort);
 assert(published.indexOf('<div class="logo"><span class="dot"></span> F1 导播台</div>') !== -1,
   'stamping title does not touch the topbar logo');
 assert((published.match(/<title>/g) || []).length === 1, 'still a single <title>');
@@ -141,8 +149,9 @@ vm.runInContext(html.slice(snippetStart, snippetEnd), runtime);
 function finish() {
   assert(fetchCalls.length === 1 && fetchCalls[0].url === 'VERSION', 'runtime fetches VERSION');
   assert(fetchCalls[0].opts && fetchCalls[0].opts.cache === 'no-store', 'VERSION fetch is no-store');
-  assert(doc.title === 'F1 导播台 · Director · v0.2.14',
-    'runtime document.title is exactly F1 导播台 · Director · v0.2.14 (got ' + doc.title + ')');
+  assert(doc.title === 'F1 导播台 · Director · v' + liveShort,
+    'runtime document.title is exactly F1 导播台 · Director · v' + liveShort +
+      ' (got ' + doc.title + ')');
 
   if (failed) {
     console.error(failed + ' failed');
