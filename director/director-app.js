@@ -3053,14 +3053,6 @@
     return !!(panel && panel.classList.contains('live-media-fill'));
   }
 
-  function clearLiveMediaFill() {
-    var panel = getLivePanelEl();
-    if (panel) panel.classList.remove('live-media-fill');
-    var root = getLiveFsRoot();
-    if (root) root.classList.remove('live-media-fill');
-    updateLiveFsButton();
-  }
-
   // Huya/QQ-like: player center-left, chat right, nav top — zoom+pan crops chrome.
   var LIVE_CROP_DEFAULT = { scale: 1.45, x: 6, y: 4 };
   var LIVE_CROP_HUYA = { scale: 1.55, x: 8, y: 6 };

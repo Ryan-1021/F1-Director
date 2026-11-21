@@ -5,7 +5,15 @@
 **项目名称：** F1 导播台 / F1-Director  
 **壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.14+20261121**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
-相对 **v0.2.13**：
+以下已合并进 **`main`**，**尚未**打新 GitHub Release（仍以 **v0.2.14** 为最新 Release，解压 zip 不含这些改动）：
+
+- 启动时仅把内容有变的 UI 拷进 `share/web/`（增量发布；`circuits/` 等未改则跳过）
+- 字体只用系统 UI（Segoe UI / 微软雅黑）；已去掉 Google Fonts
+- 冷启动看板 iframe 错峰挂载（成绩榜先、其余约 72ms 间隔）；切换布局预设仍即时挂载，直播/赛道图保活不变
+- `:8720` 已空闲则跳过残留清理；Java 一起动即开导播台窗，健康检查仍在控制台等
+- 看板数据延迟缓冲收紧，公告行就地更新（运行时，不影响启动路径）
+
+相对 **v0.2.13**（**v0.2.14** Release 已含）：
 
 - `CIRCUIT_VIEW_ROT`（#44）：12 条赛道用官方 F1.com Track 图标 `bestMatchDeg` 作为默认 `viewRot`（baku 338、catalunya 302、hungaroring 33、interlagos 286、melbourne 46、mexico 33、monaco 339、montreal 230、shanghai 336、spielberg 20、suzuka 233、yas-marina 261）。已与官方一致的赛道仍走 `autoOrientDeg`，不改
 - 赛段成绩空提示挪进导播面板 `.p-head`（标题栏右侧，#45），文案「本场次暂无赛段数据」；一旦出现任意 S1/S2/S3/本圈赛段数据即隐藏；底部 `.sectors-note` 已去掉
@@ -139,7 +147,9 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 | `director/` | 导播台源：页面、脚本、UI 覆盖 |
 | `director/Start.cmd` | 实际启动入口 |
 | `director/Stop.cmd` | 强制停 jar、释放 `:8720` |
-| `director/director.html` | 导播台主页面 |
+| `director/director.html` | 导播台壳页面（引用 `director.css` / `director-app.js`） |
+| `director/director.css` | 导播台壳样式（发布到 `share/web/`） |
+| `director/director-app.js` | 导播台壳逻辑（发布到 `share/web/`） |
 | `director/web-override/` | 覆盖 UI（`app.js` / `rank-swap.js` / `style.css` / 状态 SVG 等） |
 | `director/web-override/circuits/` | 本地赛道轮廓 SVG（f1db，不联网） |
 | `docs/` | 效果图、旗语拼图、奥斯汀进站 P 示意、比赛方向箭头、排名换行 GIF、追赶 / 朝向 / 旗语区段示意 |
