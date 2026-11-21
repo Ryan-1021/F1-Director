@@ -3,15 +3,16 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.14+20261121**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.15+20261121**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
-以下已合并进 **`main`**，**尚未**打新 GitHub Release（仍以 **v0.2.14** 为最新 Release，解压 zip 不含这些改动）：
+相对 **v0.2.14**（**v0.2.15** Release）：
 
-- 启动时仅把内容有变的 UI 拷进 `share/web/`（增量发布；`director.html` 标题盖章不触发重复拷贝；源已删的 web 残留会清理；`circuits/` 等未改则跳过）
-- 字体只用系统 UI（Segoe UI / 微软雅黑）；已去掉 Google Fonts
-- 冷启动看板 iframe 错峰挂载（成绩榜先、其余约 72ms 间隔）；切换布局预设仍即时挂载，直播/赛道图保活不变
-- `:8720` 已空闲则跳过残留清理；Java 一起动即开导播台窗，健康检查仍在控制台等
-- 看板数据延迟缓冲收紧，公告行就地更新（运行时，不影响启动路径）
+- 增量 Publish-Web：仅拷贝内容有变的 UI；`director.html` 标题盖章后以源旁 hash 判断，源未变则不重复拷；源目录已不存在、曾发布过的 web 残留会清理（如已退役的 `fonts-boot.js`），未改动的 `circuits/` 等跳过
+- 字体只用系统 UI（Segoe UI / 微软雅黑），首屏不再拉 Google Fonts / Noto
+- 冷启动看板 iframe 错峰挂载（成绩榜先、其余约 72ms）；切换布局预设或加看板仍即时挂载，直播/赛道图保活不变
+- 启动：`:8720` 已空闲则跳过残留清理；Java 一起动即开导播台窗（不等 `/api/health`）；绑定失败重试一次且不再开第二窗；`Start.cmd` / 便携 JRE 路径补 JVM 启动参数
+- 看板数据延迟为 0 时不再保留约 3 分钟缓冲；公告行就地更新、不顶滚列表
+- 再次点选当前已保存的布局预设：若经视口缩放后面板已与预设一致则不重建看板；拖改过的布局仍会恢复；「重置布局」行为不变
 
 相对 **v0.2.13**（**v0.2.14** Release 已含）：
 
@@ -201,6 +202,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
   - `F1-Director-vX.Y.Z-with-minijre-win64.zip` — jlink 精简运行时（当前约 `java.base` + `jdk.httpserver` + crypto；体积小很多）
 - mini 足够跑导播台壳（Edge `--app` UI）；若行为异常，再试完整 with-jre zip。
 - 仓库仍不提交 `share/jre`（以及 `share/web`）；带 JRE 的「解压即用」包只走 GitHub Release。
+- **v0.2.15** 起 GitHub Release zip 不含 `docs/`（README 截图仍留在仓库 / GitHub 页面）。
 - Windows 任务栏 / 小尺寸 ICO 条目应保持 BMP/DIB（仅 256 用 PNG），避免 Shell 忽略 PNG 小图后把 256 缩小显示。
 ---
 
