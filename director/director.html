@@ -385,7 +385,19 @@
     .track-strip .ts-chip { max-width: 110px; }
   }
 
-  /* LIVE panel: URL + load/clear + board-data delay on ONE compact row */
+  /* LIVE panel: URL + load/clear + board-data delay on ONE compact row.
+     Clip grid collapses the row in normal mode; the bar itself fades and slides. */
+  .live-toolbar-clip {
+    display: grid;
+    grid-template-rows: 1fr;
+    min-height: 0;
+  }
+  .fpanel.live-panel.live-tb-anim .live-toolbar-clip {
+    transition: grid-template-rows 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .live-toolbar-clip > .live-toolbar {
+    min-height: 0;
+  }
   .live-toolbar {
     position: relative;
     display: flex; align-items: center; gap: 6px;
@@ -396,6 +408,16 @@
     border-bottom: 1px solid var(--border);
     min-width: 0;
     z-index: 4;
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+    transition:
+      opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      padding-top 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      padding-bottom 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      border-bottom-width 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 0s;
   }
   .live-toolbar .stream-url-field {
     position: relative;
@@ -564,8 +586,39 @@
     background: var(--btn-bg);
     border-color: var(--border);
   }
-  .fpanel.live-panel.minimized .live-toolbar { display: none; }
-  .fpanel.live-panel.live-toolbar-hidden .live-toolbar { display: none !important; }
+  .fpanel.live-panel.minimized .live-toolbar,
+  .fpanel.live-panel.minimized .live-toolbar-clip { display: none; }
+  /* Hide without display:none so the fade can run. Pointer-events drop immediately;
+     visibility waits out the 0.2s so the bar cannot take clicks after it is gone.
+     Normal mode also collapses the clip; fill mode is an overlay and must not. */
+  .fpanel.live-panel.live-toolbar-hidden .live-toolbar {
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+    visibility: hidden;
+    transition:
+      opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      padding-top 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      padding-bottom 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      border-bottom-width 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 0.2s;
+  }
+  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar-clip {
+    grid-template-rows: 0fr;
+    pointer-events: none;
+  }
+  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar {
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom-width: 0;
+  }
+  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar-clip,
+  .fpanel.live-panel.live-tb-anim:not(.live-media-fill) .live-toolbar-clip,
+  .fpanel.live-panel.live-toolbar-hidden:not(.live-media-fill) .live-toolbar,
+  .fpanel.live-panel.live-tb-anim:not(.live-media-fill) .live-toolbar {
+    overflow: hidden;
+  }
   .p-head .win-btns button.live-url-tog {
     width: auto;
     min-width: 0;
@@ -577,6 +630,7 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     white-space: nowrap;
+    transition: background 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1), filter 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .p-head .win-btns button.live-url-tog.on {
     color: var(--teal);
@@ -1084,11 +1138,17 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     white-space: nowrap;
+    transition: background 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms cubic-bezier(0.22, 1, 0.36, 1), color 220ms cubic-bezier(0.22, 1, 0.36, 1), filter 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .p-head .win-btns button.live-fs.on {
     color: var(--live);
   }
   /* 铺满裁切：地址/延迟栏浮在画面上，不占位、不退出 live-media-fill。隐藏仍由 .live-toolbar-hidden 控制。 */
+  .fpanel.live-panel.live-media-fill .live-toolbar-clip {
+    height: 0;
+    grid-template-rows: 0fr;
+    overflow: visible;
+  }
   .fpanel.live-panel.live-media-fill .live-toolbar {
     position: absolute;
     top: 0;
@@ -1097,6 +1157,13 @@
     z-index: 10;
     padding-right: 168px;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  }
+  .fpanel.live-panel .p-head {
+    transition:
+      background 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .fpanel.live-panel.live-media-fill .p-head {
     position: absolute;
@@ -1111,12 +1178,43 @@
     border: 0;
     box-shadow: none;
   }
-  .fpanel.live-panel.live-media-fill .p-head .live-badge,
-  .fpanel.live-panel.live-media-fill .p-head .title,
-  .fpanel.live-panel.live-media-fill .p-head .tag,
-  .fpanel.live-panel.live-media-fill .p-head .spacer,
-  .fpanel.live-panel.live-media-fill .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
+  .fpanel.live-panel .p-head .live-badge,
+  .fpanel.live-panel .p-head .title,
+  .fpanel.live-panel .p-head .tag,
+  .fpanel.live-panel .p-head .spacer,
+  .fpanel.live-panel .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
+    transition-property: opacity, width, min-width, padding, margin, border-width, display;
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    transition-behavior: allow-discrete;
+  }
+  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .live-badge,
+  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .title,
+  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .tag,
+  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .spacer,
+  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
     display: none !important;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
+    width: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    overflow: hidden;
+  }
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .live-badge,
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .title,
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .tag,
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .spacer,
+  .fpanel.live-panel.live-media-fill.live-fill-leave .p-head .win-btns button:not(.live-fs):not(.live-url-tog) {
+    animation: liveChromeIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes liveChromeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-fs,
   .fpanel.live-panel.live-media-fill .p-head .win-btns button.live-url-tog {
@@ -1128,6 +1226,13 @@
     --live-crop-scale: 1.45;
     --live-crop-x: 6%;
     --live-crop-y: 4%;
+  }
+  #liveIframe {
+    transform-origin: center center;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .fpanel.live-panel.live-media-fill.live-fill-leave #liveIframe {
+    transform: none;
   }
   .fpanel.live-panel.live-media-fill #liveFsRoot {
     background: #000;
@@ -1155,7 +1260,7 @@
     will-change: transform;
   }
   .live-crop-ui {
-    display: none;
+    display: flex;
     position: absolute;
     left: 8px;
     bottom: 8px;
@@ -1168,10 +1273,20 @@
     border-radius: 8px;
     background: rgba(0,0,0,.62);
     border: 1px solid rgba(255,255,255,.12);
-    pointer-events: auto;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 220ms;
   }
-  .fpanel.live-panel.live-media-fill #liveFsRoot.has-iframe .live-crop-ui {
-    display: flex;
+  .fpanel.live-panel.live-media-fill:not(.live-fill-leave) #liveFsRoot.has-iframe .live-crop-ui {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+      opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 0s;
   }
   .live-crop-ui button {
     min-width: 28px;
@@ -1466,6 +1581,19 @@
   @media (prefers-reduced-motion: reduce) {
     ::view-transition-old(root),
     ::view-transition-new(root) {
+      animation: none !important;
+    }
+    .live-toolbar,
+    .live-toolbar-clip,
+    #liveIframe,
+    .live-crop-ui,
+    .fpanel.live-panel .p-head,
+    .fpanel.live-panel .p-head .live-badge,
+    .fpanel.live-panel .p-head .title,
+    .fpanel.live-panel .p-head .tag,
+    .fpanel.live-panel .p-head .spacer,
+    .fpanel.live-panel .p-head .win-btns button {
+      transition: none !important;
       animation: none !important;
     }
   }
@@ -3281,6 +3409,7 @@
           '<button type="button" data-action="min" title="最小化">–</button>' +
         '</span>' +
       '</div>' +
+      '<div class="live-toolbar-clip">' +
       '<div class="live-toolbar" data-no-drag title="延迟只推迟四周看板/左上角场次数据，不改变直播画面速度">' +
         '<div class="stream-url-field">' +
           '<input class="stream-url" id="streamUrl" type="url" placeholder="粘贴直播链接（B站 / 抖音 / Twitch / 直链）" autocomplete="off" aria-autocomplete="list" aria-controls="streamUrlHistory" aria-expanded="false">' +
@@ -3296,6 +3425,7 @@
         '<button class="primary" id="btnDelayApply" type="button" title="应用看板数据延迟（不改直播画面）">应用</button>' +
         '<button id="btnDelayReset" type="button" title="看板恢复实时">复位</button>' +
         '<span class="delay-status off" id="delayStatus">看板实时</span>' +
+      '</div>' +
       '</div>' +
       '<div class="p-body" id="liveFsRoot">' +
         '<div class="live-placeholder" id="livePlaceholder">' +
@@ -4507,16 +4637,26 @@
     return document.fullscreenElement || document.webkitFullscreenElement || null;
   }
 
+  var LIVE_FILL_MS = 220;
+  var liveFillLeaveTimer = 0;
+
+  function cancelLiveFillLeaveTimer() {
+    if (!liveFillLeaveTimer) return;
+    clearTimeout(liveFillLeaveTimer);
+    liveFillLeaveTimer = 0;
+  }
+
   function isLiveMediaFill() {
     var panel = getLivePanelEl();
-    return !!(panel && panel.classList.contains('live-media-fill'));
+    return !!(panel && panel.classList.contains('live-media-fill') && !panel.classList.contains('live-fill-leave'));
   }
 
   function clearLiveMediaFill() {
+    cancelLiveFillLeaveTimer();
     var panel = getLivePanelEl();
-    if (panel) panel.classList.remove('live-media-fill');
+    if (panel) panel.classList.remove('live-media-fill', 'live-fill-leave');
     var root = getLiveFsRoot();
-    if (root) root.classList.remove('live-media-fill');
+    if (root) root.classList.remove('live-media-fill', 'live-fill-leave');
     updateLiveFsButton();
   }
 
@@ -4593,10 +4733,41 @@
       updateLiveFsButton();
       return;
     }
-    panel.classList.toggle('live-media-fill', !!on);
-    root.classList.toggle('live-media-fill', !!on);
-    if (on) applyLiveCropVars();
+    on = !!on;
+    if (on) {
+      cancelLiveFillLeaveTimer();
+      panel.classList.remove('live-fill-leave');
+      root.classList.remove('live-fill-leave');
+      panel.classList.add('live-media-fill');
+      root.classList.add('live-media-fill');
+      applyLiveCropVars();
+      updateLiveFsButton();
+      return;
+    }
+    if (!panel.classList.contains('live-media-fill') || panel.classList.contains('live-fill-leave')) {
+      updateLiveFsButton();
+      return;
+    }
+    if (prefersReducedMotion()) {
+      panel.classList.remove('live-media-fill', 'live-fill-leave');
+      root.classList.remove('live-media-fill', 'live-fill-leave');
+      updateLiveFsButton();
+      return;
+    }
+    // Keep live-media-fill until the ease-out finishes, or the crop/chrome
+    // transitions have no filled state to leave from.
+    panel.classList.add('live-fill-leave');
+    root.classList.add('live-fill-leave');
     updateLiveFsButton();
+    liveFillLeaveTimer = setTimeout(function () {
+      liveFillLeaveTimer = 0;
+      var p = getLivePanelEl();
+      var r = getLiveFsRoot();
+      if (!p || !p.classList.contains('live-fill-leave')) return;
+      p.classList.remove('live-media-fill', 'live-fill-leave');
+      if (r) r.classList.remove('live-media-fill', 'live-fill-leave');
+      updateLiveFsButton();
+    }, LIVE_FILL_MS);
   }
 
   var LIVE_FS_TITLE_OFF = '铺满裁切：放大播放器区域并裁切网页四周；站点布局不同时用左下角微调。播放器自带全屏会被退出。快捷键 F / Esc 退出';
@@ -4718,20 +4889,41 @@
     updateLiveFsButton();
   }
 
+  var LIVE_TOOLBAR_MS = 200;
+  var liveTbAnimTimer = 0;
+
   function isLiveToolbarHidden() {
     try { return localStorage.getItem(STORAGE_LIVE_TB) === '1'; } catch (e) { return false; }
   }
 
+  function armLiveToolbarAnim(panel) {
+    if (!panel || panel.classList.contains('live-media-fill')) return;
+    if (prefersReducedMotion()) return;
+    if (liveTbAnimTimer) clearTimeout(liveTbAnimTimer);
+    panel.classList.add('live-tb-anim');
+    liveTbAnimTimer = setTimeout(function () {
+      liveTbAnimTimer = 0;
+      panel.classList.remove('live-tb-anim');
+    }, LIVE_TOOLBAR_MS + 40);
+  }
+
   function applyLiveToolbarHidden(hidden, persist) {
+    hidden = !!hidden;
     var panel = document.querySelector('.fpanel.live-panel');
     var btn = document.getElementById('btnLiveUrlTog');
-    if (panel) panel.classList.toggle('live-toolbar-hidden', !!hidden);
+    var changed = !!(panel && panel.classList.contains('live-toolbar-hidden') !== hidden);
+    if (panel) panel.classList.toggle('live-toolbar-hidden', hidden);
     if (btn) {
-      btn.classList.toggle('on', !!hidden);
+      btn.classList.toggle('on', hidden);
       btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
       btn.title = hidden ? '显示地址与延迟栏' : '隐藏地址与延迟栏';
     }
-    if (hidden) closeStreamUrlHistory();
+    if (hidden) {
+      closeStreamUrlHistory();
+      var active = document.activeElement;
+      if (active && active.closest && active.closest('.live-toolbar')) active.blur();
+    }
+    if (changed && persist) armLiveToolbarAnim(panel);
     if (persist) {
       try {
         if (hidden) localStorage.setItem(STORAGE_LIVE_TB, '1');
