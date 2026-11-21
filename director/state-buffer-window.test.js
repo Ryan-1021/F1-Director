@@ -47,7 +47,7 @@ function extractFunction(src, name) {
   return '';
 }
 
-var html = fs.readFileSync(path.join(__dirname, 'director.html'), 'utf8');
+var html = require('./test-director-sources').loadDirectorSources().bundle;
 var trimSrc = extractFunction(html, 'trimStateBuffer');
 var pickSrc = extractFunction(html, 'pickDelayedState');
 assert(trimSrc.indexOf('MAX_BUFFER_MS') === -1, 'trim no longer reads MAX_BUFFER_MS');

@@ -70,7 +70,9 @@ $rootFiles = @(
   @{ Src = (Join-Path $wo 'rank-swap.js'); Dst = 'rank-swap.js' },
   @{ Src = (Join-Path $wo 'board.html'); Dst = 'board.html' },
   @{ Src = (Join-Path $wo 'index.html'); Dst = 'index.html' },
-  @{ Src = (Join-Path $wo 'style.css'); Dst = 'style.css' }
+  @{ Src = (Join-Path $wo 'style.css'); Dst = 'style.css' },
+  @{ Src = (Join-Path $dir 'director.css'); Dst = 'director.css' },
+  @{ Src = (Join-Path $dir 'director-app.js'); Dst = 'director-app.js' }
 )
 foreach ($pair in $rootFiles) {
   Sync-OneFile -Src $pair.Src -DstRel $pair.Dst

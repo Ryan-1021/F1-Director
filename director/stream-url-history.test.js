@@ -23,7 +23,7 @@ function assert(cond, msg) {
   }
 }
 
-var html = fs.readFileSync(path.join(__dirname, 'director.html'), 'utf8');
+var html = require('./test-director-sources').loadDirectorSources().bundle;
 
 var start = html.indexOf('/* stream-url-history:start */');
 var end = html.indexOf('/* stream-url-history:end */');

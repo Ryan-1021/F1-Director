@@ -16,7 +16,8 @@ function assert(cond, msg) {
 }
 
 var root = path.join(__dirname);
-var director = fs.readFileSync(path.join(root, 'director.html'), 'utf8');
+var sources = require('./test-director-sources').loadDirectorSources();
+var director = sources.html + '\n' + sources.css;
 var index = fs.readFileSync(path.join(root, 'web-override', 'index.html'), 'utf8');
 var board = fs.readFileSync(path.join(root, 'web-override', 'board.html'), 'utf8');
 var css = fs.readFileSync(path.join(root, 'web-override', 'style.css'), 'utf8');
@@ -41,7 +42,10 @@ assert(!fs.existsSync(path.join(root, 'web-override', 'fonts-boot.js')), 'fonts-
 
 assert(director.indexOf('fonts-noto-loaded') === -1, 'director has no Noto class hook');
 assert(css.indexOf('fonts-noto-loaded') === -1, 'style.css has no Noto class hook');
-assert(director.indexOf('Noto Sans SC') === -1, 'director.html has no Noto family name');
+assert(director.indexOf('Noto Sans SC') === -1, 'director shell/css has no Noto family name');
+assert(sources.html.indexOf('director.css') !== -1, 'director.html links director.css');
+assert(sources.html.indexOf('director-app.js') !== -1, 'director.html loads director-app.js');
+assert(sources.html.indexOf('<style>') === -1, 'director.html has no inline style block');
 assert(css.indexOf('Noto') === -1, 'style.css has no Noto references');
 
 var stack = '--font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';

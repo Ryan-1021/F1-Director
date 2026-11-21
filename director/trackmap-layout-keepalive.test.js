@@ -16,7 +16,7 @@ function assert(cond, msg) {
   }
 }
 
-var html = fs.readFileSync(path.join(__dirname, 'director.html'), 'utf8');
+var html = require('./test-director-sources').loadDirectorSources().bundle;
 
 assert(html.indexOf('function findTrackmapPanel()') >= 0, 'findTrackmapPanel exists');
 assert(html.indexOf('function applyKeptPanel(') >= 0, 'applyKeptPanel exists');
