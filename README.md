@@ -181,6 +181,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 排名换行自测：`node director/web-override/rank-swap.test.js`；界面上换位成绩榜或赛段成绩里任意两车的 POS 应看到整行滑动。
 - 关页停服时序自测：`node director/lifecycle-heartbeat.test.js`（心跳 4s / 告别 ~3s / 失联 ~5s）。
 - 窗口标题版本自测：`node director/window-title-version.test.js`。
+- 直播地址历史自测：`node director/stream-url-history.test.js`（载入记历史、去重、上限 20、单条删除；清除只停当前流）。
 - `share/web/` 为生成物，以 `director/` 为源。
 - 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
