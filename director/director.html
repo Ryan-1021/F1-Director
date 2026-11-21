@@ -1142,13 +1142,22 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     white-space: nowrap;
+    flex: 0 0 auto;
     transition: background 1s cubic-bezier(0.22, 1, 0.36, 1), border-color 1s cubic-bezier(0.22, 1, 0.36, 1), color 1s cubic-bezier(0.22, 1, 0.36, 1), filter 1s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .p-head .win-btns button.live-fs.on {
     color: var(--live);
   }
-  /* 铺满裁切不改标题栏的定位。地址栏用上面的同一条 in-flow 收起；
-     画面是 flex 剩余空间，只跟着格子变高变矮，播放器节点不重建。 */
+  /* 铺满裁切不移动、不压缩标题栏。文案始终是「铺满裁切」，
+     按下只用 .on / aria-pressed / title。标题栏是固定高度、布局独立的一层，
+     地址栏格子和画面只改变它下面的高度，播放器节点不重建、定位不切换。 */
+  .fpanel.live-panel > .p-head {
+    flex: 0 0 var(--head-h);
+    height: var(--head-h);
+    min-height: var(--head-h);
+    max-height: var(--head-h);
+    contain: layout;
+  }
   #liveFsRoot {
     --live-crop-scale: 1.45;
     --live-crop-x: 6%;
@@ -1157,17 +1166,11 @@
   #liveIframe {
     transform-origin: center center;
     transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
   }
   .fpanel.live-panel.live-media-fill #liveFsRoot {
     background: #000;
     overflow: hidden;
-  }
-  .fpanel.live-panel.live-media-fill #liveFsRoot .live-frame,
-  .fpanel.live-panel.live-media-fill #liveFsRoot .live-placeholder {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
   }
   .fpanel.live-panel.live-media-fill #liveVideo {
     object-fit: contain;
@@ -1181,7 +1184,6 @@
     border: 0;
     transform-origin: center center;
     transform: translate(var(--live-crop-x), var(--live-crop-y)) scale(var(--live-crop-scale));
-    will-change: transform;
   }
   .live-crop-ui {
     display: flex;
@@ -4668,16 +4670,14 @@
 
   var LIVE_FS_TITLE_OFF = '铺满裁切：放大播放器区域并裁切网页四周；站点布局不同时用左下角微调。播放器自带全屏会被退出。快捷键 F / Esc 退出';
   var LIVE_FS_TITLE_ON = '退出铺满：恢复面板内正常显示。Esc / F';
-  var LIVE_FS_LABEL_OFF = '⛶ 铺满裁切';
-  var LIVE_FS_LABEL_ON = '⛶ 退出铺满';
 
   function updateLiveFsButton() {
     var btn = document.getElementById('btnLiveFs');
     if (!btn) return;
     var on = isLiveMediaFill();
+    // Keep the static label. A second, wider label reflows the whole title row.
     btn.classList.toggle('on', on);
     btn.title = on ? LIVE_FS_TITLE_ON : LIVE_FS_TITLE_OFF;
-    btn.textContent = on ? LIVE_FS_LABEL_ON : LIVE_FS_LABEL_OFF;
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
 
