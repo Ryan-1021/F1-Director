@@ -1685,7 +1685,12 @@
   var pendingMount = null;
 
   var MAX_DELAY_SEC = 120;
-  var MAX_BUFFER_MS = 180000; // keep up to 3 min of SSE snapshots
+  // History beyond the selected delay. Keeps the sample just older than the
+  // playback target (quiet ticks are ~1s apart) and lets a slider increase of
+  // up to 8s still resolve immediately. Not a minimum window: delay 0 keeps
+  // one snapshot, and there is no 180s floor. Slider max is MAX_DELAY_SEC.
+  var DELAY_BUFFER_MARGIN_MS = 8000;
+  var MAX_BUFFER_SNAPSHOTS = 2400; // count backstop inside the time window
   var streamDelaySec = 0;     // applied delay (seconds)
   var stateBuffer = [];       // [{ t, state }, ...] newest last
   var displayState = null;    // last state pushed to boards / session strip
@@ -1763,13 +1768,19 @@
   }
 
   function trimStateBuffer(now) {
-    var keepMs = Math.max(MAX_BUFFER_MS, streamDelaySec * 1000 + 8000);
+    if (streamDelaySec <= 0) {
+      if (stateBuffer.length > 1) {
+        stateBuffer.splice(0, stateBuffer.length - 1);
+      }
+      return;
+    }
+    var keepMs = streamDelaySec * 1000 + DELAY_BUFFER_MARGIN_MS;
     var cutoff = now - keepMs;
     while (stateBuffer.length > 1 && stateBuffer[0].t < cutoff) {
       stateBuffer.shift();
     }
-    if (stateBuffer.length > 2400) {
-      stateBuffer.splice(0, stateBuffer.length - 2400);
+    if (stateBuffer.length > MAX_BUFFER_SNAPSHOTS) {
+      stateBuffer.splice(0, stateBuffer.length - MAX_BUFFER_SNAPSHOTS);
     }
   }
 

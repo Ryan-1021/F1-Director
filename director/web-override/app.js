@@ -2220,34 +2220,118 @@
     return m.time || '';
   }
 
-  function renderMessages(box) {
-    clear(box);
-    if (!ONCE) panelTitle(box, '赛事通报');
-    var msgs = (state && state.messages) || [];
-    if (!msgs.length) {
-      box.appendChild(el('div', 'sub', '还没有通报'));
+  function childByClass(parent, cls) {
+    var kids = parent.children;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].classList && kids[i].classList.contains(cls)) return kids[i];
+    }
+    return null;
+  }
+
+  function fillMessageMeta(meta, m, line) {
+    clear(meta);
+    meta.appendChild(el('span', 'mtime', msgTime(m)));
+    if (m.category || m.flag) {
+      meta.appendChild(el('span', 'mcat', m.category || m.flag || ''));
+    }
+    if (line.translated && line.en && line.en !== line.zh) {
+      meta.appendChild(el('span', 'morig', line.en));
+    }
+  }
+
+  function buildMessageRow(m, isNewest) {
+    var line = msgLine(m);
+    var row = el('div', 'msg' + (isNewest ? ' newest' : ''));
+    // Chinese primary line; English sits on the time/meta row to save height.
+    row.appendChild(el('span', 'mtext', line.zh));
+    var meta = el('div', 'mmeta');
+    fillMessageMeta(meta, m, line);
+    row.appendChild(meta);
+    if (m.utc) row.title = m.utc;
+    return row;
+  }
+
+  function patchMessageMeta(meta, m, line) {
+    var wantCat = m.category || m.flag || '';
+    var wantEn = (line.translated && line.en && line.en !== line.zh) ? String(line.en) : '';
+    var timeEl = childByClass(meta, 'mtime');
+    var catEl = childByClass(meta, 'mcat');
+    var origEl = childByClass(meta, 'morig');
+    var shapeOk = !!(timeEl
+      && ((!!catEl) === (!!wantCat))
+      && ((!!origEl) === (!!wantEn)));
+    if (!shapeOk) {
+      fillMessageMeta(meta, m, line);
       return;
     }
-    var list = el('div', 'msgs');
-    for (var i = 0; i < msgs.length; i++) {
-      var m = msgs[i];
-      var line = msgLine(m);
-      var d = el('div', 'msg' + (i === 0 ? ' newest' : ''));
-      // Chinese primary line; English sits on the time/meta row to save height.
-      d.appendChild(el('span', 'mtext', line.zh));
-      var meta = el('div', 'mmeta');
-      meta.appendChild(el('span', 'mtime', msgTime(m)));
-      if (m.category || m.flag) {
-        meta.appendChild(el('span', 'mcat', m.category || m.flag || ''));
-      }
-      if (line.translated && line.en && line.en !== line.zh) {
-        meta.appendChild(el('span', 'morig', line.en));
-      }
-      d.appendChild(meta);
-      if (m.utc) { d.title = m.utc; }
-      list.appendChild(d);
+    var timeTxt = String(msgTime(m));
+    if (timeEl.textContent !== timeTxt) timeEl.textContent = timeTxt;
+    if (catEl && catEl.textContent !== String(wantCat)) catEl.textContent = String(wantCat);
+    if (origEl && origEl.textContent !== wantEn) origEl.textContent = wantEn;
+  }
+
+  function patchMessageRow(row, m, isNewest) {
+    var line = msgLine(m);
+    row.classList.toggle('newest', !!isNewest);
+    row.title = m.utc ? m.utc : '';
+    var text = row.children[0];
+    var meta = row.children[1];
+    if (!text || !meta || !text.classList.contains('mtext') || !meta.classList.contains('mmeta')) {
+      clear(row);
+      row.appendChild(el('span', 'mtext', line.zh));
+      meta = el('div', 'mmeta');
+      fillMessageMeta(meta, m, line);
+      row.appendChild(meta);
+      return;
     }
-    box.appendChild(list);
+    var zh = line.zh == null ? '' : String(line.zh);
+    if (text.textContent !== zh) text.textContent = zh;
+    patchMessageMeta(meta, m, line);
+  }
+
+  /** 标题留在原处；只换掉已有的弹出按钮，让「弹出 / 收回」仍然跟着状态走。 */
+  function syncMessagesPopButton(box) {
+    var title = childByClass(box, 'ptitle');
+    if (!title) return;
+    var btn = childByClass(title, 'p-pop');
+    if (!btn || !btn.parentNode) return;
+    btn.parentNode.replaceChild(popButton('messages'), btn);
+  }
+
+  /**
+   * 和成绩榜一样就地改行。列表节点留着，滚动容器（.panel / .b-box）
+   * 不会在每次推送时被清空，滚动位置也就不会被打回顶部。
+   * 标题只在第一次补上，避免叠一行「赛事通报」。
+   */
+  function renderMessages(box) {
+    if (!ONCE && !childByClass(box, 'ptitle')) panelTitle(box, '赛事通报');
+    else if (!ONCE) syncMessagesPopButton(box);
+    var msgs = (state && state.messages) || [];
+    var list = childByClass(box, 'msgs');
+    if (!msgs.length) {
+      if (list) box.removeChild(list);
+      if (!childByClass(box, 'sub')) box.appendChild(el('div', 'sub', '还没有通报'));
+      return;
+    }
+    var kids = box.children;
+    for (var r = kids.length - 1; r >= 0; r--) {
+      if (kids[r].classList && kids[r].classList.contains('sub')) box.removeChild(kids[r]);
+    }
+    if (!list) {
+      list = el('div', 'msgs');
+      box.appendChild(list);
+    }
+    var rows = [];
+    for (var i = 0; i < list.children.length; i++) rows.push(list.children[i]);
+    while (rows.length > msgs.length) {
+      var extra = rows.pop();
+      if (extra && extra.parentNode) extra.parentNode.removeChild(extra);
+    }
+    for (var j = 0; j < msgs.length; j++) {
+      var row = rows[j];
+      if (!row) list.appendChild(buildMessageRow(msgs[j], j === 0));
+      else patchMessageRow(row, msgs[j], j === 0);
+    }
   }
 
 
