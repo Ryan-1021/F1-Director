@@ -111,6 +111,28 @@ function Wait-DirectorPort8720Free {
     }
 }
 
+function Invoke-F1DirectorStartupCleanup {
+    Write-Host 'Cleaning up any previous Director instance...'
+    Stop-F1Director
+    Wait-DirectorPort8720Free
+}
+
+# After Start-DirectorJava, use the same signals as the health wait loop: Java exit,
+# nothing listening on :8720, or something listening but /api/health never passed.
+function Test-DirectorBindLikelyFailed {
+    if (Test-DirectorJavaExited) { return $true }
+    if (Test-DirectorPort8720Free) {
+        $proc = $script:JavaProc
+        if ($proc) {
+            try {
+                if (-not $proc.HasExited) { return $false }
+            } catch {}
+        }
+        return $true
+    }
+    return $true
+}
+
 function Quote-ProcessArg([string]$s) {
     # CommandLineToArgvW quoting (java.exe), not cmd.exe quoting.
     if ([string]::IsNullOrEmpty($s)) { return '""' }
@@ -428,9 +450,9 @@ function Pump-HeartbeatListener {
     }
 }
 
-Write-Host 'Cleaning up any previous Director instance...'
-Stop-F1Director
-Wait-DirectorPort8720Free
+if (-not (Test-DirectorPort8720Free)) {
+    Invoke-F1DirectorStartupCleanup
+}
 
 # Tiny local heartbeat server (director.html pings this; tab close => stop Java)
 Write-Host ("Starting heartbeat listener on {0} ..." -f $HeartbeatPrefix)
@@ -442,28 +464,42 @@ if (-not $hb.Ok) {
     Write-Host '  Heartbeat listener ready.'
 }
 
-Write-Host 'Starting F1 Director server in this console...'
-Write-Host ("  {0}" -f $JavaExe)
-try {
-    $null = Start-DirectorJava -JavaExe $JavaExe -Jar $Jar -WebDir $WebDir -ExtraArgs $ExtraArgs
-    Write-Host ("  java pid {0}" -f $script:JavaProc.Id)
-} catch {
-    Write-Host ("[!] Failed to start Java: {0}" -f $_.Exception.Message)
+$ready = $false
+for ($startAttempt = 0; $startAttempt -lt 2; $startAttempt++) {
+    if ($startAttempt -gt 0) {
+        Write-Host '[!] Port 8720 did not come up; cleaning up and retrying start once...'
+        Invoke-F1DirectorStartupCleanup
+        $script:JavaExitNoted = $false
+        Stop-JavaPumps
+    }
+
+    Write-Host 'Starting F1 Director server in this console...'
+    Write-Host ("  {0}" -f $JavaExe)
+    try {
+        $null = Start-DirectorJava -JavaExe $JavaExe -Jar $Jar -WebDir $WebDir -ExtraArgs $ExtraArgs
+        Write-Host ("  java pid {0}" -f $script:JavaProc.Id)
+    } catch {
+        Write-Host ("[!] Failed to start Java: {0}" -f $_.Exception.Message)
+    }
+
+    Write-Host 'Waiting for http://127.0.0.1:8720 ...'
+    $ready = $false
+    for ($i = 0; $i -lt 45; $i++) {
+        Write-JavaLogs
+        if (Test-DirectorJavaExited) { break }
+        if (Test-Health) { $ready = $true; break }
+        for ($slice = 0; $slice -lt 5; $slice++) {
+            Start-Sleep -Milliseconds 200
+            Write-JavaLogs
+        }
+    }
+    Write-JavaLogs
+    Set-DirectorConsoleTitle
+    if ($ready) { break }
+    if ($startAttempt -ge 1) { break }
+    if (-not (Test-DirectorBindLikelyFailed)) { break }
 }
 
-Write-Host 'Waiting for http://127.0.0.1:8720 ...'
-$ready = $false
-for ($i = 0; $i -lt 45; $i++) {
-    Write-JavaLogs
-    if (Test-DirectorJavaExited) { break }
-    if (Test-Health) { $ready = $true; break }
-    for ($slice = 0; $slice -lt 5; $slice++) {
-        Start-Sleep -Milliseconds 200
-        Write-JavaLogs
-    }
-}
-Write-JavaLogs
-Set-DirectorConsoleTitle
 if (-not $ready) {
     if ($script:JavaExitNoted) {
         Write-Host '[!] Director server is not running; opening the page anyway.'
