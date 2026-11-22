@@ -84,6 +84,8 @@
   var connected = false;
   var lastPush = 0;
   var errNote = '';
+  // F1Feed 仅在有意义变更时递增；用于跳过整板重绘，但仍刷新剩余时间与 ago()。
+  var lastFeedUpdates = null;
 
   // 哪些看板已经拉成了独立小窗。★ 以服务器为准，前端不自己记账：
   // 用户可能直接用窗口的 X 关掉，前端根本收不到那个事件。
@@ -4373,6 +4375,62 @@
   // 连接
   // ---------------------------------------------------------------
 
+  function feedUpdatesKey(s) {
+    if (!s || s.updates == null) return null;
+    return s.updates;
+  }
+
+  /** updates 未变时：只改剩余时间、连接 ago()，不跑 RENDER（trackmap rAF 照跑）。 */
+  function patchSessionRemaining(box) {
+    if (!box) return;
+    var r = (state && state.race) || {};
+    var cells = box.querySelectorAll('.session .scell');
+    for (var i = 0; i < cells.length; i++) {
+      var lab = cells[i].querySelector('.slabel');
+      if (lab && lab.textContent === '剩余') {
+        var val = cells[i].querySelector('.svalue');
+        if (val) val.textContent = r.remaining || '—';
+        break;
+      }
+    }
+  }
+
+  function refreshPhoneStatusTick() {
+    var phoneText = document.querySelector('.phone-status-text');
+    if (phoneText && !phoneNotice) {
+      phoneText.textContent = connected
+        ? ('已连接 · ' + ago(lastPush))
+        : (errNote || '未连接');
+    }
+  }
+
+  function repaintTickOnly() {
+    var board = document.getElementById('board');
+    if (board) {
+      var box0 = board.querySelector('.b-box');
+      if (!box0) return;
+      var m = /^\/board\/([a-z]+)/.exec(location.pathname);
+      var id = m ? m[1] : null;
+      var head = board.querySelector('.b-head .b-sub');
+      if (head) {
+        head.textContent = connected ? ago(lastPush) : (errNote || '未连接');
+      }
+      var dot = board.querySelector('.b-head .dot');
+      if (dot) { dot.className = 'dot' + (connected ? ' ok' : ' bad'); }
+      if (id === 'session') {
+        patchSessionRemaining(board.querySelector('.b-box'));
+      }
+    }
+    var main = document.getElementById('main');
+    if (main) {
+      if (main.getAttribute('data-main-built') === '1' && main.querySelector('.m-body')) {
+        refreshMainDesktop(main);
+      } else {
+        refreshPhoneStatusTick();
+      }
+    }
+  }
+
   function repaint(opts) {
     opts = opts || {};
     var layoutOnly = !!opts.layoutOnly;
@@ -4414,9 +4472,25 @@
     }
   }
 
-  function onState(s) {
+  function applyStateTick(s) {
+    if (!s) return;
+    connected = true;
+    errNote = '';
     state = s;
     lastPush = s.lastUpdateAt || Date.now();
+    repaintTickOnly();
+  }
+
+  function onState(s) {
+    var nextU = feedUpdatesKey(s);
+    var sameFeed = (nextU != null && lastFeedUpdates != null && nextU === lastFeedUpdates);
+    state = s;
+    lastPush = s.lastUpdateAt || Date.now();
+    if (sameFeed) {
+      repaintTickOnly();
+      return;
+    }
+    if (nextU != null) lastFeedUpdates = nextU;
     repaint();
   }
 
@@ -4436,10 +4510,10 @@
     });
   }
 
-  // 每秒刷新"多久以前"，即使没有新数据
+  // 每秒刷新"多久以前"（及服务器推来的剩余时间），即使没有 F1Feed 增量
   setInterval(function () {
     if (!connected || ONCE) { return; }
-    repaint();
+    repaintTickOnly();
   }, 1000);
 
   // 每 3 秒问一次"哪些看板弹出来了"：用户可能直接用窗口的 X 关掉，
@@ -4493,6 +4567,10 @@
       }
       if (d.type === 'f1-push-state' && d.state) {
         pushState(d.state);
+        return;
+      }
+      if (d.type === 'f1-tick-state' && d.state) {
+        applyStateTick(d.state);
         return;
       }
       if (d.type === 'f1-resize') {
@@ -4582,6 +4660,7 @@
     renderMain: renderMain, renderBoard: renderBoard, setBoard: setBoard,
     state: function () { return state; },
     pushState: pushState,
+    applyStateTick: applyStateTick,
     relayout: relayout,
     applyTheme: applyTheme,
     timingCols: TIMING_COLS,
