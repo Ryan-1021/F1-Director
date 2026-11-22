@@ -1192,10 +1192,21 @@
   /**
    * 绿旗下停车、差距已清空、圈数/赛段不再跟 FIELD：从赛道图去掉点（同退赛隐藏路径）。
    */
-  function shouldHideStoppedOnGreen(c, prog, prevPlanCar, leader, leaderProg, prevByNum, leaderNum, raceGaps, pace, pit, hide, gap, statusText) {
+  function shouldHideStoppedOnGreen(c, prog, prevPlanCar, leader, leaderProg, prevByNum, leaderNum, raceGaps, pace, pit, hide, gap, statusText, holdField) {
     if (hide || pit) return false;
     if (!raceGaps || !c.stopped) return false;
     if (gap.kind !== 'none') return false;
+    // 场次冻结（含 Finalised / 方格后停表）：保持绿旗下已隐藏的停车点；
+    // SC 等仍显示在轮廓上的停车点保持可见；无上一帧时按 FIELD 是否仍在推进判定。
+    if (holdField) {
+      if (prevPlanCar && prevPlanCar.hide) {
+        var holdStickyT = prevPlanCar.timing;
+        if (holdStickyT && timingAdvanced(holdStickyT, prog)) return false;
+        return true;
+      }
+      if (prevPlanCar && !prevPlanCar.hide) return false;
+      return !fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace);
+    }
     if (!isGreenFlagRacing(pace, statusText)) return false;
     // 已由绿旗停车规则隐藏：FIELD 本帧未前进也保持 hide，直到本车再次有计时进展。
     if (prevPlanCar && prevPlanCar.hide) {
@@ -1281,6 +1292,7 @@
       leaderProg = ratchetLapProgress(leadPrev, leadMeasured, leadPit || leadHold || !!leadMeasured.freshLap);
     }
     var fieldRacing = fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace);
+    var holdField = sessionHoldField(sessionName, statusText, fieldRacing);
     var planned = [];
     for (var i = 0; i < list.length; i++) {
       var c = list[i] || {};
@@ -1300,7 +1312,7 @@
       }
       if (shouldHideStoppedOnGreen(
         c, prog, prevByNum[num], leader, leaderProg, prevByNum, leaderNum,
-        raceGaps, pace, pit, hide, gap, statusText
+        raceGaps, pace, pit, hide, gap, statusText, holdField
       )) {
         hide = true;
         hold = false;
@@ -1383,7 +1395,6 @@
         timing: cloneTiming(prog)
       });
     }
-    var holdField = sessionHoldField(sessionName, statusText, fieldRacing);
     return {
       lapSeconds: lapSeconds,
       pace: pace,

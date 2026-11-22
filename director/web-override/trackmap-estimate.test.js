@@ -308,6 +308,49 @@ var outLin2 = {
 var outPlan2 = E.planField([outLeader2, outLin2], 'Race', greenRun, null, outPlan1);
 assert(outPlan2.cars[1].hide === true && !outPlan2.cars[1].hold, 'sticky hide when leader timing unchanged');
 
+// holdField：绿旗 sticky 隐藏的停车点在 Finalised 仍隐藏；正常完赛照开仍显示。
+var finLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 58, bestLap: '1:30.000',
+  sectors: crashS2Segs(4)
+};
+var finLin0 = {
+  number: 14, tla: 'LIN', position: 20, gap: '', numberOfLaps: 19, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var finGreen0 = E.planField([finLeader0, finLin0], 'Race', greenRun);
+var finLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 58, bestLap: '1:30.000',
+  sectors: crashS2Segs(6)
+};
+var finLin1 = {
+  number: 14, tla: 'LIN', position: 20, gap: '—', numberOfLaps: 19, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var finGreen1 = E.planField([finLeader1, finLin1], 'Race', greenRun, null, finGreen0);
+assert(finGreen1.cars[1].hide === true, 'precheck LIN hidden under green sticky');
+var finLeader2 = Object.assign({}, finLeader1, { sectors: crashS2Segs(6) });
+var finLin2 = Object.assign({}, finLin1, { sectors: crashS2Segs(2) });
+var finPlanGreen = E.planField([finLeader2, finLin2], 'Race', greenRun, null, finGreen1);
+assert(finPlanGreen.cars[1].hide === true, 'sticky hide before finalised');
+var finPlanFinalised = E.planField([finLeader2, finLin2], 'Race', 'Finalised Race', null, finPlanGreen);
+assert(finPlanFinalised.holdField === true, 'finalised sets holdField');
+assert(finPlanFinalised.cars[0].hide === false && !finPlanFinalised.cars[0].pit,
+  'visible finisher stays on map not inPit');
+assert(finPlanFinalised.cars[1].hide === true && !finPlanFinalised.cars[1].hold,
+  'stopped sticky hide survives session end');
+
+var finRefreshLin = {
+  number: 14, tla: 'LIN', position: 20, gap: '—', numberOfLaps: 19, stopped: true,
+  inPit: false, bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var finRefreshLeader = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 58, bestLap: '1:30.000',
+  sectors: crashS2Segs(6)
+};
+var finRefreshPlan = E.planField([finRefreshLeader, finRefreshLin], 'Race', 'Finalised Race');
+assert(finRefreshPlan.cars[1].hide === true, 'refresh after finalised hides stopped cleared-gap car');
+assert(finRefreshPlan.cars[1].pit === false, 'session end does not fake inPit for stopped');
+
 var racing = E.planField([normLeader1, normLec1], 'Race', greenRun, null, normPlan0);
 assert(!racing.cars[0].hide && !racing.cars[1].hide, 'circulating cars stay visible');
 
@@ -331,6 +374,19 @@ var scPer1 = {
 };
 var scPlan1 = E.planField([scLeader1, scPer1], 'Race', scRun, null, scPlan0);
 assert(!scPlan1.cars[1].hide && scPlan1.cars[1].hold === true, 'under SC stopped stays on outline');
+
+var scEndLeader = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 12, bestLap: '1:30.000',
+  sectors: crashS2Segs(5)
+};
+var scEndPer = {
+  number: 11, tla: 'PER', position: 4, gap: '', numberOfLaps: 12, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var scEndPlan = E.planField([scEndLeader, scEndPer], 'Race', 'Finalised Race', null, scPlan1);
+assert(scEndPlan.holdField === true, 'SC field finalised hold');
+assert(!scEndPlan.cars[1].hide && scEndPlan.cars[1].hold === true,
+  'SC outline stopped stays visible when session ends');
 
 // 正赛 / 冲刺 Inactive 无计时时 standby；Started 或迷你赛段更新时仍跟计时。
 var preGridCars = [
