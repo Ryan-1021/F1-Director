@@ -649,12 +649,35 @@ assert(sqPinC.visX < sqPinS.visX * 0.7,
 assert(sqPinC.visX > 0.30 && sqPinC.visX < 0.70, 'pinned corner visX=' + sqPinC.visX);
 assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.40, 'pinned straight visX=' + sqPinS.visX);
 
+var lapFs = 1 / 90000;
+assert(E.CHASE_VMAX_LIFT === 2.4, 'CHASE_VMAX_LIFT locked at 2.4');
+assert(E.CHASE_VMAX_NOARC_X === 8, 'no-outline chase still 8× ref');
+near(E.chaseVmaxAt(lapFs, E.PACE_STRAIGHT, true), lapFs * E.PACE_STRAIGHT * E.CHASE_VMAX_LIFT, 1e-15,
+  'straight chase cap is cruise × lift');
+near(E.chaseVmaxAt(lapFs, E.PACE_CORNER, true), lapFs * E.PACE_CORNER * E.CHASE_VMAX_LIFT, 1e-15,
+  'corner chase cap scales with corner cruise');
+assert(E.chaseVmaxAt(lapFs, E.PACE_STRAIGHT, true) < lapFs * 8,
+  'straight chase cap is below old fixed 8× ref');
+assert(E.chaseVmaxAt(lapFs, E.PACE_CORNER, true) < E.chaseVmaxAt(lapFs, E.PACE_STRAIGHT, true),
+  'corner chase cap is below straight');
+
 var leapC = E.stepMotion(null, 0.0, 0.02, 0, 90000, false, { exact: true, arc: paceSq });
 leapC = E.stepMotion(leapC, 0.16, 0.22, 300, 90000, false, { exact: true, arc: paceSq });
 var leapC0 = E.sampleMotion(leapC, 300, 90000, false, paceSq);
+assert(Math.abs(leapC0 - 0) < 0.006, 'corner sector jump does not teleport on tick');
 var leapC1 = E.sampleMotion(leapC, 1300, 90000, false, paceSq);
-assert(E.wrapDelta(leapC1 - leapC0) > 0.05,
-  'corner catch-up still uses unscaled vmax ' + E.wrapDelta(leapC1 - leapC0));
+var leapCD = E.wrapDelta(leapC1 - leapC0);
+assert(leapCD > 0.008 && leapCD < 0.045,
+  'corner catch-up is accel-limited and gentler than 8× ' + leapCD);
+
+var leapS = E.stepMotion(null, 0.125, 0.13, 0, 90000, false, { exact: true, arc: paceSq });
+leapS = E.stepMotion(leapS, 0.28, 0.34, 300, 90000, false, { exact: true, arc: paceSq });
+var leapS0 = E.sampleMotion(leapS, 300, 90000, false, paceSq);
+var leapS1 = E.sampleMotion(leapS, 1300, 90000, false, paceSq);
+var leapSD = E.wrapDelta(leapS1 - leapS0);
+assert(leapSD > leapCD + 0.01,
+  'straight catch-up lifts above corner for the same 1s window ' + leapSD + ' vs ' + leapCD);
+assert(leapSD < 0.14, 'straight catch-up is still a modest lift, not 8× ref sprint ' + leapSD);
 
 // 回贴 / 大后撤 / HOLD_BACK：有轮廓时行为与 #34 相同，不走曲率物理。
 var rewindArc = E.stepMotion(null, 0.55, 0.62, 0, 90000, false, { exact: true, arc: paceSq });
