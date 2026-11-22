@@ -57,10 +57,10 @@
   var COAST_TAU_MS = 900;
   var COAST_MIN = 0.12;
   var COAST_STEP_MAX = 0.0035;
-  // Scheme 3：画面追 belief。墨西哥那种 0.08–0.12 圈前跳用 8× 圈速大约
-  // 1.0–1.4s 追上。KP 放软，误差降到 ~0.03 圈就开始从 vmax 减速，避免
+  // Scheme 3：画面追 belief。墨西哥那种 0.08–0.12 圈前跳在直道约 1–2s、
+  // 弯里更慢地追上。KP 放软，误差降到 ~0.03 圈就开始从 vmax 减速，避免
   // 单帧掉回 1×（看起来「一顿一顿」）。加速上限加高，起速不要挖那么久。
-  // 单帧（16ms）在 8× 下约 0.0014 圈，仍远低于瞬移。
+  // 单帧（16ms）在直道追赶顶速下仍远低于瞬移。
   // 小更新（0.01 圈）大约 0.4s 内跟上。
   // 追上后不要把 display 钉在 belief 上：cap 一卡住点就停死，下一格再
   // 从近 0 拉到 vmax，看起来像停住再闪过去。已跟上则按 1× 巡航，等到
@@ -70,11 +70,13 @@
   // vel 不低于 fullSpeed，小跳不必每次 0→vmax。
   // 额外速度（圈/秒）= CHASE_KP × 误差（圈），再被 VMAX 卡住。
   var CHASE_KP = 5;
-  // 追赶最高速度：圈速的倍数。8× ≈ 90s 圈里 11s 跑完一圈的距离。
-  // 比 13× 软一截，长间隔后补上时不像传送。
-  var CHASE_VMAX_X = 8;
-  // 加速度：每秒最多加上这么多倍圈速。45 → 从 1× 到 8× 大约 0.16s，
-  // 也够从 8× 在 KP 放软后的剩余误差里减速落地。
+  // 有轮廓：追赶顶速 = 当地曲率巡航 × CHASE_VMAX_LIFT（弯随 0.55× 缩、
+  // 直道只在 1.15× 上适度抬高，不再固定 8× 冲刺）。2.4× → 直 ~2.8× / 弯 ~1.3× 圈速。
+  // 无轮廓：仍用 CHASE_VMAX_NOARC_X（与 0.2.13 前相同），仅 curv 路径走动态 cap。
+  var CHASE_VMAX_LIFT = 2.4;
+  var CHASE_VMAX_NOARC_X = 8;
+  // 加速度同样按当地巡航缩放：从巡航拉到追赶顶速的时间弯直相近。
+  // 基数 45（相对 1× 巡航每秒 +45× 圈速）在直道 1.15× 下约 0.07s 拉满。
   var CHASE_ACCEL_X = 45;
   // 小于这点误差视为已跟上，按 1× 巡航继续积，不把画面粘在 belief 上。
   var CHASE_SNAP = 0.0008;
@@ -82,7 +84,7 @@
   // 交给 #21 coast；卡在 cap 上等下一格时不进深 coast。
   var CHASE_CRUISE_LEAD = 0.018;
   // 积分步长。单次 sample 可能跨整秒（测试 / 切后台），必须拆开，
-  // 否则 8× × 3s 会一次跳 ~0.27 圈。
+  // 否则高倍数 × 长 dt 会一次跳太多圈。
   var CHASE_DT_MS = 12;
   // 示意图折线曲率 → 参考巡航倍数。不是 GPS / 官方弯角 / 测距。
   // 直线快于 1×（1.15），弯角略快于半速（0.55）；k∈[10, 48] 从直到弯。
@@ -1258,13 +1260,13 @@
   /**
    * 画面沿圈追 belief：只向前（过起终点按短弧绕），加速度和最高速度封顶。
    * dt 可能是整秒（测试一次采样 / 页签回前台），按 CHASE_DT_MS 拆开积。
-   * 曲率只缩放参考巡航（cruise）；vmax / 加速度仍用未缩放 fullSpeed。
+   * 曲率缩放参考巡航（cruise）与追赶 vmax/accel（× CHASE_VMAX_LIFT）。
    * HOLD_BACK 回贴 shown=belief、#21 coast 种子与下限都不走曲率。
    */
   function chaseToward(st, belief, dt, fullSpeed, arc) {
     var shown = (st.display != null && isFinite(st.display)) ? st.display : belief;
-    arc = motionArc(st, arc);
-    if (arc) blendPaceFactor(st, paceFactorAt(arc, shown), dt > 0 ? Math.min(dt, PACE_TAU_MS) : 0);
+    var paceArc = motionArc(st, arc);
+    if (paceArc) blendPaceFactor(st, paceFactorAt(paceArc, shown), dt > 0 ? Math.min(dt, PACE_TAU_MS) : 0);
     else if (!(st.paceFactor > 0)) st.paceFactor = 1;
     var cruise = cruiseSpeed(st, fullSpeed);
     if (!(st.vel > 0) && !st.coasting) st.vel = cruise;
@@ -1293,17 +1295,24 @@
     st.belief = belief;
     if (!(dt > 0)) return shown;
 
-    var vmax = fullSpeed * CHASE_VMAX_X;
-    var aMax = fullSpeed * (CHASE_ACCEL_X / 1000);
     var kp = CHASE_KP / 1000;
     var t = 0;
     while (t < dt) {
       var h = dt - t;
       if (h > CHASE_DT_MS) h = CHASE_DT_MS;
       t += h;
-      if (arc) {
-        blendPaceFactor(st, paceFactorAt(arc, shown), h);
+      if (paceArc) {
+        blendPaceFactor(st, paceFactorAt(paceArc, shown), h);
         cruise = cruiseSpeed(st, fullSpeed);
+      }
+      var vmax;
+      var aMax;
+      if (paceArc) {
+        vmax = cruise * CHASE_VMAX_LIFT;
+        aMax = cruise * (CHASE_ACCEL_X / 1000);
+      } else {
+        vmax = fullSpeed * CHASE_VMAX_NOARC_X;
+        aMax = fullSpeed * (CHASE_ACCEL_X / 1000);
       }
       var err = wrapDelta(belief - shown);
       if (err <= -HOLD_BACK) {
@@ -2185,6 +2194,16 @@
     PACE_CORNER: PACE_CORNER,
     PACE_K_LO: PACE_K_LO,
     PACE_K_HI: PACE_K_HI,
+    CHASE_VMAX_LIFT: CHASE_VMAX_LIFT,
+    CHASE_VMAX_NOARC_X: CHASE_VMAX_NOARC_X,
+    chaseVmaxAt: function (fullSpeed, paceFactor, hasArc) {
+      if (!hasArc) return fullSpeed * CHASE_VMAX_NOARC_X;
+      var f = paceFactor;
+      if (!(f > 0) || !isFinite(f)) f = 1;
+      if (f < PACE_CORNER) f = PACE_CORNER;
+      if (f > PACE_STRAIGHT) f = PACE_STRAIGHT;
+      return fullSpeed * f * CHASE_VMAX_LIFT;
+    },
     paceFactorAt: paceFactorAt,
     ratchetCap: ratchetCap,
     ratchetLapProgress: ratchetLapProgress,
