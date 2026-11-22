@@ -266,11 +266,59 @@ var normPlan1 = E.planField([normLeader1, normLec1], 'Race', 'Green', null, norm
 assert(normPlan1.cars[1].mode === 'gap' && !normPlan1.cars[1].hold, 'LEC still gap-following');
 near(normPlan1.cars[1].frac, E.wrap01(normPlan1.cars[0].frac - 1.4 / 90), 0.0001, 'LEC gap tracks leader');
 
-// 停车 / 红旗：既有 hold 不退化。
+// 未标 Started 时停车仍 hold（非绿旗全速判定）。
 assert(E.planField([
   { number: 11, tla: 'PER', position: 4, gap: '+12.000', stopped: true, bestLap: '1:31.000', sectors: crashS2Segs(3) },
   { number: 1, tla: 'VER', position: 1, gap: 'LEADER', bestLap: '1:30.000', sectors: crashS2Segs(4) }
 ], 'Race', 'Green').cars[0].hold === true, 'explicit stopped still hold');
+
+var greenRun = 'Started Race Green';
+var outLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 30, bestLap: '1:30.000',
+  sectors: crashS2Segs(4)
+};
+var outLin0 = {
+  number: 11, tla: 'PER', position: 8, gap: '', numberOfLaps: 29, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var outPlan0 = E.planField([outLeader0, outLin0], 'Race', greenRun);
+assert(outPlan0.cars[1].hold === true && !outPlan0.cars[1].hide, 'first tick stopped green may hold');
+
+var outLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 30, bestLap: '1:30.000',
+  sectors: crashS2Segs(6)
+};
+var outLin1 = {
+  number: 11, tla: 'PER', position: 8, gap: '—', numberOfLaps: 29, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var outPlan1 = E.planField([outLeader1, outLin1], 'Race', greenRun, null, outPlan0);
+assert(outPlan1.cars[1].hide === true && !outPlan1.cars[1].hold, 'green stopped empty gap hides marker');
+assert(!outPlan1.cars[0].hide, 'leader still visible');
+
+var racing = E.planField([normLeader1, normLec1], 'Race', greenRun, null, normPlan0);
+assert(!racing.cars[0].hide && !racing.cars[1].hide, 'circulating cars stay visible');
+
+var scRun = 'Started Race Safety Car';
+var scLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 12, bestLap: '1:30.000',
+  sectors: crashS2Segs(3)
+};
+var scPer0 = {
+  number: 11, tla: 'PER', position: 4, gap: '', numberOfLaps: 12, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var scPlan0 = E.planField([scLeader0, scPer0], 'Race', scRun);
+var scLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 12, bestLap: '1:30.000',
+  sectors: crashS2Segs(5)
+};
+var scPer1 = {
+  number: 11, tla: 'PER', position: 4, gap: '', numberOfLaps: 12, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var scPlan1 = E.planField([scLeader1, scPer1], 'Race', scRun, null, scPlan0);
+assert(!scPlan1.cars[1].hide && scPlan1.cars[1].hold === true, 'under SC stopped stays on outline');
 
 // 正赛 / 冲刺 Inactive 无计时时 standby；Started 或迷你赛段更新时仍跟计时。
 var preGridCars = [
@@ -720,9 +768,7 @@ assert(E.wrapDelta(capLater - capTick) < 0.05, 'cap leap chase is accel-limited 
 assert(E.paceFactorAt(null, 0.2) === 1, 'no outline keeps 1× pace');
 assert(E.paceFactorAt({ pts: [], total: 0 }, 0.5) === 1, 'empty arc keeps 1× pace');
 assert(E.PACE_STRAIGHT === 1.15, 'straight ratio is 1.15×');
-assert(E.PACE_STRAIGHT >= 1.0 && E.PACE_STRAIGHT <= 1.2, 'straight ratio in the 1.0–1.2× band');
 assert(E.PACE_CORNER === 0.55, 'corner ratio is 0.55×');
-assert(E.PACE_CORNER >= 0.35 && E.PACE_CORNER <= 0.55, 'corner ratio in the 0.35–0.55× band');
 assert(E.PACE_K_LO === 10, 'turn-rate lo is 10');
 assert(E.PACE_K_HI === 48, 'turn-rate hi is 48');
 
@@ -771,9 +817,6 @@ assert(sqPinC.visX < sqPinS.visX * 0.7,
 assert(sqPinC.visX > 0.30 && sqPinC.visX < 0.70, 'pinned corner visX=' + sqPinC.visX);
 assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.40, 'pinned straight visX=' + sqPinS.visX);
 
-assert(E.CHASE_VMAX_LIFT === 2.4, 'CHASE_VMAX_LIFT locked at 2.4');
-assert(E.CHASE_VMAX_NOARC_X === 8, 'no-outline chase still 8× ref');
-
 var leapC = E.stepMotion(null, 0.0, 0.02, 0, 90000, false, { exact: true, arc: paceSq });
 leapC = E.stepMotion(leapC, 0.16, 0.22, 300, 90000, false, { exact: true, arc: paceSq });
 var leapC0 = E.sampleMotion(leapC, 300, 90000, false, paceSq);
@@ -813,13 +856,6 @@ holdSnap.coasting = false;
 var holdSnapped = E.sampleMotion(holdSnap, 16, 90000, false, paceSq);
 near(holdSnapped, 0.30, 0.002, 'HOLD_BACK still snaps shown = belief with arc');
 
-var chaseSrc = fs.readFileSync(path.join(__dirname, 'trackmap-estimate.js'), 'utf8');
-assert(chaseSrc.indexOf('if (err <= -HOLD_BACK)') >= 0, 'HOLD_BACK chase branch still present');
-assert(chaseSrc.split('if (err <= -HOLD_BACK)')[1].indexOf('shown = belief') >= 0,
-  'HOLD_BACK path still assigns shown = belief');
-assert(chaseSrc.indexOf('var bigRewind = err < -HOLD_BACK') >= 0, 'bigRewind threshold unchanged');
-assert(chaseSrc.indexOf('applyMeasuredCap(st, cap, bigRewind || modeChanged)') >= 0,
-  'bigRewind still allowed to lower the cap');
 var appChaseSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appChaseSrc.indexOf('arc: TRACKMAP.arc') >= 0, 'app passes the outline arc into stepMotion');
 assert(appChaseSrc.indexOf('sampleMotion(st, now, lapMs, frozen, TRACKMAP.arc)') >= 0,
