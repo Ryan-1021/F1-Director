@@ -1104,6 +1104,58 @@
     return String(c && c.number != null ? c.number : (c && c.tla) || '');
   }
 
+  function carLapCount(car) {
+    var c = car || {};
+    var n = c.numberOfLaps;
+    if (n == null) n = c.NumberOfLaps;
+    if (n == null) n = c.laps;
+    n = parseInt(n, 10);
+    return isNaN(n) ? null : n;
+  }
+
+  function timingAdvanced(prev, next) {
+    if (!prev || !next) return false;
+    if (next.freshLap && !prev.freshLap) return true;
+    if ((next.sector | 0) > (prev.sector | 0)) return true;
+    if ((next.sector | 0) === (prev.sector | 0) &&
+        next.doneSegs != null && prev.doneSegs != null && next.doneSegs > prev.doneSegs) return true;
+    if (isFinite(next.frac) && isFinite(prev.frac) && wrapDelta(next.frac - prev.frac) > 0.0005) return true;
+    return false;
+  }
+
+  function fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace) {
+    if (!(pace > 0) || !leader || !leaderProg) return false;
+    var leaderPrevCar = prevByNum[leaderNum];
+    if (!leaderPrevCar) return false;
+    var leaderLaps = carLapCount(leader);
+    var leaderPrevLaps = leaderPrevCar.laps;
+    if (leaderLaps != null && leaderPrevLaps != null && leaderLaps > leaderPrevLaps) return true;
+    var leaderPrevTiming = leaderPrevCar.timing;
+    if (leaderPrevTiming && timingAdvanced(leaderPrevTiming, leaderProg)) return true;
+    return false;
+  }
+
+  /**
+   * 正赛时间差仍贴在画面上，但本车赛段/圈数不再跟 FIELD：不当成还在跟领跑差距。
+   */
+  function shouldFreezeStaleGap(c, prog, prevPlanCar, leader, leaderProg, prevByNum, leaderNum, raceGaps, pace, pit, hide, isLeader, gap) {
+    if (!raceGaps || !(pace > 0) || pit || hide || isLeader) return false;
+    if (gap.kind !== 'time') return false;
+    if (!fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace)) return false;
+    if (!prevPlanCar || !prevPlanCar.timing) return false;
+    var prevT = prevPlanCar.timing;
+    if (!(prevT.confident || prevT.exact)) return false;
+    if (timingAdvanced(prevT, prog)) return false;
+    var leaderPrevCar = prevByNum[leaderNum];
+    var leaderLaps = carLapCount(leader);
+    var leaderPrevLaps = leaderPrevCar && leaderPrevCar.laps;
+    var carLaps = carLapCount(c);
+    var carPrevLaps = prevPlanCar.laps;
+    if (leaderLaps != null && leaderPrevLaps != null && carLaps != null && carPrevLaps != null &&
+        leaderLaps > leaderPrevLaps && carLaps <= carPrevLaps) return true;
+    return true;
+  }
+
   function findLeader(cars) {
     var leader = null;
     var bestPos = Infinity;
@@ -1146,6 +1198,7 @@
       var leadHold = !leadPit && !!leader.stopped;
       leaderProg = ratchetLapProgress(leadPrev, leadMeasured, leadPit || leadHold || !!leadMeasured.freshLap);
     }
+    var fieldRacing = fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace);
     var planned = [];
     for (var i = 0; i < list.length; i++) {
       var c = list[i] || {};
@@ -1154,20 +1207,32 @@
       var hide = !!(c.retired || c.knockedOut);
       var pit = !hide && (!!c.inPit || gap.kind === 'pit');
       var hold = !hide && !pit && !!c.stopped;
+      var isLeader = !!(leader && carNumber(c) === leaderNum);
       var measured = progressFromTiming(c, sectorEnds);
       var prog = ratchetLapProgress(prevByNum[num] && prevByNum[num].timing, measured, pit || hold || !!measured.freshLap);
+      if (!hold && fieldRacing) {
+        hold = shouldFreezeStaleGap(
+          c, prog, prevByNum[num], leader, leaderProg, prevByNum, leaderNum,
+          raceGaps, pace, pit, hide, isLeader, gap
+        );
+      }
       var outlap = !hide && !pit && !!c.pitOut && prog.sector === 0 && prog.doneSegs === 0 && !prog.freshLap;
       var frac = prog.frac;
       var cap = prog.cap;
       var exact = prog.exact;
       var mode = exact ? 'sector' : 'floor';
-      var isLeader = !!(leader && carNumber(c) === leaderNum);
       if (pit) {
         mode = 'pit';
         exact = true;
       } else if (hold) {
         mode = 'hold';
         exact = true;
+        var prevPlanCar = prevByNum[num];
+        if (prevPlanCar && (!prog.confident && !prog.exact) && prevPlanCar.timing &&
+            (prevPlanCar.timing.confident || prevPlanCar.timing.exact)) {
+          frac = prevPlanCar.frac;
+          if (prevPlanCar.cap != null && isFinite(prevPlanCar.cap)) cap = prevPlanCar.cap;
+        }
       } else if (standby) {
         var gridPos = parseInt(c.position, 10);
         if (isNaN(gridPos) || gridPos < 1) gridPos = i + 1;
@@ -1207,7 +1272,7 @@
         exact = false;
         mode = 'outlap';
       }
-      var ownStrip = mode === 'sector' || mode === 'floor' || mode === 'outlap';
+      var ownStrip = mode === 'sector' || mode === 'floor' || mode === 'outlap' || mode === 'hold';
       planned.push({
         number: num,
         tla: c.tla || num,
@@ -1221,6 +1286,7 @@
         hold: hold,
         hide: hide,
         mode: mode,
+        laps: carLapCount(c),
         lapScale: ownLapScale(c, lapSeconds),
         freshLap: !!prog.freshLap,
         sector: ownStrip ? prog.sector : undefined,
