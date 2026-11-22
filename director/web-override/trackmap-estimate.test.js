@@ -346,6 +346,8 @@ near(slow.cars[0].frac, (1 / 3) / 3, 0.001, 'practice frac follows first lit min
 
 var onLine = E.packOffset(0, false);
 assert(onLine.n === 0 && onLine.t === 0, 'first car sits on the arc');
+var bunched = E.packOffset(5, false);
+assert(bunched.n === 0 && bunched.t === 0, 'bunched on-track cars share the centerline');
 var pit0 = E.packOffset(0, true);
 assert(pit0.n > 0 && pit0.n <= 16 && pit0.t === 0, 'pit car is a small inward offset');
 var midLap = E.stepMotion(null, 0.4, 0.5, 0, 90000, false, { exact: true });
@@ -866,7 +868,7 @@ near(flickerCap.cap, 0.10, 0.001, 'cap flicker back across S/F does not rewind t
 for (var slot = 0; slot < 16; slot++) {
   var pack = E.packOffset(slot, false);
   var pitPack = E.packOffset(slot, true);
-  assert(Math.abs(pack.n) <= 14 && Math.abs(pack.t) <= 22, 'on-track pack stays beside the line ' + slot);
+  assert(pack.n === 0 && pack.t === 0, 'on-track pack stays on the centerline ' + slot);
   assert(Math.abs(pitPack.n) <= 28 && Math.abs(pitPack.t) <= 22, 'pit pack stays beside the line ' + slot);
 }
 
@@ -1083,9 +1085,9 @@ assert(appSrc.indexOf('directionOutset') >= 0 && appSrc.indexOf('screenCentroid'
   'app offsets the cue along the outward normal');
 assert(appSrc.indexOf('applyTrackmapAutoOrient') >= 0, 'app applies per-circuit auto-orient');
 assert(appSrc.indexOf('computeFitBounds') >= 0, 'app rotate-then-fits before scale');
-assert(appSrc.indexOf('trackmapDotRadius') >= 0, 'app scales car dot radius with outline stroke');
+assert(appSrc.indexOf('TM_CAR_DOT_R') >= 0 && appSrc.indexOf('6.5') >= 0, 'app uses fixed 6.5px car dots');
 assert(appSrc.indexOf('syncMarkerDotRadii') >= 0, 'app refreshes dot radii on view rebuild');
-assert(appSrc.indexOf("r', '6.5'") < 0, 'app no longer hardcodes 6.5px car dots');
+assert(appSrc.indexOf('trackmapDotRadius') < 0, 'app does not scale dot radius with stroke (Option A reverted)');
 assert(appSrc.indexOf('viewRotDeg = wrapTrackmapRot(TRACKMAP.baseRotDeg)') >= 0,
   'reset restores the auto default, not hard 0');
 assert(appSrc.indexOf('TRACKMAP.viewRotDeg = 0') < 0, 'reset does not force 0°');
@@ -1577,22 +1579,10 @@ function trackStrokeW(zoom) {
   return Math.max(4, Math.min(12, 5 + Math.sqrt(z) * 3));
 }
 
-function trackmapDotRadius(lw) {
-  var w = Number(lw);
-  if (!(w > 0)) w = 8;
-  var r = w * 0.38;
-  if (r < 3.2) r = 3.2;
-  if (r > 4.2) r = 4.2;
-  return r;
-}
-
 var lwDefault = trackStrokeW(1.05);
-var rDefault = trackmapDotRadius(lwDefault);
 near(lwDefault, 8.074, 0.02, 'default zoom outline stroke width');
-near(rDefault, 3.2, 0.01, 'default zoom car dot radius (lw×0.38 clamped)');
-assert(rDefault + 1.5 / 2 <= lwDefault / 2 + 1e-6,
-  'slot-0 dot fits inside half the track stroke at default zoom (1.5px dot stroke)');
-assert(rDefault < 6.5, 'preview dot radius is smaller than legacy 6.5');
+var dotConst = /var TM_CAR_DOT_R = ([0-9.]+)/.exec(appSrc);
+assert(dotConst && +dotConst[1] === 6.5, 'car dot radius is fixed at 6.5px (legacy size)');
 
 function mapOutlineToView(pts, w, h, zoom, rotDeg) {
   if (rotDeg == null) rotDeg = E.autoOrientDeg(pts);
