@@ -186,12 +186,18 @@
 
   var latestState = null; // displayed (possibly delayed) state
   var feedEs = null;
+  var lastPushedBoardUpdates = null;
 
   function clampDelaySec(n) {
     n = Math.round(Number(n) || 0);
     if (n < 0) n = 0;
     if (n > MAX_DELAY_SEC) n = MAX_DELAY_SEC;
     return n;
+  }
+
+  function feedUpdatesKey(s) {
+    if (!s || s.updates == null) return null;
+    return s.updates;
   }
 
   function pushStateToFrame(iframe) {
@@ -206,6 +212,24 @@
     try {
       iframe.contentWindow.postMessage(
         { type: 'f1-push-state', state: latestState },
+        '*'
+      );
+    } catch (e2) {}
+  }
+
+  /** updates 未变：只同步剩余时间/ago，不触发看板整板 RENDER。 */
+  function pushTickToFrame(iframe) {
+    if (!iframe || !latestState) return;
+    try {
+      var w = iframe.contentWindow;
+      if (w && w.F1 && typeof w.F1.applyStateTick === 'function') {
+        w.F1.applyStateTick(latestState);
+        return;
+      }
+    } catch (e) {}
+    try {
+      iframe.contentWindow.postMessage(
+        { type: 'f1-tick-state', state: latestState },
         '*'
       );
     } catch (e2) {}
@@ -651,7 +675,18 @@
   }
 
   function pushStateToAll() {
+    var u = feedUpdatesKey(latestState);
+    var skipBoardRender = (u != null && lastPushedBoardUpdates != null && u === lastPushedBoardUpdates);
     updateSessionStrip();
+    if (skipBoardRender) {
+      Object.keys(panels).forEach(function (id) {
+        var p = panels[id];
+        if (!p || p.type !== 'board' || !p.el) return;
+        pushTickToFrame(p.el.querySelector('iframe'));
+      });
+      return;
+    }
+    if (u != null) lastPushedBoardUpdates = u;
     updateWeatherStrip();
     updateTrackStrip();
     Object.keys(panels).forEach(function (id) {
