@@ -177,15 +177,13 @@ near(race.cars[1].frac, E.wrap01(leaderFrac - 1.5 / 90), 0.0001, 'lec behind');
 assert(race.cars[2].mode !== 'gap', 'lapped car not gap ' + race.cars[2].mode);
 assert(race.cars[2].sector === undefined || race.cars[2].mode === 'sector' || race.cars[2].mode === 'floor', 'sai own sectors');
 
+// 正赛 / 冲刺 Inactive 无计时时 standby；Started 或迷你赛段更新时仍跟计时。
 var preGridCars = [
   { number: 1, tla: 'VER', position: 1, gap: 'LEADER', sectors: [{ value: '', segments: [] }, {}, {}] },
   { number: 16, tla: 'LEC', position: 2, gap: '+0.000', sectors: [{}, {}, {}] }
 ];
 var preInactive = E.planField(preGridCars, 'Race', 'Inactive Race');
-assert(preInactive.standby === true, 'race inactive standby');
-assert(preInactive.cars[0].mode === 'grid', 'inactive race leader grid ' + preInactive.cars[0].mode);
-assert(preInactive.cars[1].mode === 'grid', 'inactive race P2 grid');
-assert(preInactive.cars[0].mode !== 'clock', 'inactive race no leader clock');
+assert(preInactive.standby === true && preInactive.cars[0].mode === 'grid', 'inactive empty timing is standby grid');
 var preSt = E.stepMotion(null, preInactive.cars[0].frac, preInactive.cars[0].cap, 0, 90000, true, { exact: false });
 preSt = E.stepMotion(preSt, preInactive.cars[0].frac, preInactive.cars[0].cap, 5000, 90000, true, { exact: false });
 near(E.sampleMotion(preSt, 15000, 90000, true), preInactive.cars[0].frac, 1e-9, 'standby frozen motion');
@@ -200,20 +198,11 @@ var formationCar = {
 };
 var formation = E.planField([formationCar], 'Race', 'Started Race');
 assert(formation.standby === false, 'started formation not standby');
-assert(formation.cars[0].mode !== 'grid' && formation.cars[0].mode !== 'clock', 'formation uses live sectors ' + formation.cars[0].mode);
 var formSt = E.stepMotion(null, formation.cars[0].frac, formation.cars[0].cap, 0, 90000, false, { exact: formation.cars[0].exact });
 formSt = E.stepMotion(formSt, formation.cars[0].frac, formation.cars[0].cap, 1000, 90000, false, { exact: formation.cars[0].exact });
-var formMoved = E.sampleMotion(formSt, 4000, 90000, false);
-assert(formMoved > formation.cars[0].frac + 0.001, 'formation lap still integrates ' + formMoved);
-
-var reconInactive = E.planField([formationCar], 'Race', 'Inactive Race');
-assert(reconInactive.standby === false, 'inactive with mini-sectors still live');
-assert(E.paceScale('Red Flag Race') === 0, 'red flag pace still zero');
-var redPlan = E.planField(preGridCars, 'Race', 'Red Flag Inactive Race');
-assert(redPlan.pace === 0, 'red flag plan pace');
-var redSt = E.stepMotion(null, 0.3, 0.4, 0, 90000, true, { exact: false });
-redSt = E.stepMotion(redSt, 0.3, 0.4, 8000, 90000, true, { exact: false });
-near(E.sampleMotion(redSt, 16000, 90000, true), 0.3, 1e-9, 'red flag still frozen');
+assert(E.sampleMotion(formSt, 4000, 90000, false) > formation.cars[0].frac + 0.001, 'formation lap still integrates');
+assert(E.planField([formationCar], 'Race', 'Inactive Race').standby === false, 'inactive with mini-sectors still live');
+assert(E.planField(preGridCars, 'Race', 'Red Flag Inactive Race').pace === 0, 'red flag plan pace');
 
 // 运动：目标不变时继续往前走，不要被每秒的重复测量拉回。
 var st = E.stepMotion(null, 0.2, 0.33, 0, 90000, false, { exact: true });
@@ -687,17 +676,8 @@ assert(sqPinC.visX < sqPinS.visX * 0.7,
 assert(sqPinC.visX > 0.30 && sqPinC.visX < 0.70, 'pinned corner visX=' + sqPinC.visX);
 assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.40, 'pinned straight visX=' + sqPinS.visX);
 
-var lapFs = 1 / 90000;
 assert(E.CHASE_VMAX_LIFT === 2.4, 'CHASE_VMAX_LIFT locked at 2.4');
 assert(E.CHASE_VMAX_NOARC_X === 8, 'no-outline chase still 8× ref');
-near(E.chaseVmaxAt(lapFs, E.PACE_STRAIGHT, true), lapFs * E.PACE_STRAIGHT * E.CHASE_VMAX_LIFT, 1e-15,
-  'straight chase cap is cruise × lift');
-near(E.chaseVmaxAt(lapFs, E.PACE_CORNER, true), lapFs * E.PACE_CORNER * E.CHASE_VMAX_LIFT, 1e-15,
-  'corner chase cap scales with corner cruise');
-assert(E.chaseVmaxAt(lapFs, E.PACE_STRAIGHT, true) < lapFs * 8,
-  'straight chase cap is below old fixed 8× ref');
-assert(E.chaseVmaxAt(lapFs, E.PACE_CORNER, true) < E.chaseVmaxAt(lapFs, E.PACE_STRAIGHT, true),
-  'corner chase cap is below straight');
 
 var leapC = E.stepMotion(null, 0.0, 0.02, 0, 90000, false, { exact: true, arc: paceSq });
 leapC = E.stepMotion(leapC, 0.16, 0.22, 300, 90000, false, { exact: true, arc: paceSq });

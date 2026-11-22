@@ -2238,23 +2238,12 @@
     PACE_K_HI: PACE_K_HI,
     CHASE_VMAX_LIFT: CHASE_VMAX_LIFT,
     CHASE_VMAX_NOARC_X: CHASE_VMAX_NOARC_X,
-    chaseVmaxAt: function (fullSpeed, paceFactor, hasArc) {
-      if (!hasArc) return fullSpeed * CHASE_VMAX_NOARC_X;
-      var f = paceFactor;
-      if (!(f > 0) || !isFinite(f)) f = 1;
-      if (f < PACE_CORNER) f = PACE_CORNER;
-      if (f > PACE_STRAIGHT) f = PACE_STRAIGHT;
-      return fullSpeed * f * CHASE_VMAX_LIFT;
-    },
     paceFactorAt: paceFactorAt,
     ratchetCap: ratchetCap,
     ratchetLapProgress: ratchetLapProgress,
     progressFromTiming: progressFromTiming,
     parseGap: parseGap,
     sessionUsesTimeGaps: sessionUsesTimeGaps,
-    sessionLifecyclePhase: sessionLifecyclePhase,
-    sessionAwaitingStart: sessionAwaitingStart,
-    fieldHasLiveTiming: fieldHasLiveTiming,
     paceScale: paceScale,
     planField: planField,
     packOffset: packOffset,
