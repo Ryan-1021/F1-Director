@@ -177,6 +177,44 @@ near(race.cars[1].frac, E.wrap01(leaderFrac - 1.5 / 90), 0.0001, 'lec behind');
 assert(race.cars[2].mode !== 'gap', 'lapped car not gap ' + race.cars[2].mode);
 assert(race.cars[2].sector === undefined || race.cars[2].mode === 'sector' || race.cars[2].mode === 'floor', 'sai own sectors');
 
+var preGridCars = [
+  { number: 1, tla: 'VER', position: 1, gap: 'LEADER', sectors: [{ value: '', segments: [] }, {}, {}] },
+  { number: 16, tla: 'LEC', position: 2, gap: '+0.000', sectors: [{}, {}, {}] }
+];
+var preInactive = E.planField(preGridCars, 'Race', 'Inactive Race');
+assert(preInactive.standby === true, 'race inactive standby');
+assert(preInactive.cars[0].mode === 'grid', 'inactive race leader grid ' + preInactive.cars[0].mode);
+assert(preInactive.cars[1].mode === 'grid', 'inactive race P2 grid');
+assert(preInactive.cars[0].mode !== 'clock', 'inactive race no leader clock');
+var preSt = E.stepMotion(null, preInactive.cars[0].frac, preInactive.cars[0].cap, 0, 90000, true, { exact: false });
+preSt = E.stepMotion(preSt, preInactive.cars[0].frac, preInactive.cars[0].cap, 5000, 90000, true, { exact: false });
+near(E.sampleMotion(preSt, 15000, 90000, true), preInactive.cars[0].frac, 1e-9, 'standby frozen motion');
+
+var formationCar = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER',
+  sectors: [
+    { value: '', segments: [2048, 2048, 0, 0, 0, 0, 0, 0] },
+    { value: '', segments: [] },
+    { value: '', segments: [] }
+  ]
+};
+var formation = E.planField([formationCar], 'Race', 'Started Race');
+assert(formation.standby === false, 'started formation not standby');
+assert(formation.cars[0].mode !== 'grid' && formation.cars[0].mode !== 'clock', 'formation uses live sectors ' + formation.cars[0].mode);
+var formSt = E.stepMotion(null, formation.cars[0].frac, formation.cars[0].cap, 0, 90000, false, { exact: formation.cars[0].exact });
+formSt = E.stepMotion(formSt, formation.cars[0].frac, formation.cars[0].cap, 1000, 90000, false, { exact: formation.cars[0].exact });
+var formMoved = E.sampleMotion(formSt, 4000, 90000, false);
+assert(formMoved > formation.cars[0].frac + 0.001, 'formation lap still integrates ' + formMoved);
+
+var reconInactive = E.planField([formationCar], 'Race', 'Inactive Race');
+assert(reconInactive.standby === false, 'inactive with mini-sectors still live');
+assert(E.paceScale('Red Flag Race') === 0, 'red flag pace still zero');
+var redPlan = E.planField(preGridCars, 'Race', 'Red Flag Inactive Race');
+assert(redPlan.pace === 0, 'red flag plan pace');
+var redSt = E.stepMotion(null, 0.3, 0.4, 0, 90000, true, { exact: false });
+redSt = E.stepMotion(redSt, 0.3, 0.4, 8000, 90000, true, { exact: false });
+near(E.sampleMotion(redSt, 16000, 90000, true), 0.3, 1e-9, 'red flag still frozen');
+
 // 运动：目标不变时继续往前走，不要被每秒的重复测量拉回。
 var st = E.stepMotion(null, 0.2, 0.33, 0, 90000, false, { exact: true });
 st = E.stepMotion(st, 0.2, 0.33, 1000, 90000, false, { exact: true });
