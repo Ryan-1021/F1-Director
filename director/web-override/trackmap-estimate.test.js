@@ -1576,6 +1576,43 @@ assert(leftPits.pit === false, 'pitOut clears the pit flag so the dot can return
 assert(E.pitBayTip && E.pitBayTip.indexOf('进站') >= 0, 'shared Chinese tooltip copy');
 assert(E.pitBayInset === 8, 'default panel inset is 8px');
 
+var sigSquare = E.screenOutlineSig(squareScreen);
+assert(sigSquare.indexOf('5:') === 0, 'outline sig includes point count');
+assert(E.screenOutlineSig(squareScreen) === sigSquare, 'outline sig is stable');
+assert(E.screenOutlineSig([]) === '0', 'empty outline sig');
+
+var cacheBase = {
+  viewKey: '420|280|1.05|0|0|90|512|circuits/austin-1.svg',
+  viewW: 420,
+  viewH: 280,
+  strokeW: 8,
+  zoom: 1.05,
+  outline: squareScreen,
+  carCount: 4
+};
+var cacheKeyA = E.pitBayLayoutCacheKey(cacheBase);
+var cacheKeyB = E.pitBayLayoutCacheKey(cacheBase);
+assert(cacheKeyA === cacheKeyB, 'pit bay layout cache key is stable');
+assert(E.pitBayLayoutCacheKey(Object.assign({}, cacheBase, { carCount: 5 })) !== cacheKeyA,
+  'pit count change invalidates layout cache');
+assert(E.pitBayLayoutCacheKey(Object.assign({}, cacheBase, { carCount: 10 })) !== cacheKeyA,
+  'two-digit pit count invalidates layout cache');
+assert(E.pitBayLayoutCacheKey(Object.assign({}, cacheBase, { viewW: 438 })) !== cacheKeyA,
+  'viewport width invalidates layout cache');
+assert(E.pitBayLayoutCacheKey(Object.assign({}, cacheBase, { zoom: 1.2 })) !== cacheKeyA,
+  'zoom invalidates layout cache');
+assert(E.pitBayLayoutCacheKey(Object.assign({}, cacheBase, { strokeW: 10 })) !== cacheKeyA,
+  'stroke width invalidates layout cache');
+var shiftedOutline = squareScreen.map(function (p) { return { x: p.x + 12, y: p.y }; });
+assert(E.pitBayLayoutCacheKey(Object.assign({}, cacheBase, { outline: shiftedOutline })) !== cacheKeyA,
+  'screen outline shift invalidates layout cache');
+
+assert(appSrc.indexOf('resolvePitBayLayout') >= 0, 'app resolves pit bay layout through a cache');
+assert(appSrc.indexOf('pitBayLayoutCacheKey') >= 0, 'app keys pit bay layout cache');
+assert(appSrc.indexOf('pitBayLayoutKey') >= 0, 'app stores pit bay layout cache state');
+assert(/updateMarkerTransforms[\s\S]*resolvePitBayLayout/.test(appSrc),
+  'rAF marker pass reuses cached pit bay layout');
+
 var bay0 = E.placePitBay({
   outline: squareScreen,
   strokeW: 8,

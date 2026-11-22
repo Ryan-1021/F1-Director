@@ -901,6 +901,40 @@
   var PIT_BAY_INSET = 8;
   var PIT_BAY_TIP = '进站中的车数（退赛/淘汰不计）';
 
+  function screenOutlineSig(outline) {
+    if (!outline || !outline.length) return '0';
+    var n = outline.length
+    var im = (n / 2) | 0
+    var i1 = n - 1
+    function pt(i) {
+      var p = outline[i]
+      return p.x.toFixed(1) + ',' + p.y.toFixed(1)
+    }
+    return n + ':' + pt(0) + ';' + pt(im) + ';' + pt(i1)
+  }
+
+  /** 进站徽章布局缓存键：视口、缩放、描边、屏幕轮廓、人数（含位数变宽）变化时失效。 */
+  function pitBayLayoutCacheKey(opts) {
+    opts = opts || {}
+    var pitCount = opts.carCount | 0
+    var zoom = Number(opts.zoom)
+    if (!(zoom > 0)) zoom = 1.05
+    var strokeW = Number(opts.strokeW)
+    if (!(strokeW > 0)) strokeW = 8
+    var size = pitBaySize(pitCount, zoom, 0)
+    return [
+      opts.viewKey || '',
+      Number(opts.viewW) || 0,
+      Number(opts.viewH) || 0,
+      strokeW.toFixed(2),
+      zoom.toFixed(3),
+      screenOutlineSig(opts.outline),
+      pitCount,
+      size.width.toFixed(2),
+      size.digits
+    ].join('|')
+  }
+
   function clampBayOrigin(x, y, w, h, viewW, viewH, margin) {
     var m = margin > 0 ? margin : 8;
     var vw = viewW > w + m * 2 ? viewW : (w + m * 2);
@@ -2357,6 +2391,8 @@
     minDistRectToPolyline: minDistRectToPolyline,
     pitBaySize: pitBaySize,
     placePitBay: placePitBay,
+    screenOutlineSig: screenOutlineSig,
+    pitBayLayoutCacheKey: pitBayLayoutCacheKey,
     pitBayInset: PIT_BAY_INSET,
     pitBayTip: PIT_BAY_TIP,
     pitLanePaint: pitLanePaint,
