@@ -153,12 +153,67 @@ function New-MiniJre {
         '--no-header-files',
         '--no-man-pages',
         '--compress=2',
-        '-o', $dstJre
+        '--output', $dstJre
     )
     & $jlink @args
     if ($LASTEXITCODE -ne 0) {
         throw "jlink failed, exit $LASTEXITCODE"
     }
+}
+
+function Set-ZipUtf8LanguageFlags {
+    param([string]$ZipPath)
+    # .NET Framework ZipFile + UTF8Encoding writes UTF-8 entry names but omits GP bit 11 (0x800).
+    # Patch local headers and central directory so Windows extractors honor UTF-8 names (e.g. CJK .exe).
+    $bytes = [System.IO.File]::ReadAllBytes($ZipPath)
+    $len = $bytes.Length
+    if ($len -lt 22) {
+        throw "ZIP too small: $ZipPath"
+    }
+    $eocd = -1
+    $scanStart = [Math]::Max(0, $len - 65557)
+    for ($i = $len - 22; $i -ge $scanStart; $i--) {
+        if ($bytes[$i] -eq 0x50 -and $bytes[$i + 1] -eq 0x05 -and $bytes[$i + 2] -eq 0x06) {
+            $eocd = $i
+            break
+        }
+    }
+    if ($eocd -lt 0) {
+        throw "ZIP EOCD not found: $ZipPath"
+    }
+    $cdOffset = [BitConverter]::ToUInt32($bytes, $eocd + 16)
+    $cdSize = [BitConverter]::ToUInt32($bytes, $eocd + 12)
+    $cdEnd = $cdOffset + $cdSize
+
+    $pos = 0
+    while ($pos -lt $cdOffset) {
+        if ($bytes[$pos] -ne 0x50 -or $bytes[$pos + 1] -ne 0x03 -or $bytes[$pos + 2] -ne 0x04) {
+            throw "bad local file header at offset $pos in $ZipPath"
+        }
+        $flags = [BitConverter]::ToUInt16($bytes, $pos + 6)
+        $flags = $flags -bor 0x0800
+        [BitConverter]::GetBytes([uint16]$flags).CopyTo($bytes, $pos + 6)
+        $fnLen = [BitConverter]::ToUInt16($bytes, $pos + 26)
+        $extraLen = [BitConverter]::ToUInt16($bytes, $pos + 28)
+        $compSize = [BitConverter]::ToUInt32($bytes, $pos + 18)
+        $pos = $pos + 30 + $fnLen + $extraLen + $compSize
+    }
+
+    $pos = $cdOffset
+    while ($pos -lt $cdEnd) {
+        if ($bytes[$pos] -ne 0x50 -or $bytes[$pos + 1] -ne 0x01 -or $bytes[$pos + 2] -ne 0x02) {
+            throw "bad central directory header at offset $pos in $ZipPath"
+        }
+        $flags = [BitConverter]::ToUInt16($bytes, $pos + 8)
+        $flags = $flags -bor 0x0800
+        [BitConverter]::GetBytes([uint16]$flags).CopyTo($bytes, $pos + 8)
+        $fnLen = [BitConverter]::ToUInt16($bytes, $pos + 28)
+        $extraLen = [BitConverter]::ToUInt16($bytes, $pos + 30)
+        $commentLen = [BitConverter]::ToUInt16($bytes, $pos + 32)
+        $pos = $pos + 46 + $fnLen + $extraLen + $commentLen
+    }
+
+    [System.IO.File]::WriteAllBytes($ZipPath, $bytes)
 }
 
 function New-Utf8ReleaseZip {
@@ -194,6 +249,7 @@ function New-Utf8ReleaseZip {
     } finally {
         $zip.Dispose()
     }
+    Set-ZipUtf8LanguageFlags -ZipPath $ZipPath
 }
 
 function Write-ZipDigest {
