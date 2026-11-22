@@ -3,9 +3,18 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.16+20261121**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.17+20261122**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
 
-相对 **v0.2.15**（**v0.2.16** 尚未打 Release）：
+相对 **v0.2.16**（**v0.2.16** Release）：
+
+- 开赛前后冻结估计赛道图圆点；绿旗下 sticky 隐藏停在场上的车（赛后刷新后仍有圈差的车可能仍可见，属预期）
+- 在场上车标点对齐赛道中心线
+- `state.updates` 不变时跳过整板重绘（剩余时间与 ago 仍 tick）
+- 「刷新看板」会先 dispose 旧 iframe，减轻 Edge 内存阶梯上涨
+- 内嵌 jar 增加 SSE ping / state 写锁（文件名仍为 `0.1.15_modify`）
+- 新增 `director\Pack-Release.ps1`：本地打出官方 win64 zip（UTF-8 文件名与编码标志、with-jre / with-minijre、不含 `docs/` / `.git`，产物与 SHA-256 输出到 `D:\Develop`）
+
+相对 **v0.2.15**（**v0.2.16** Release）：
 
 - Publish-Web 同步末尾自动盖窗口标题：`Sync-WebPublish` 直接调 `Stamp-WindowTitle.ps1`，不再经 cmd `for /f` 解析 `NEEDS_STAMP`；标题分隔符用 `[char]0x00B7`（U+00B7），GBK 代码页不误码
 - 增量发布路径：`WebDir` / `DirectorRoot` 与 prune 相对路径在 `GetFullPath` 后再算，`director\..\share\web` 等不再 Substring 抛错，prune 与盖章能跑完
@@ -200,12 +209,13 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 窗口标题版本自测：`node director/window-title-version.test.js`。
 - 直播地址历史自测：`node director/stream-url-history.test.js`（载入记历史、去重、上限 20、单条删除；清除只停当前流）。
 - `share/web/` 为生成物，以 `director/` 为源。
-- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种等；壳层版本见 `VERSION`，勿与 jar 标号混读。
+- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种、SSE ping / state 写锁等；壳层版本见 `VERSION`，勿与 jar 标号混读。
+- 打官方 Release zip：在 Windows 本机（`D:\Develop\F1-Director`）跑 `director\Pack-Release.cmd`。会先 `Publish-Web`，再打出 `F1-Director-v{短版本}-with-jre-win64.zip` 与 `-with-minijre-win64.zip`（ZIP 使用 UTF-8 文件名与语言编码标志；不含 `docs/`、`.git`、`*.bak`）；仅输出到 `D:\Develop`，打完清理 staging 并打印每个 zip 的体积与 SHA-256。不创建 GitHub Release（需另行上传）。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
 - 分支命名：`{base}_{content}`（如 `main_timingWeatherCache`）。
-- GitHub Releases 同一壳版本可能提供两个 win64 zip：
+- GitHub Releases 同一壳版本可能提供两个 win64 zip（亦可用 `director\Pack-Release.cmd` 在本地打出同款布局）：
   - `F1-Director-vX.Y.Z-with-jre-win64.zip` — 完整 Temurin JRE（体积大）
-  - `F1-Director-vX.Y.Z-with-minijre-win64.zip` — jlink 精简运行时（当前约 `java.base` + `jdk.httpserver` + crypto；体积小很多）
+  - `F1-Director-vX.Y.Z-with-minijre-win64.zip` — jlink 精简运行时（`java.base`、`jdk.crypto.ec`、`jdk.crypto.cryptoki`、`jdk.crypto.mscapi`、`jdk.httpserver`；体积小很多）
 - mini 足够跑导播台壳（Edge `--app` UI）；若行为异常，再试完整 with-jre zip。
 - 仓库仍不提交 `share/jre`（以及 `share/web`）；带 JRE 的「解压即用」包只走 GitHub Release。
 - **v0.2.15** 起 GitHub Release zip 不含 `docs/`（README 截图仍留在仓库 / GitHub 页面）。
