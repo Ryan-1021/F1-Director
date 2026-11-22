@@ -224,6 +224,8 @@ near(slow.cars[0].frac, (1 / 3) / 3, 0.001, 'practice frac follows first lit min
 
 var onLine = E.packOffset(0, false);
 assert(onLine.n === 0 && onLine.t === 0, 'first car sits on the arc');
+var bunched = E.packOffset(5, false);
+assert(bunched.n === 0 && bunched.t === 0, 'bunched on-track cars share the centerline');
 var pit0 = E.packOffset(0, true);
 assert(pit0.n > 0 && pit0.n <= 16 && pit0.t === 0, 'pit car is a small inward offset');
 var midLap = E.stepMotion(null, 0.4, 0.5, 0, 90000, false, { exact: true });
@@ -730,7 +732,7 @@ near(flickerCap.cap, 0.10, 0.001, 'cap flicker back across S/F does not rewind t
 for (var slot = 0; slot < 16; slot++) {
   var pack = E.packOffset(slot, false);
   var pitPack = E.packOffset(slot, true);
-  assert(Math.abs(pack.n) <= 14 && Math.abs(pack.t) <= 22, 'on-track pack stays beside the line ' + slot);
+  assert(pack.n === 0 && pack.t === 0, 'on-track pack stays on the centerline ' + slot);
   assert(Math.abs(pitPack.n) <= 28 && Math.abs(pitPack.t) <= 22, 'pit pack stays beside the line ' + slot);
 }
 

@@ -721,7 +721,8 @@
   }
 
   function packOffset(slot, pit) {
-    var n = pit ? 14 : 0;
+    if (!pit) return { n: 0, t: 0 };
+    var n = 14;
     var t = 0;
     var s = slot | 0;
     if (s < 0) s = 0;
@@ -732,8 +733,7 @@
       t = col * 11;
       n += row * 11;
     }
-    if (!pit && n > 14) n = 14;
-    if (pit && n > 28) n = 28;
+    if (n > 28) n = 28;
     if (t > 22) t = 22;
     return { n: n, t: t };
   }
