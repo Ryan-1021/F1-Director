@@ -181,6 +181,10 @@ assert(hideFn.indexOf('armLiveToolbarAnim(panel)') !== -1, '地址 toggle arms t
 assert(hideFn.indexOf("panel.classList.contains('live-media-fill')") === -1,
   'hide helper does not branch on fill; the clip class does');
 assert(hideFn.indexOf('closeStreamUrlHistory()') !== -1, 'hiding the bar still closes history');
+assert(hideFn.indexOf("btn.classList.toggle('on', !hidden)") !== -1,
+  '地址 toggle uses .on when the bar is expanded');
+assert(hideFn.indexOf("btn.setAttribute('aria-pressed', hidden ? 'false' : 'true')") !== -1,
+  '地址 aria-pressed is true when the bar is shown');
 
 var fillStart = html.indexOf('function setLiveMediaFill(on)');
 var fillEnd = html.indexOf('var LIVE_FS_TITLE_OFF', fillStart);

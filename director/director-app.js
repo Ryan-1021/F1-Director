@@ -3350,8 +3350,8 @@
     var changed = !!(panel && panel.classList.contains('live-toolbar-hidden') !== hidden);
     if (panel) panel.classList.toggle('live-toolbar-hidden', hidden);
     if (btn) {
-      btn.classList.toggle('on', hidden);
-      btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+      btn.classList.toggle('on', !hidden);
+      btn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
       btn.title = hidden ? '显示地址与延迟栏' : '隐藏地址与延迟栏';
     }
     if (hidden) {
