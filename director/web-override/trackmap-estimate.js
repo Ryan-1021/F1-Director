@@ -1042,6 +1042,38 @@
     return 1;
   }
 
+  /** F1 SessionStatus：Started 起含暖胎 / 编队圈；Inactive 为未发车。 */
+  function sessionLifecyclePhase(text) {
+    var s = String(text || '').toLowerCase();
+    if (/\bstarted\b/.test(s)) return 'started';
+    if (/\binactive\b/.test(s)) return 'inactive';
+    if (/\baborted\b/.test(s)) return 'aborted';
+    if (/\bfinished\b/.test(s)) return 'finished';
+    if (/\bfinalised\b/.test(s)) return 'finalised';
+    if (/\bends\b/.test(s)) return 'ends';
+    return '';
+  }
+
+  function fieldHasLiveTiming(cars, sectorEnds) {
+    var list = cars || [];
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (!c || c.retired || c.knockedOut) continue;
+      var prog = progressFromTiming(c, sectorEnds);
+      if (prog.confident || prog.exact) return true;
+    }
+    return false;
+  }
+
+  function sessionAwaitingStart(sessionName, statusText, hasLiveTiming) {
+    if (!sessionUsesTimeGaps(sessionName)) return false;
+    if (hasLiveTiming) return false;
+    var phase = sessionLifecyclePhase(statusText);
+    if (phase === 'started' || phase === 'aborted') return false;
+    if (phase === 'finished' || phase === 'finalised' || phase === 'ends') return false;
+    return phase === 'inactive';
+  }
+
   function refLapSeconds(cars) {
     var best = Infinity;
     var list = cars || [];
@@ -1094,6 +1126,8 @@
     var raceGaps = sessionUsesTimeGaps(sessionName);
     var lapSeconds = refLapSeconds(list);
     var pace = paceScale(statusText);
+    var liveTiming = fieldHasLiveTiming(list, sectorEnds);
+    var standby = sessionAwaitingStart(sessionName, statusText, liveTiming);
     var leader = findLeader(list);
     var prevByNum = {};
     if (prevPlan && prevPlan.cars) {
@@ -1134,6 +1168,13 @@
       } else if (hold) {
         mode = 'hold';
         exact = true;
+      } else if (standby) {
+        var gridPos = parseInt(c.position, 10);
+        if (isNaN(gridPos) || gridPos < 1) gridPos = i + 1;
+        frac = wrap01((gridPos - 1) * 0.007);
+        cap = wrap01(frac + 0.015);
+        exact = false;
+        mode = 'grid';
       } else if (raceGaps && !isLeader && gap.kind === 'time' && leaderProg) {
         var base = leaderProg.confident || leaderProg.exact ? leaderProg.frac : 0.5;
         var leadCap = (leaderProg.confident || leaderProg.exact) ? leaderProg.cap : null;
@@ -1190,6 +1231,7 @@
     return {
       lapSeconds: lapSeconds,
       pace: pace,
+      standby: standby,
       raceGaps: raceGaps,
       leader: leaderNum,
       cars: planned
@@ -2196,14 +2238,6 @@
     PACE_K_HI: PACE_K_HI,
     CHASE_VMAX_LIFT: CHASE_VMAX_LIFT,
     CHASE_VMAX_NOARC_X: CHASE_VMAX_NOARC_X,
-    chaseVmaxAt: function (fullSpeed, paceFactor, hasArc) {
-      if (!hasArc) return fullSpeed * CHASE_VMAX_NOARC_X;
-      var f = paceFactor;
-      if (!(f > 0) || !isFinite(f)) f = 1;
-      if (f < PACE_CORNER) f = PACE_CORNER;
-      if (f > PACE_STRAIGHT) f = PACE_STRAIGHT;
-      return fullSpeed * f * CHASE_VMAX_LIFT;
-    },
     paceFactorAt: paceFactorAt,
     ratchetCap: ratchetCap,
     ratchetLapProgress: ratchetLapProgress,

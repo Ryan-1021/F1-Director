@@ -3138,7 +3138,7 @@
     var phase = circuitPhase(TRACKMAP.svgRel);
     var plan = E.planField(cars, race.session, statusText, phase && phase.sectors, TRACKMAP.planMeta);
     TRACKMAP.planMeta = plan;
-    var frozen = plan.pace === 0;
+    var frozen = plan.pace === 0 || !!plan.standby;
     var lapMs = plan.pace > 0 ? (plan.lapSeconds / plan.pace) * 1000 : (TRACKMAP.estLapMs || 90000);
     var now = Date.now();
     var prevMs = TRACKMAP.estLapMs || lapMs;
