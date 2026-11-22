@@ -2378,6 +2378,7 @@
     flagPaintKey: '',
     screenOutline: null,
     trackStrokeW: 8,
+    carDotR: 3.2,
     sfScreen: null
   };
 
@@ -2517,6 +2518,30 @@
   }
   var TM_ZOOM_MIN = 0.5;
   var TM_ZOOM_MAX = 4;
+  var TM_DOT_STROKE = 1.5;
+
+  function trackmapDotRadius(lw) {
+    var w = Number(lw);
+    if (!(w > 0)) w = TRACKMAP.trackStrokeW || 8;
+    var r = w * 0.38;
+    if (r < 3.2) r = 3.2;
+    if (r > 4.2) r = 4.2;
+    return r;
+  }
+
+  function syncMarkerDotRadii() {
+    var r = TRACKMAP.carDotR;
+    if (!(r > 0)) return;
+    var s = r.toFixed(2);
+    Object.keys(TRACKMAP.nodes).forEach(function (num) {
+      var g = TRACKMAP.nodes[num];
+      if (!g || !g.__dot) return;
+      if (g.__dotR !== s) {
+        g.__dot.setAttribute('r', s);
+        g.__dotR = s;
+      }
+    });
+  }
 
   function clampTrackmapZoom(z) {
     z = Number(z) || 1;
@@ -3345,8 +3370,10 @@
     if (fg) fg.setAttribute('d', d);
     var lw = Math.max(4, Math.min(12, 5 + Math.sqrt(zoom) * 3));
     TRACKMAP.trackStrokeW = lw;
+    TRACKMAP.carDotR = trackmapDotRadius(lw);
     if (bg) bg.setAttribute('stroke-width', lw.toFixed(1));
     if (fg) fg.setAttribute('stroke-width', Math.max(1.4, lw * 0.28).toFixed(1));
+    syncMarkerDotRadii();
     var E = window.TrackmapEstimate;
     if (E && E.pointOnArc && TRACKMAP.arc && TRACKMAP.arc.total > 0) {
       var sf = E.pointOnArc(TRACKMAP.arc, 0);
@@ -3709,7 +3736,9 @@
     g = svgEl('g', 'tm-car');
     g.setAttribute('data-num', num);
     var dot = svgEl('circle', 'tm-dot');
-    dot.setAttribute('r', '6.5');
+    var dotR = TRACKMAP.carDotR > 0 ? TRACKMAP.carDotR : trackmapDotRadius(TRACKMAP.trackStrokeW);
+    var dotRs = dotR.toFixed(2);
+    dot.setAttribute('r', dotRs);
     dot.setAttribute('cx', '0');
     dot.setAttribute('cy', '0');
     var label = svgEl('text', 'tm-tla');
@@ -3718,6 +3747,7 @@
     g.appendChild(dot);
     g.appendChild(label);
     g.__dot = dot;
+    g.__dotR = dotRs;
     g.__label = label;
     if (TRACKMAP.carsG) TRACKMAP.carsG.appendChild(g);
     TRACKMAP.nodes[num] = g;

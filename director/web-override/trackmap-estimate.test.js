@@ -988,6 +988,9 @@ assert(appSrc.indexOf('directionOutset') >= 0 && appSrc.indexOf('screenCentroid'
   'app offsets the cue along the outward normal');
 assert(appSrc.indexOf('applyTrackmapAutoOrient') >= 0, 'app applies per-circuit auto-orient');
 assert(appSrc.indexOf('computeFitBounds') >= 0, 'app rotate-then-fits before scale');
+assert(appSrc.indexOf('trackmapDotRadius') >= 0, 'app scales car dot radius with outline stroke');
+assert(appSrc.indexOf('syncMarkerDotRadii') >= 0, 'app refreshes dot radii on view rebuild');
+assert(appSrc.indexOf("r', '6.5'") < 0, 'app no longer hardcodes 6.5px car dots');
 assert(appSrc.indexOf('viewRotDeg = wrapTrackmapRot(TRACKMAP.baseRotDeg)') >= 0,
   'reset restores the auto default, not hard 0');
 assert(appSrc.indexOf('TRACKMAP.viewRotDeg = 0') < 0, 'reset does not force 0°');
@@ -1478,6 +1481,23 @@ function trackStrokeW(zoom) {
   if (!(z > 0)) z = 1.05;
   return Math.max(4, Math.min(12, 5 + Math.sqrt(z) * 3));
 }
+
+function trackmapDotRadius(lw) {
+  var w = Number(lw);
+  if (!(w > 0)) w = 8;
+  var r = w * 0.38;
+  if (r < 3.2) r = 3.2;
+  if (r > 4.2) r = 4.2;
+  return r;
+}
+
+var lwDefault = trackStrokeW(1.05);
+var rDefault = trackmapDotRadius(lwDefault);
+near(lwDefault, 8.074, 0.02, 'default zoom outline stroke width');
+near(rDefault, 3.2, 0.01, 'default zoom car dot radius (lw×0.38 clamped)');
+assert(rDefault + 1.5 / 2 <= lwDefault / 2 + 1e-6,
+  'slot-0 dot fits inside half the track stroke at default zoom (1.5px dot stroke)');
+assert(rDefault < 6.5, 'preview dot radius is smaller than legacy 6.5');
 
 function mapOutlineToView(pts, w, h, zoom, rotDeg) {
   if (rotDeg == null) rotDeg = E.autoOrientDeg(pts);
