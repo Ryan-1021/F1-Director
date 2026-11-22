@@ -173,7 +173,7 @@ function Set-ZipUtf8LanguageFlags {
     $eocd = -1
     $scanStart = [Math]::Max(0, $len - 65557)
     for ($i = $len - 22; $i -ge $scanStart; $i--) {
-        if ($bytes[$i] -eq 0x50 -and $bytes[$i + 1] -eq 0x05 -and $bytes[$i + 2] -eq 0x06) {
+        if ($bytes[$i] -eq 0x50 -and $bytes[$i + 1] -eq 0x4B -and $bytes[$i + 2] -eq 0x05 -and $bytes[$i + 3] -eq 0x06) {
             $eocd = $i
             break
         }
@@ -187,7 +187,7 @@ function Set-ZipUtf8LanguageFlags {
 
     $pos = 0
     while ($pos -lt $cdOffset) {
-        if ($bytes[$pos] -ne 0x50 -or $bytes[$pos + 1] -ne 0x03 -or $bytes[$pos + 2] -ne 0x04) {
+        if ($bytes[$pos] -ne 0x50 -or $bytes[$pos + 1] -ne 0x4B -or $bytes[$pos + 2] -ne 0x03 -or $bytes[$pos + 3] -ne 0x04) {
             throw "bad local file header at offset $pos in $ZipPath"
         }
         $flags = [BitConverter]::ToUInt16($bytes, $pos + 6)
@@ -201,7 +201,7 @@ function Set-ZipUtf8LanguageFlags {
 
     $pos = $cdOffset
     while ($pos -lt $cdEnd) {
-        if ($bytes[$pos] -ne 0x50 -or $bytes[$pos + 1] -ne 0x01 -or $bytes[$pos + 2] -ne 0x02) {
+        if ($bytes[$pos] -ne 0x50 -or $bytes[$pos + 1] -ne 0x4B -or $bytes[$pos + 2] -ne 0x01 -or $bytes[$pos + 3] -ne 0x02) {
             throw "bad central directory header at offset $pos in $ZipPath"
         }
         $flags = [BitConverter]::ToUInt16($bytes, $pos + 8)
