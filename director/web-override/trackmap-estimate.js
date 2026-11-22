@@ -1108,6 +1108,20 @@
     return phase === 'inactive';
   }
 
+  /**
+   * 正赛 / 冲刺结束后（或方格旗后 FIELD 计时不再前进）冻结估计时钟，
+   * 画面停在当时的车位；轮廓保留，不把完赛车当成 inPit。
+   */
+  function sessionHoldField(sessionName, statusText, fieldRacing) {
+    if (!sessionUsesTimeGaps(sessionName)) return false;
+    var phase = sessionLifecyclePhase(statusText);
+    if (phase === 'finished' || phase === 'finalised' || phase === 'ends') return true;
+    if (phase !== 'started') return false;
+    var s = String(statusText || '').toLowerCase();
+    if (!/chequered|checkered|方格/.test(s)) return false;
+    return !fieldRacing;
+  }
+
   function refLapSeconds(cars) {
     var best = Infinity;
     var list = cars || [];
@@ -1369,10 +1383,12 @@
         timing: cloneTiming(prog)
       });
     }
+    var holdField = sessionHoldField(sessionName, statusText, fieldRacing);
     return {
       lapSeconds: lapSeconds,
       pace: pace,
       standby: standby,
+      holdField: holdField,
       raceGaps: raceGaps,
       leader: leaderNum,
       cars: planned
@@ -2384,6 +2400,8 @@
     parseGap: parseGap,
     sessionUsesTimeGaps: sessionUsesTimeGaps,
     paceScale: paceScale,
+    sessionLifecyclePhase: sessionLifecyclePhase,
+    sessionHoldField: sessionHoldField,
     planField: planField,
     packOffset: packOffset,
     inwardNormal: inwardNormal,

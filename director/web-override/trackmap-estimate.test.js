@@ -359,6 +359,51 @@ assert(E.sampleMotion(formSt, 4000, 90000, false) > formation.cars[0].frac + 0.0
 assert(E.planField([formationCar], 'Race', 'Inactive Race').standby === false, 'inactive with mini-sectors still live');
 assert(E.planField(preGridCars, 'Race', 'Red Flag Inactive Race').pace === 0, 'red flag plan pace');
 
+// 场次结束：冻结估计时钟，完赛车不冒充 inPit；轮廓上的点仍按完赛瞬间位置。
+var postRaceCar = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 58, bestLap: '1:30.000',
+  inPit: false,
+  sectors: [
+    { value: '28.1', segments: [2048, 2048, 2048] },
+    { value: '30.2', segments: [2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048] },
+    { value: '29.4', segments: [2048, 2048, 2048, 2048] }
+  ]
+};
+assert(E.sessionLifecyclePhase('Finalised Race') === 'finalised', 'finalised phase');
+assert(E.sessionLifecyclePhase('Finished Race') === 'finished', 'finished phase');
+assert(E.sessionLifecyclePhase('Ends Sprint') === 'ends', 'ends phase');
+var finalisedPlan = E.planField([postRaceCar], 'Race', 'Finalised Race');
+assert(finalisedPlan.holdField === true, 'finalised race holds field');
+assert(finalisedPlan.cars[0].pit === false, 'finished leader not forced into pit');
+var finishedPlan = E.planField([postRaceCar], 'Race', 'Finished Race');
+assert(finishedPlan.holdField === true, 'finished race holds field');
+var endsPlan = E.planField([postRaceCar], 'Sprint', 'Ends Sprint');
+assert(endsPlan.holdField === true, 'ends sprint holds field');
+assert(E.planField([postRaceCar], 'Qualifying', 'Finalised Qualifying').holdField === false,
+  'quali finalised does not hold field');
+var endSt = E.stepMotion(null, finalisedPlan.cars[0].frac, finalisedPlan.cars[0].cap, 0, 90000, true,
+  { exact: finalisedPlan.cars[0].exact });
+endSt = E.stepMotion(endSt, finalisedPlan.cars[0].frac, finalisedPlan.cars[0].cap, 2000, 90000, true,
+  { exact: finalisedPlan.cars[0].exact });
+var endLater = E.sampleMotion(endSt, 15000, 90000, true);
+near(endLater, endSt.anchor, 1e-9, 'session-end frozen motion');
+
+// 方格旗 in-lap：计时仍在走时别冻；停住后才冻。
+var cheqLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 57, bestLap: '1:30.000',
+  sectors: crashS2Segs(3)
+};
+var cheqP2 = {
+  number: 16, tla: 'LEC', position: 2, gap: '+1.200', numberOfLaps: 57, bestLap: '1:31.000',
+  sectors: crashS2Segs(2)
+};
+var cheqPlan0 = E.planField([cheqLeader0, cheqP2], 'Race', 'Started Race CHEQUERED');
+var cheqLeader1 = Object.assign({}, cheqLeader0, { sectors: crashS2Segs(5) });
+var cheqPlan1 = E.planField([cheqLeader1, cheqP2], 'Race', 'Started Race CHEQUERED', null, cheqPlan0);
+assert(cheqPlan1.holdField === false, 'chequered in-lap still advancing does not hold');
+var cheqPlanStall = E.planField([cheqLeader1, cheqP2], 'Race', 'Started Race CHEQUERED', null, cheqPlan1);
+assert(cheqPlanStall.holdField === true, 'chequered with stalled timing holds field');
+
 // 运动：目标不变时继续往前走，不要被每秒的重复测量拉回。
 var st = E.stepMotion(null, 0.2, 0.33, 0, 90000, false, { exact: true });
 st = E.stepMotion(st, 0.2, 0.33, 1000, 90000, false, { exact: true });
@@ -871,6 +916,7 @@ var holdSnapped = E.sampleMotion(holdSnap, 16, 90000, false, paceSq);
 near(holdSnapped, 0.30, 0.002, 'HOLD_BACK still snaps shown = belief with arc');
 
 var appChaseSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+assert(appChaseSrc.indexOf('plan.holdField') >= 0, 'app freezes when session holdField');
 assert(appChaseSrc.indexOf('arc: TRACKMAP.arc') >= 0, 'app passes the outline arc into stepMotion');
 assert(appChaseSrc.indexOf('sampleMotion(st, now, lapMs, frozen, TRACKMAP.arc)') >= 0,
   'app samples chase with the outline arc');
