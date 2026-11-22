@@ -2376,6 +2376,8 @@
     planMeta: null,
     flagGeomKey: '',
     flagPaintKey: '',
+    pitBayLayoutKey: '',
+    pitBayLayout: null,
     screenOutline: null,
     trackStrokeW: 8,
     carDotR: 6.5,
@@ -2512,6 +2514,8 @@
       applyTrackmapAutoOrient(c.outline, true);
       TRACKMAP.viewDirty = true;
       TRACKMAP.viewKey = '';
+      TRACKMAP.pitBayLayoutKey = '';
+      TRACKMAP.pitBayLayout = null;
       if (c.status && String(c.status).indexOf('估计') === 0) TRACKMAP.status = c.status;
       return true;
     } catch (e) { return false; }
@@ -3005,6 +3009,8 @@
     applyTrackmapAutoOrient(pts, false);
     TRACKMAP.viewDirty = true;
     TRACKMAP.viewKey = '';
+    TRACKMAP.pitBayLayoutKey = '';
+    TRACKMAP.pitBayLayout = null;
     saveTrackmapCache();
     var box = document.querySelector('.b-trackmap');
     if (box) {
@@ -3293,6 +3299,8 @@
     }
     TRACKMAP.viewKey = key;
     TRACKMAP.viewDirty = false;
+    TRACKMAP.pitBayLayoutKey = '';
+    TRACKMAP.pitBayLayout = null;
     var empty = svg.querySelector('.tm-empty');
     var bg = svg.querySelector('.tm-line-bg');
     var fg = svg.querySelector('.tm-line-fg');
@@ -3691,6 +3699,32 @@
     return g;
   }
 
+  function resolvePitBayLayout(pitCount) {
+    var E = window.TrackmapEstimate;
+    if (!E || !E.placePitBay || !E.pitBayLayoutCacheKey) return null;
+    var key = E.pitBayLayoutCacheKey({
+      viewKey: TRACKMAP.viewKey || '',
+      viewW: TRACKMAP.viewW,
+      viewH: TRACKMAP.viewH,
+      strokeW: TRACKMAP.trackStrokeW || 8,
+      zoom: TRACKMAP.viewZoom || 1.05,
+      outline: TRACKMAP.screenOutline || [],
+      carCount: pitCount
+    });
+    if (key === TRACKMAP.pitBayLayoutKey && TRACKMAP.pitBayLayout) return TRACKMAP.pitBayLayout;
+    var bay = E.placePitBay({
+      outline: TRACKMAP.screenOutline || [],
+      strokeW: TRACKMAP.trackStrokeW || 8,
+      viewW: TRACKMAP.viewW,
+      viewH: TRACKMAP.viewH,
+      zoom: TRACKMAP.viewZoom || 1.05,
+      carCount: pitCount
+    });
+    TRACKMAP.pitBayLayoutKey = key;
+    TRACKMAP.pitBayLayout = bay;
+    return bay;
+  }
+
   function paintPitBay(wrap, layout, visible) {
     var g = ensurePitBayLayer(wrap);
     if (!g) return;
@@ -3836,16 +3870,7 @@
     }
 
     var bay = null;
-    if (lane.showBay && E.placePitBay) {
-      bay = E.placePitBay({
-        outline: TRACKMAP.screenOutline || [],
-        strokeW: TRACKMAP.trackStrokeW || 8,
-        viewW: TRACKMAP.viewW,
-        viewH: TRACKMAP.viewH,
-        zoom: TRACKMAP.viewZoom || 1.05,
-        carCount: pitCount
-      });
-    }
+    if (lane.showBay) bay = resolvePitBayLayout(pitCount);
     var wrap = (svg && svg.parentNode && svg.parentNode.classList &&
       svg.parentNode.classList.contains('tm-wrap')) ? svg.parentNode : null;
     paintPitBay(wrap || svg, bay, !!(bay && lane.showBay));
@@ -3859,6 +3884,8 @@
     ensureTrackmapSvg(box);
     TRACKMAP.viewDirty = true;
     TRACKMAP.viewKey = '';
+    TRACKMAP.pitBayLayoutKey = '';
+    TRACKMAP.pitBayLayout = null;
     rebuildTrackmapView(box);
     updateMarkerTransforms(Date.now());
     syncTrackmapRotUi(box);
@@ -3913,6 +3940,8 @@
       TRACKMAP.viewKey = '';
       TRACKMAP.flagGeomKey = '';
       TRACKMAP.flagPaintKey = '';
+      TRACKMAP.pitBayLayoutKey = '';
+      TRACKMAP.pitBayLayout = null;
       TRACKMAP.baseRotDeg = 0;
       resetTrackmapView();
       stopTrackmapPoll();
