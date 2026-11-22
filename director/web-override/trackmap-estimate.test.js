@@ -296,6 +296,18 @@ var outPlan1 = E.planField([outLeader1, outLin1], 'Race', greenRun, null, outPla
 assert(outPlan1.cars[1].hide === true && !outPlan1.cars[1].hold, 'green stopped empty gap hides marker');
 assert(!outPlan1.cars[0].hide, 'leader still visible');
 
+// 领先进度本帧未变时仍保持 hide（修复 PER/LIN 闪一下又回来的 flicker）。
+var outLeader2 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 30, bestLap: '1:30.000',
+  sectors: crashS2Segs(6)
+};
+var outLin2 = {
+  number: 11, tla: 'PER', position: 8, gap: '—', numberOfLaps: 29, stopped: true,
+  bestLap: '1:31.000', sectors: crashS2Segs(2)
+};
+var outPlan2 = E.planField([outLeader2, outLin2], 'Race', greenRun, null, outPlan1);
+assert(outPlan2.cars[1].hide === true && !outPlan2.cars[1].hold, 'sticky hide when leader timing unchanged');
+
 var racing = E.planField([normLeader1, normLec1], 'Race', greenRun, null, normPlan0);
 assert(!racing.cars[0].hide && !racing.cars[1].hide, 'circulating cars stay visible');
 

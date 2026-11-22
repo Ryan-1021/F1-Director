@@ -1149,6 +1149,12 @@
     if (!raceGaps || !c.stopped) return false;
     if (gap.kind !== 'none') return false;
     if (!isGreenFlagRacing(pace, statusText)) return false;
+    // 已由绿旗停车规则隐藏：FIELD 本帧未前进也保持 hide，直到本车再次有计时进展。
+    if (prevPlanCar && prevPlanCar.hide) {
+      var stickyPrevT = prevPlanCar.timing;
+      if (stickyPrevT && timingAdvanced(stickyPrevT, prog)) return false;
+      return true;
+    }
     if (!fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace)) return false;
     if (!prevPlanCar) return false;
     var leaderPrevCar = prevByNum[leaderNum];
