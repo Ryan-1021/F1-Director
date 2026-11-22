@@ -177,6 +177,101 @@ near(race.cars[1].frac, E.wrap01(leaderFrac - 1.5 / 90), 0.0001, 'lec behind');
 assert(race.cars[2].mode !== 'gap', 'lapped car not gap ' + race.cars[2].mode);
 assert(race.cars[2].sector === undefined || race.cars[2].mode === 'sector' || race.cars[2].mode === 'floor', 'sai own sectors');
 
+function crashS2Segs(done) {
+  var segs = [];
+  var i;
+  for (i = 0; i < 8; i++) segs.push(i < done ? 2048 : 0);
+  return [
+    { value: '30.000', segments: [2048, 2048, 2048] },
+    { value: '32.000', segments: segs },
+    { value: '', segments: [0, 0, 0, 0] }
+  ];
+}
+
+// 撞车：差距还挂着旧时间差，赛段不更新 → 冻在事故点，不跟领跑差距走。
+var crashLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 12, bestLap: '1:30.000',
+  sectors: crashS2Segs(4)
+};
+var crashPer0 = {
+  number: 11, tla: 'PER', position: 4, gap: '+8.500', numberOfLaps: 12, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var crashPlan0 = E.planField([crashLeader0, crashPer0], 'Race', 'Green');
+assert(crashPlan0.cars[1].mode === 'gap', 'pre-crash PER uses gap');
+var crashGapFrac = E.wrap01(crashPlan0.cars[0].frac - 8.5 / 90);
+near(crashPlan0.cars[1].frac, crashGapFrac, 0.0001, 'pre-crash gap frac');
+
+var crashLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 12, bestLap: '1:30.000',
+  sectors: crashS2Segs(6)
+};
+var crashPer1 = {
+  number: 11, tla: 'PER', position: 4, gap: '+8.500', numberOfLaps: 12, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var crashPlan1 = E.planField([crashLeader1, crashPer1], 'Race', 'Green', null, crashPlan0);
+assert(crashPlan1.cars[1].hold === true && crashPlan1.cars[1].mode === 'hold', 'crashed PER frozen');
+near(crashPlan1.cars[1].frac, (1 + 2 / 8) / 3, 0.02, 'PER stays at S2 mini-sector edge');
+var crashFollowGap = E.wrap01(crashPlan1.cars[0].frac - 8.5 / 90);
+assert(Math.abs(crashPlan1.cars[1].frac - crashFollowGap) > 0.02, 'PER does not trail leader gap');
+
+var crashSt = E.stepMotion(null, crashPlan1.cars[1].frac, crashPlan1.cars[1].cap, 0, 90000, false, {
+  exact: true, hold: true
+});
+var crashPos = E.sampleMotion(crashSt, 2000, 90000, false);
+var crashLater = E.sampleMotion(crashSt, 12000, 90000, false);
+near(crashLater, crashPos, 0.0005, 'stale-gap hold does not coast');
+
+// 领跑多一圈、事故车圈数不变 → 同样冻住。
+var lapLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 20, bestLap: '1:30.000',
+  sectors: crashS2Segs(8)
+};
+var lapPer0 = {
+  number: 11, tla: 'PER', position: 4, gap: '+25.000', numberOfLaps: 19, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var lapPlan0 = E.planField([lapLeader0, lapPer0], 'Race', 'Green');
+var lapLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 21, bestLap: '1:30.000',
+  sectors: crashS2Segs(2)
+};
+var lapPer1 = {
+  number: 11, tla: 'PER', position: 4, gap: '+25.000', numberOfLaps: 19, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var lapPlan1 = E.planField([lapLeader1, lapPer1], 'Race', 'Green', null, lapPlan0);
+assert(lapPlan1.cars[1].hold === true, 'lap stall holds PER');
+
+// 正常跟差距的车：赛段还在走，仍用 gap。
+var normLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 5, bestLap: '1:30.000',
+  sectors: crashS2Segs(3)
+};
+var normLec0 = {
+  number: 16, tla: 'LEC', position: 2, gap: '+1.200', numberOfLaps: 5, bestLap: '1:30.200',
+  sectors: crashS2Segs(2)
+};
+var normPlan0 = E.planField([normLeader0, normLec0], 'Race', 'Green');
+var normLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 5, bestLap: '1:30.000',
+  sectors: crashS2Segs(5)
+};
+var normLec1 = {
+  number: 16, tla: 'LEC', position: 2, gap: '+1.400', numberOfLaps: 5, bestLap: '1:30.200',
+  sectors: crashS2Segs(3)
+};
+var normPlan1 = E.planField([normLeader1, normLec1], 'Race', 'Green', null, normPlan0);
+assert(normPlan1.cars[1].mode === 'gap' && !normPlan1.cars[1].hold, 'LEC still gap-following');
+near(normPlan1.cars[1].frac, E.wrap01(normPlan1.cars[0].frac - 1.4 / 90), 0.0001, 'LEC gap tracks leader');
+
+// 停车 / 红旗：既有 hold 不退化。
+assert(E.planField([
+  { number: 11, tla: 'PER', position: 4, gap: '+12.000', stopped: true, bestLap: '1:31.000', sectors: crashS2Segs(3) },
+  { number: 1, tla: 'VER', position: 1, gap: 'LEADER', bestLap: '1:30.000', sectors: crashS2Segs(4) }
+], 'Race', 'Green').cars[0].hold === true, 'explicit stopped still hold');
+
 // 正赛 / 冲刺 Inactive 无计时时 standby；Started 或迷你赛段更新时仍跟计时。
 var preGridCars = [
   { number: 1, tla: 'VER', position: 1, gap: 'LEADER', sectors: [{ value: '', segments: [] }, {}, {}] },
