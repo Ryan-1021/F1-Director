@@ -874,6 +874,18 @@
     syncSectorsHeadTip(el, boardId);
   }
 
+  /** Tear down an iframe document before replace/remove so timers / rAF /
+   *  observers in the old board page can release (刷新看板 force path). */
+  function disposeBoardFrame(frame) {
+    if (!frame) return;
+    try { frame.onload = null; } catch (e0) { /* ignore */ }
+    try {
+      var w = frame.contentWindow;
+      if (w && w.F1 && typeof w.F1.dispose === 'function') w.F1.dispose();
+    } catch (e1) { /* cross-origin or detached */ }
+    try { frame.src = 'about:blank'; } catch (e2) { /* ignore */ }
+  }
+
   /** Prefer in-place board switch (keeps the iframe and its trackmap cache).
    *  Pass force=true to skip that path and recreate the iframe with a
    *  cache-bust — used by 「刷新看板」 so a wedged trackmap recovers. */
@@ -916,6 +928,7 @@
     iframe.onload = function () { finishLive(iframe); };
     iframe.src = boardUrl(boardId, true);
     if (oldFrame) {
+      disposeBoardFrame(oldFrame);
       body.replaceChild(iframe, oldFrame);
     } else {
       body.appendChild(iframe);

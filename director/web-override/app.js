@@ -4511,14 +4511,14 @@
   }
 
   // 每秒刷新"多久以前"（及服务器推来的剩余时间），即使没有 F1Feed 增量
-  setInterval(function () {
+  var tickIv = setInterval(function () {
     if (!connected || ONCE) { return; }
     repaintTickOnly();
   }, 1000);
 
   // 每 3 秒问一次"哪些看板弹出来了"：用户可能直接用窗口的 X 关掉，
   // 那样按钮上的"收回"要能自己变回"弹出"。
-  setInterval(function () {
+  var poppedIv = setInterval(function () {
     if (!ONCE) { refreshPopped(); }
   }, 3000);
 
@@ -4609,16 +4609,18 @@
 
   // Theme toggles from the parent director may only flip data-theme (or arrive
   // via storage); keep canvas boards in sync without requiring a full reload.
+  var themeMo = null;
   try {
     if (typeof MutationObserver !== 'undefined') {
-      new MutationObserver(function (muts) {
+      themeMo = new MutationObserver(function (muts) {
         for (var i = 0; i < muts.length; i++) {
           if (muts[i].attributeName === 'data-theme') {
             scheduleThemeCanvasRedraw();
             break;
           }
         }
-      }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      });
+      themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     }
   } catch (e) { /* ignore */ }
   try {
@@ -4629,16 +4631,60 @@
   } catch (e) { /* ignore */ }
 
   // iframe CSS size changes often skip window.resize — observe the document box.
+  var docRo = null;
   if (typeof ResizeObserver !== 'undefined') {
     try {
-      var __ro = new ResizeObserver(function () {
+      docRo = new ResizeObserver(function () {
         if (resizeTimer) { clearTimeout(resizeTimer); }
         resizeTimer = setTimeout(function () { resizeTimer = null; repaint({ layoutOnly: true }); }, 80);
       });
-      __ro.observe(document.documentElement);
+      docRo.observe(document.documentElement);
     } catch (e) { /* ignore */ }
   }
 
+  var disposed = false;
+
+  function disconnectBoardFitObservers() {
+    try {
+      var boxes = document.querySelectorAll('.b-box');
+      for (var bi = 0; bi < boxes.length; bi++) {
+        var b = boxes[bi];
+        if (b && b.__boardFitRo) {
+          b.__boardFitRo.disconnect();
+          b.__boardFitRo = null;
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    try {
+      if (tickIv != null) { clearInterval(tickIv); tickIv = null; }
+      if (poppedIv != null) { clearInterval(poppedIv); poppedIv = null; }
+    } catch (e0) { /* ignore */ }
+    try {
+      if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = null; }
+      if (themeRedrawTimer) { clearTimeout(themeRedrawTimer); themeRedrawTimer = null; }
+    } catch (e1) { /* ignore */ }
+    try { stopTrackmapPoll(); } catch (e2) { /* ignore */ }
+    try { stopTrackmapMotion(); } catch (e3) { /* ignore */ }
+    try {
+      if (es) { es.close(); es = null; }
+    } catch (e4) { /* ignore */ }
+    try {
+      if (themeMo) { themeMo.disconnect(); themeMo = null; }
+    } catch (e5) { /* ignore */ }
+    try {
+      if (docRo) { docRo.disconnect(); docRo = null; }
+    } catch (e6) { /* ignore */ }
+    disconnectBoardFitObservers();
+  }
+
+  try {
+    window.addEventListener('pagehide', function () { dispose(); });
+  } catch (e) { /* ignore */ }
 
   function setBoard(id) {
     if (!id || !RENDER[id]) return false;
@@ -4674,7 +4720,8 @@
     setTrackmapRot: setTrackmapRotDeg,
     getTrackmapRot: function () { return wrapTrackmapRot(TRACKMAP.viewRotDeg); },
     getTrackmapStatus: trackmapStatusText,
-    getSectorsNoteVisible: function () { return !!lastSectorsNoteShow; }
+    getSectorsNoteVisible: function () { return !!lastSectorsNoteShow; },
+    dispose: dispose
   };
 
   document.addEventListener('DOMContentLoaded', function () {
