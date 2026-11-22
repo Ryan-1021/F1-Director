@@ -177,6 +177,128 @@ near(race.cars[1].frac, E.wrap01(leaderFrac - 1.5 / 90), 0.0001, 'lec behind');
 assert(race.cars[2].mode !== 'gap', 'lapped car not gap ' + race.cars[2].mode);
 assert(race.cars[2].sector === undefined || race.cars[2].mode === 'sector' || race.cars[2].mode === 'floor', 'sai own sectors');
 
+function crashS2Segs(done) {
+  var segs = [];
+  var i;
+  for (i = 0; i < 8; i++) segs.push(i < done ? 2048 : 0);
+  return [
+    { value: '30.000', segments: [2048, 2048, 2048] },
+    { value: '32.000', segments: segs },
+    { value: '', segments: [0, 0, 0, 0] }
+  ];
+}
+
+// 撞车：差距还挂着旧时间差，赛段不更新 → 冻在事故点，不跟领跑差距走。
+var crashLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 12, bestLap: '1:30.000',
+  sectors: crashS2Segs(4)
+};
+var crashPer0 = {
+  number: 11, tla: 'PER', position: 4, gap: '+8.500', numberOfLaps: 12, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var crashPlan0 = E.planField([crashLeader0, crashPer0], 'Race', 'Green');
+assert(crashPlan0.cars[1].mode === 'gap', 'pre-crash PER uses gap');
+var crashGapFrac = E.wrap01(crashPlan0.cars[0].frac - 8.5 / 90);
+near(crashPlan0.cars[1].frac, crashGapFrac, 0.0001, 'pre-crash gap frac');
+
+var crashLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 12, bestLap: '1:30.000',
+  sectors: crashS2Segs(6)
+};
+var crashPer1 = {
+  number: 11, tla: 'PER', position: 4, gap: '+8.500', numberOfLaps: 12, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var crashPlan1 = E.planField([crashLeader1, crashPer1], 'Race', 'Green', null, crashPlan0);
+assert(crashPlan1.cars[1].hold === true && crashPlan1.cars[1].mode === 'hold', 'crashed PER frozen');
+near(crashPlan1.cars[1].frac, (1 + 2 / 8) / 3, 0.02, 'PER stays at S2 mini-sector edge');
+var crashFollowGap = E.wrap01(crashPlan1.cars[0].frac - 8.5 / 90);
+assert(Math.abs(crashPlan1.cars[1].frac - crashFollowGap) > 0.02, 'PER does not trail leader gap');
+
+var crashSt = E.stepMotion(null, crashPlan1.cars[1].frac, crashPlan1.cars[1].cap, 0, 90000, false, {
+  exact: true, hold: true
+});
+var crashPos = E.sampleMotion(crashSt, 2000, 90000, false);
+var crashLater = E.sampleMotion(crashSt, 12000, 90000, false);
+near(crashLater, crashPos, 0.0005, 'stale-gap hold does not coast');
+
+// 领跑多一圈、事故车圈数不变 → 同样冻住。
+var lapLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 20, bestLap: '1:30.000',
+  sectors: crashS2Segs(8)
+};
+var lapPer0 = {
+  number: 11, tla: 'PER', position: 4, gap: '+25.000', numberOfLaps: 19, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var lapPlan0 = E.planField([lapLeader0, lapPer0], 'Race', 'Green');
+var lapLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 21, bestLap: '1:30.000',
+  sectors: crashS2Segs(2)
+};
+var lapPer1 = {
+  number: 11, tla: 'PER', position: 4, gap: '+25.000', numberOfLaps: 19, bestLap: '1:31.000',
+  sectors: crashS2Segs(2), stopped: false
+};
+var lapPlan1 = E.planField([lapLeader1, lapPer1], 'Race', 'Green', null, lapPlan0);
+assert(lapPlan1.cars[1].hold === true, 'lap stall holds PER');
+
+// 正常跟差距的车：赛段还在走，仍用 gap。
+var normLeader0 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 5, bestLap: '1:30.000',
+  sectors: crashS2Segs(3)
+};
+var normLec0 = {
+  number: 16, tla: 'LEC', position: 2, gap: '+1.200', numberOfLaps: 5, bestLap: '1:30.200',
+  sectors: crashS2Segs(2)
+};
+var normPlan0 = E.planField([normLeader0, normLec0], 'Race', 'Green');
+var normLeader1 = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', numberOfLaps: 5, bestLap: '1:30.000',
+  sectors: crashS2Segs(5)
+};
+var normLec1 = {
+  number: 16, tla: 'LEC', position: 2, gap: '+1.400', numberOfLaps: 5, bestLap: '1:30.200',
+  sectors: crashS2Segs(3)
+};
+var normPlan1 = E.planField([normLeader1, normLec1], 'Race', 'Green', null, normPlan0);
+assert(normPlan1.cars[1].mode === 'gap' && !normPlan1.cars[1].hold, 'LEC still gap-following');
+near(normPlan1.cars[1].frac, E.wrap01(normPlan1.cars[0].frac - 1.4 / 90), 0.0001, 'LEC gap tracks leader');
+
+// 停车 / 红旗：既有 hold 不退化。
+assert(E.planField([
+  { number: 11, tla: 'PER', position: 4, gap: '+12.000', stopped: true, bestLap: '1:31.000', sectors: crashS2Segs(3) },
+  { number: 1, tla: 'VER', position: 1, gap: 'LEADER', bestLap: '1:30.000', sectors: crashS2Segs(4) }
+], 'Race', 'Green').cars[0].hold === true, 'explicit stopped still hold');
+
+// 正赛 / 冲刺 Inactive 无计时时 standby；Started 或迷你赛段更新时仍跟计时。
+var preGridCars = [
+  { number: 1, tla: 'VER', position: 1, gap: 'LEADER', sectors: [{ value: '', segments: [] }, {}, {}] },
+  { number: 16, tla: 'LEC', position: 2, gap: '+0.000', sectors: [{}, {}, {}] }
+];
+var preInactive = E.planField(preGridCars, 'Race', 'Inactive Race');
+assert(preInactive.standby === true && preInactive.cars[0].mode === 'grid', 'inactive empty timing is standby grid');
+var preSt = E.stepMotion(null, preInactive.cars[0].frac, preInactive.cars[0].cap, 0, 90000, true, { exact: false });
+preSt = E.stepMotion(preSt, preInactive.cars[0].frac, preInactive.cars[0].cap, 5000, 90000, true, { exact: false });
+near(E.sampleMotion(preSt, 15000, 90000, true), preInactive.cars[0].frac, 1e-9, 'standby frozen motion');
+
+var formationCar = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER',
+  sectors: [
+    { value: '', segments: [2048, 2048, 0, 0, 0, 0, 0, 0] },
+    { value: '', segments: [] },
+    { value: '', segments: [] }
+  ]
+};
+var formation = E.planField([formationCar], 'Race', 'Started Race');
+assert(formation.standby === false, 'started formation not standby');
+var formSt = E.stepMotion(null, formation.cars[0].frac, formation.cars[0].cap, 0, 90000, false, { exact: formation.cars[0].exact });
+formSt = E.stepMotion(formSt, formation.cars[0].frac, formation.cars[0].cap, 1000, 90000, false, { exact: formation.cars[0].exact });
+assert(E.sampleMotion(formSt, 4000, 90000, false) > formation.cars[0].frac + 0.001, 'formation lap still integrates');
+assert(E.planField([formationCar], 'Race', 'Inactive Race').standby === false, 'inactive with mini-sectors still live');
+assert(E.planField(preGridCars, 'Race', 'Red Flag Inactive Race').pace === 0, 'red flag plan pace');
+
 // 运动：目标不变时继续往前走，不要被每秒的重复测量拉回。
 var st = E.stepMotion(null, 0.2, 0.33, 0, 90000, false, { exact: true });
 st = E.stepMotion(st, 0.2, 0.33, 1000, 90000, false, { exact: true });
@@ -651,12 +773,26 @@ assert(sqPinC.visX < sqPinS.visX * 0.7,
 assert(sqPinC.visX > 0.30 && sqPinC.visX < 0.70, 'pinned corner visX=' + sqPinC.visX);
 assert(sqPinS.visX > 0.90 && sqPinS.visX < 1.40, 'pinned straight visX=' + sqPinS.visX);
 
+assert(E.CHASE_VMAX_LIFT === 2.4, 'CHASE_VMAX_LIFT locked at 2.4');
+assert(E.CHASE_VMAX_NOARC_X === 8, 'no-outline chase still 8× ref');
+
 var leapC = E.stepMotion(null, 0.0, 0.02, 0, 90000, false, { exact: true, arc: paceSq });
 leapC = E.stepMotion(leapC, 0.16, 0.22, 300, 90000, false, { exact: true, arc: paceSq });
 var leapC0 = E.sampleMotion(leapC, 300, 90000, false, paceSq);
+assert(Math.abs(leapC0 - 0) < 0.006, 'corner sector jump does not teleport on tick');
 var leapC1 = E.sampleMotion(leapC, 1300, 90000, false, paceSq);
-assert(E.wrapDelta(leapC1 - leapC0) > 0.05,
-  'corner catch-up still uses unscaled vmax ' + E.wrapDelta(leapC1 - leapC0));
+var leapCD = E.wrapDelta(leapC1 - leapC0);
+assert(leapCD > 0.008 && leapCD < 0.045,
+  'corner catch-up is accel-limited and gentler than 8× ' + leapCD);
+
+var leapS = E.stepMotion(null, 0.125, 0.13, 0, 90000, false, { exact: true, arc: paceSq });
+leapS = E.stepMotion(leapS, 0.28, 0.34, 300, 90000, false, { exact: true, arc: paceSq });
+var leapS0 = E.sampleMotion(leapS, 300, 90000, false, paceSq);
+var leapS1 = E.sampleMotion(leapS, 1300, 90000, false, paceSq);
+var leapSD = E.wrapDelta(leapS1 - leapS0);
+assert(leapSD > leapCD + 0.01,
+  'straight catch-up lifts above corner for the same 1s window ' + leapSD + ' vs ' + leapCD);
+assert(leapSD < 0.14, 'straight catch-up is still a modest lift, not 8× ref sprint ' + leapSD);
 
 // 回贴 / 大后撤 / HOLD_BACK：有轮廓时行为与 #34 相同，不走曲率物理。
 var rewindArc = E.stepMotion(null, 0.55, 0.62, 0, 90000, false, { exact: true, arc: paceSq });
@@ -949,6 +1085,9 @@ assert(appSrc.indexOf('directionOutset') >= 0 && appSrc.indexOf('screenCentroid'
   'app offsets the cue along the outward normal');
 assert(appSrc.indexOf('applyTrackmapAutoOrient') >= 0, 'app applies per-circuit auto-orient');
 assert(appSrc.indexOf('computeFitBounds') >= 0, 'app rotate-then-fits before scale');
+assert(appSrc.indexOf('trackmapDotRadius') >= 0, 'app scales car dot radius with outline stroke');
+assert(appSrc.indexOf('syncMarkerDotRadii') >= 0, 'app refreshes dot radii on view rebuild');
+assert(appSrc.indexOf("r', '6.5'") < 0, 'app no longer hardcodes 6.5px car dots');
 assert(appSrc.indexOf('viewRotDeg = wrapTrackmapRot(TRACKMAP.baseRotDeg)') >= 0,
   'reset restores the auto default, not hard 0');
 assert(appSrc.indexOf('TRACKMAP.viewRotDeg = 0') < 0, 'reset does not force 0°');
@@ -1439,6 +1578,23 @@ function trackStrokeW(zoom) {
   if (!(z > 0)) z = 1.05;
   return Math.max(4, Math.min(12, 5 + Math.sqrt(z) * 3));
 }
+
+function trackmapDotRadius(lw) {
+  var w = Number(lw);
+  if (!(w > 0)) w = 8;
+  var r = w * 0.38;
+  if (r < 3.2) r = 3.2;
+  if (r > 4.2) r = 4.2;
+  return r;
+}
+
+var lwDefault = trackStrokeW(1.05);
+var rDefault = trackmapDotRadius(lwDefault);
+near(lwDefault, 8.074, 0.02, 'default zoom outline stroke width');
+near(rDefault, 3.2, 0.01, 'default zoom car dot radius (lw×0.38 clamped)');
+assert(rDefault + 1.5 / 2 <= lwDefault / 2 + 1e-6,
+  'slot-0 dot fits inside half the track stroke at default zoom (1.5px dot stroke)');
+assert(rDefault < 6.5, 'preview dot radius is smaller than legacy 6.5');
 
 function mapOutlineToView(pts, w, h, zoom, rotDeg) {
   if (rotDeg == null) rotDeg = E.autoOrientDeg(pts);
