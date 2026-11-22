@@ -1135,6 +1135,34 @@
     return false;
   }
 
+  /** 全速绿旗：非 SC/VSC/红旗（pace 仍 > 0，但不是慢节奏跟车）。 */
+  function isGreenFlagRacing(pace, statusText) {
+    if (!(pace >= 0.95)) return false;
+    return sessionLifecyclePhase(statusText) === 'started';
+  }
+
+  /**
+   * 绿旗下停车、差距已清空、圈数/赛段不再跟 FIELD：从赛道图去掉点（同退赛隐藏路径）。
+   */
+  function shouldHideStoppedOnGreen(c, prog, prevPlanCar, leader, leaderProg, prevByNum, leaderNum, raceGaps, pace, pit, hide, gap, statusText) {
+    if (hide || pit) return false;
+    if (!raceGaps || !c.stopped) return false;
+    if (gap.kind !== 'none') return false;
+    if (!isGreenFlagRacing(pace, statusText)) return false;
+    if (!fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace)) return false;
+    if (!prevPlanCar) return false;
+    var leaderPrevCar = prevByNum[leaderNum];
+    var leaderLaps = carLapCount(leader);
+    var leaderPrevLaps = leaderPrevCar && leaderPrevCar.laps;
+    var carLaps = carLapCount(c);
+    var carPrevLaps = prevPlanCar.laps;
+    if (leaderLaps != null && leaderPrevLaps != null && carLaps != null && carPrevLaps != null &&
+        leaderLaps > leaderPrevLaps && carLaps <= carPrevLaps) return true;
+    var prevT = prevPlanCar.timing;
+    if (prevT && (prevT.confident || prevT.exact) && !timingAdvanced(prevT, prog)) return true;
+    return false;
+  }
+
   /**
    * 正赛时间差仍贴在画面上，但本车赛段/圈数不再跟 FIELD：不当成还在跟领跑差距。
    */
@@ -1215,6 +1243,13 @@
           c, prog, prevByNum[num], leader, leaderProg, prevByNum, leaderNum,
           raceGaps, pace, pit, hide, isLeader, gap
         );
+      }
+      if (shouldHideStoppedOnGreen(
+        c, prog, prevByNum[num], leader, leaderProg, prevByNum, leaderNum,
+        raceGaps, pace, pit, hide, gap, statusText
+      )) {
+        hide = true;
+        hold = false;
       }
       var outlap = !hide && !pit && !!c.pitOut && prog.sector === 0 && prog.doneSegs === 0 && !prog.freshLap;
       var frac = prog.frac;
@@ -2302,8 +2337,6 @@
     PACE_CORNER: PACE_CORNER,
     PACE_K_LO: PACE_K_LO,
     PACE_K_HI: PACE_K_HI,
-    CHASE_VMAX_LIFT: CHASE_VMAX_LIFT,
-    CHASE_VMAX_NOARC_X: CHASE_VMAX_NOARC_X,
     paceFactorAt: paceFactorAt,
     ratchetCap: ratchetCap,
     ratchetLapProgress: ratchetLapProgress,
