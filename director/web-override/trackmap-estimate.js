@@ -294,9 +294,33 @@
     return isFinite(t) && t > 0.5;
   }
 
-  /** 和赛段成绩条同一套：非 0 都画出来（2048 黄 / 2049 绿 / 2051 紫，其余暗色）。 */
+  /** 和赛段成绩条同一套：非 0 都画出来（2048 黄 / 2049 绿 / 2051 紫，2052 停车，其余暗色）。 */
+  var MINI_STATUS_STOPPED = 2052;
+
   function segmentReached(status) {
     return ((status | 0) !== 0);
+  }
+
+  function lastReachedMiniStatus(car) {
+    var sectors = readSectors(car || {});
+    var si;
+    for (si = 0; si < 3; si++) {
+      var segs = sectors[si].segments;
+      var done = 0;
+      var i;
+      for (i = 0; i < segs.length; i++) {
+        if (!segmentReached(segs[i])) break;
+        done++;
+      }
+      if (done > 0) return segs[done - 1] | 0;
+    }
+    return 0;
+  }
+
+  function carStoppedOnTrack(car) {
+    if (!car) return false;
+    if (car.stopped) return true;
+    return lastReachedMiniStatus(car) === MINI_STATUS_STOPPED;
   }
 
   function sectorMini(segments) {
@@ -423,6 +447,10 @@
     if (inner < 0) inner = 0;
     if (inner > 0.98) inner = 0.98;
     if (capInner < inner) capInner = Math.min(0.99, inner + 0.04);
+    if (car && carStoppedOnTrack(car) && exact && done > 0) {
+      // 停车或迷你格 2052：停在最后亮格边缘，不要 1× 巡航等下一格。
+      capInner = inner;
+    }
     var anyTime = false;
     for (i = 0; i < 3; i++) {
       if (sectorHasTime(sectors[i].value)) anyTime = true;
@@ -1292,7 +1320,7 @@
       var leadPrev = prevByNum[leaderNum] && prevByNum[leaderNum].timing;
       var leadGap = parseGap(leader.gap);
       var leadPit = !!leader.inPit || leadGap.kind === 'pit';
-      var leadHold = !leadPit && !!leader.stopped;
+      var leadHold = !leadPit && carStoppedOnTrack(leader);
       leaderProg = ratchetLapProgress(leadPrev, leadMeasured, leadPit || leadHold || !!leadMeasured.freshLap);
     }
     var fieldRacing = fieldStillRacing(leader, leaderProg, prevByNum, leaderNum, pace);
@@ -1304,7 +1332,7 @@
       var gap = parseGap(c.gap);
       var hide = !!(c.retired || c.knockedOut);
       var pit = !hide && (!!c.inPit || gap.kind === 'pit');
-      var hold = !hide && !pit && !!c.stopped;
+      var hold = !hide && !pit && carStoppedOnTrack(c);
       var isLeader = !!(leader && carNumber(c) === leaderNum);
       var measured = progressFromTiming(c, sectorEnds);
       var prog = ratchetLapProgress(prevByNum[num] && prevByNum[num].timing, measured, pit || hold || !!measured.freshLap);
@@ -1332,6 +1360,7 @@
       } else if (hold) {
         mode = 'hold';
         exact = true;
+        cap = frac;
         var prevPlanCar = prevByNum[num];
         if (prevPlanCar && (!prog.confident && !prog.exact) && prevPlanCar.timing &&
             (prevPlanCar.timing.confident || prevPlanCar.timing.exact)) {
@@ -1797,9 +1826,26 @@
     }
 
     if (flags.hold) {
+      var freezeAt = (cap != null && isFinite(cap)) ? wrap01(cap) : wrap01(target);
       if (!st.hold) {
-        var stoppedAt = sampleMotion(st, now, lapMs, frozen, flags.arc);
-        rebaseMotion(st, stoppedAt, now);
+        var shownHold = sampleMotion(st, now, lapMs, frozen, flags.arc);
+        if (wrapDelta(shownHold - freezeAt) > 0.0008) {
+          st.easeFrom = shownHold;
+          st.easeTo = freezeAt;
+          st.easeStart = now;
+          var holdGap = Math.abs(wrapDelta(freezeAt - shownHold));
+          st.easeMs = holdGap > HOLD_BACK ? 700 : (holdGap > 0.05 ? 520 : 360);
+          st.display = shownHold;
+          st.belief = freezeAt;
+          st.anchor = freezeAt;
+          st.at = now;
+          st.seen = now;
+          st.vel = 0;
+          st.coasting = false;
+          st.coastSpeed = 0;
+        } else {
+          rebaseMotion(st, freezeAt, now);
+        }
       }
       st.hold = true;
       st.cap = st.anchor;

@@ -744,12 +744,48 @@ assert(E.wrapDelta(crawlLater2 - crawlLater) <= E.wrapDelta(crawlLater - crawlHe
   'coast speed decays ' + crawlLater2 + ' vs ' + crawlLater + ' vs ' + crawlHeld);
 
 // 停车 / 进站仍冻住，不走 coast。
-var stopped = E.stepMotion(null, 0.40, 0.55, 0, 90000, false, { exact: true });
-stopped = E.stepMotion(stopped, 0.42, 0.55, 2000, 90000, false, { exact: true, hold: true });
+var stopped = E.stepMotion(null, 0.40, 0.42, 0, 90000, false, { exact: true });
+stopped = E.stepMotion(stopped, 0.40, 0.42, 2000, 90000, false, { exact: true, hold: true });
 var stoppedAt = E.sampleMotion(stopped, 2000, 90000, false);
 var stoppedLater = E.sampleMotion(stopped, 8000, 90000, false);
 near(stoppedLater, stoppedAt, 0.0005, 'hold still freezes');
 assert(stopped.coasting === false, 'hold does not coast');
+
+// 等下一格时已经巡航超前：停车应 ease 回最后一格，而不是冻在超前点。
+var holdCruise = E.stepMotion(null, 0.40, 0.44, 0, 90000, false, { exact: true });
+E.rebaseMotion(holdCruise, 0.48, 0);
+holdCruise.cap = 0.44;
+holdCruise = E.stepMotion(holdCruise, 0.40, 0.44, 100, 90000, false, { exact: true, hold: true });
+assert(holdCruise.easeTo != null, 'hold starts ease when already ahead of last mini');
+near(holdCruise.easeTo, 0.44, 0.015, 'hold ease target is last mini cap');
+var holdEased = E.sampleMotion(holdCruise, 4000, 90000, false);
+near(holdEased, 0.44, 0.015, 'hold ease lands on last mini');
+near(E.sampleMotion(holdCruise, 12000, 90000, false), 0.44, 0.015, 'hold stays at last mini');
+
+// 迷你赛段 2052：stopped 标志还没来时也应 hold，cap 不留给巡航。
+function crashS1Segs2052(done) {
+  var segs = [];
+  var i;
+  for (i = 0; i < 9; i++) {
+    if (i < done - 1) segs.push(2048);
+    else if (i === done - 1) segs.push(2052);
+    else segs.push(0);
+  }
+  return [
+    { value: '28.000', segments: segs },
+    { value: '', segments: [0, 0, 0, 0] },
+    { value: '', segments: [0, 0, 0, 0] }
+  ];
+}
+var mini2052Car = {
+  number: 44, tla: 'HAM', position: 5, gap: '', stopped: false,
+  sectors: crashS1Segs2052(5)
+};
+var mini2052Prog = E.progressFromTiming(mini2052Car, null);
+assert(Math.abs(mini2052Prog.cap - mini2052Prog.frac) < 0.0001,
+  '2052 pins cap to last mini ' + mini2052Prog.frac + ' vs ' + mini2052Prog.cap);
+var mini2052Plan = E.planField([mini2052Car], 'Practice 2', 'Green');
+assert(mini2052Plan.cars[0].hold === true, '2052 hold before stopped=true');
 
 // Scheme 3：belief 前跳时画面不瞬移，沿圈加速度限制追上。
 var leap = E.stepMotion(null, 0.20, 0.28, 0, 90000, false, { exact: true });

@@ -306,6 +306,49 @@ function sfPoint(data) {
   return { x: +data.x[0], y: +data.y[0], length: 0 };
 }
 
+function marshalSfQuality(data) {
+  var pts = mvPoints(data);
+  var geom = polylineGeom(pts);
+  var sf = sfPoint(data);
+  return geom.per > 0 ? sf.length / geom.per : 1;
+}
+
+/**
+ * FIA 计时线相对弯心（米，沿比赛方向）。MultiViewer length≈0 的裁判灯
+ * 经常不是计时线，不能用 marshalLights 当 S/F 对齐锚点。
+ */
+var TIMING_FIA = {
+  'lusail-1.svg': {
+    totalM: 5419,
+    ref: { turn: 1, meters: 776, side: 'before' },
+    source: 'FIA 2025 Qatar GP（T1 弯心距计时线 776 m）'
+  }
+};
+
+function sfFromFia(data, spec) {
+  if (!spec || !spec.ref) return null;
+  var pts = mvPoints(data);
+  var geom = polylineGeom(pts);
+  var corner = cornerByNumber(data.corners || [], spec.ref.turn);
+  if (!corner || !corner.trackPosition) return null;
+  var totalM = spec.totalM || (spec.totalKm ? spec.totalKm * 1000 : 0);
+  if (!(totalM > 0)) return null;
+  var hit = nearestFrac(geom, { x: +corner.trackPosition.x, y: +corner.trackPosition.y });
+  var delta = spec.ref.meters / totalM;
+  var sfFrac = spec.ref.side === 'after' ? wrap01(hit.frac + delta) : wrap01(hit.frac - delta);
+  var pt = pointAt(geom, sfFrac * geom.per);
+  return { x: pt.x, y: pt.y, length: 0, fia: true, source: spec.source || '' };
+}
+
+function sfForCircuit(data, svgFile) {
+  var fia = TIMING_FIA[svgFile];
+  if (fia) {
+    var pt = sfFromFia(data, fia);
+    if (pt) return pt;
+  }
+  return sfPoint(data);
+}
+
 /** 让折线从计时线起、沿比赛方向（弯道 length 递增）走。 */
 function orientMvRace(pts, corners, sf) {
   var geom = polylineGeom(pts);
@@ -802,11 +845,12 @@ function main() {
       try { data = JSON.parse(fs.readFileSync(years[y].file, 'utf8')); }
       catch (e) { continue; }
       if (!data.x || data.x.length < 30) continue;
-      var align = alignPair(svgPts, mvPoints(data), sfPoint(data), data.corners || []);
+      var sf = sfForCircuit(data, c.svg);
+      var align = alignPair(svgPts, mvPoints(data), sf, data.corners || []);
       var phase = phaseFromAlign(align);
       var prodGeom = polylineGeom(svgPts4);
-      var sfMv = sfPoint(data);
-      var prod = nearestFrac(prodGeom, applyTr(align.tr, align.flipY ? { x: sfMv.x, y: -sfMv.y } : sfMv));
+      var sfIn = applyTr(align.tr, align.flipY ? { x: sf.x, y: -sf.y } : { x: sf.x, y: sf.y });
+      var prod = nearestFrac(prodGeom, sfIn);
       var prodRaw = prod.frac;
       var prodOffset = align.reverseMv ? wrap01(1 - prodRaw) : prodRaw;
       var sectorRaw = null;
@@ -817,6 +861,8 @@ function main() {
         requestYear: years[y].year,
         yearField: data.year,
         corners: (data.corners || []).length,
+        sfSource: sf.fia ? 'fia' : 'marshal',
+        marshalSfPct: +((marshalSfQuality(data) || 0) * 100).toFixed(3),
         align: align,
         phase: phase,
         prodOffset: round3(prodOffset),
