@@ -303,6 +303,7 @@
 
   function lastReachedMiniStatus(car) {
     var sectors = readSectors(car || {});
+    var lastStatus = 0;
     var si;
     for (si = 0; si < 3; si++) {
       var segs = sectors[si].segments;
@@ -312,9 +313,9 @@
         if (!segmentReached(segs[i])) break;
         done++;
       }
-      if (done > 0) return segs[done - 1] | 0;
+      if (done > 0) lastStatus = segs[done - 1] | 0;
     }
-    return 0;
+    return lastStatus;
   }
 
   function carStoppedOnTrack(car) {
