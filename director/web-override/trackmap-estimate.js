@@ -12,7 +12,8 @@
  * 赛段或计时突然前跳时平滑加速追上，接近目标提前减速，不瞬移；
  * 小更新仍然跟得上。追上之后按约 1× 巡航接着走，不把画面钉死在卡住
  * 的测量上；卡在 cap 上等下一格时也不掉到 0.12× 爬行（否则两格之间
- * 像粘住，下一格再 vmax 闪过去）。有轮廓时，这趟 1× 参考巡航再乘
+ * 像粘住，下一格再 vmax 闪过去）。外推超前超过约 0.12 圈时只沿圈
+ * 减速前行、不回贴；测量目标真后撤超过该量才仍允许 snap / ease。有轮廓时，这趟 1× 参考巡航再乘
  * 当地折线曲率：弯慢直快（示意图近似，本地 SVG 折线转角，不是 GPS /
  * 官方弯角表；直道 1.15×，弯角 0.55×，k∈[10, 48]，时滞 120ms）。
  * vmax / 加速度仍按未缩放圈速。测量后撤仍衰减滑行。
@@ -83,6 +84,9 @@
   // 略超前仍按 1× 巡航的带宽（约 1.6s / 90s 圈）。测量后撤超过这点才
   // 交给 #21 coast；卡在 cap 上等下一格时不进深 coast。
   var CHASE_CRUISE_LEAD = 0.018;
+  // 外推超前超过 HOLD_BACK：沿圈只减速前行，不回贴。#21 深 coast 仍可低到
+  // COAST_MIN；这里保持明显高于 0.12× 的巡航，避免「粘住再 vmax」。
+  var OVERSHOOT_FLOOR = 0.48;
   // 积分步长。单次 sample 可能跨整秒（测试 / 切后台），必须拆开，
   // 否则高倍数 × 长 dt 会一次跳太多圈。
   var CHASE_DT_MS = 12;
@@ -1525,8 +1529,10 @@
         aMax = fullSpeed * (CHASE_ACCEL_X / 1000);
       }
       var err = wrapDelta(belief - shown);
-      if (err <= -HOLD_BACK) {
-        // 大后撤不走 chase（换圈误判 / 重置）：允许一次不连续，交给 ease 或直接落到 belief。
+      var beliefDrop = rolledBack ? -wrapDelta(belief - prevBelief) : 0;
+      var genuineRewind = beliefDrop > HOLD_BACK + 1e-4;
+      if (err <= -HOLD_BACK && genuineRewind) {
+        // 测量后撤超过 HOLD_BACK：仍允许不连续（换圈 / 重置），交给 ease 或落到 belief。
         shown = belief;
         st.vel = 0;
         st.coasting = false;
@@ -1541,7 +1547,18 @@
         break;
       }
       var desired;
-      if (err < -CHASE_CRUISE_LEAD && err > -HOLD_BACK && (st.coasting || rolledBack)) {
+      if (err <= -HOLD_BACK) {
+        // cap 等待外推超前：测量略落后但目标没有真后撤，只减速往前蹭。
+        var excess = -err - (HOLD_BACK - 0.002);
+        if (excess < 0) excess = 0;
+        var soften = 1 - excess / HOLD_BACK;
+        if (soften < OVERSHOOT_FLOOR) soften = OVERSHOOT_FLOOR;
+        st.coasting = false;
+        st.coastSpeed = 0;
+        if (!(st.vel > cruise)) st.vel = cruise;
+        desired = cruise * soften;
+        if (desired < cruise * OVERSHOOT_FLOOR) desired = cruise * OVERSHOOT_FLOOR;
+      } else if (err < -CHASE_CRUISE_LEAD && err > -HOLD_BACK && (st.coasting || rolledBack)) {
         if (!st.coasting) {
           var seed = st.trackSpeed > 0 ? st.trackSpeed : (st.vel > 0 ? st.vel : fullSpeed);
           if (seed > fullSpeed) seed = fullSpeed;
@@ -1580,7 +1597,7 @@
           step = err + slack;
           vel = cruise;
         }
-      } else {
+      } else if (err > -HOLD_BACK - 1e-6) {
         var maxLead = HOLD_BACK - 0.002;
         var proposed = wrap01(shown + Math.max(0, step));
         if (wrapDelta(proposed - belief) > maxLead) {
@@ -1687,9 +1704,15 @@
     var modeChanged = !!st.pit !== !!flags.pit || !!st.hold !== !!flags.hold;
     var targetMoved = st.lastTarget == null || Math.abs(wrapDelta(target - st.lastTarget)) > 0.0005;
     var err = wrapDelta(target - shown);
+    var targetRetreat = 0;
+    if (st.lastTarget != null && isFinite(st.lastTarget) && targetMoved) {
+      targetRetreat = -wrapDelta(target - st.lastTarget);
+      if (targetRetreat < 0) targetRetreat = 0;
+    }
     // 已经滑过点亮边界的不要为了对齐往回拽。
-    // 差了一大截（换圈、数据跳变）仍然沿短弧收回。前跳交给 chase，不 ease。
-    var bigRewind = err < -HOLD_BACK;
+    // 仅当测量目标本身后撤超过 HOLD_BACK 才沿短弧收回；纯外推超前（迟到的一格）
+    // 只减速前行。前跳交给 chase，不 ease。
+    var bigRewind = err < -HOLD_BACK && targetRetreat > HOLD_BACK + 1e-4;
     if (modeChanged || (targetMoved && bigRewind)) {
       st.easeFrom = shown;
       st.easeTo = target;
@@ -1708,6 +1731,21 @@
       st.display = shown;
       st.belief = target;
       st.coasting = false;
+    } else if (targetMoved && err < -1e-6 && !bigRewind) {
+      st.anchor = target;
+      st.at = now;
+      st.display = shown;
+      st.belief = target;
+      if (err <= -HOLD_BACK) {
+        st.coasting = false;
+        st.coastSpeed = 0;
+      } else if (err < -CHASE_CRUISE_LEAD) {
+        var recent = st.trackSpeed > 0 ? st.trackSpeed : (st.vel > 0 ? st.vel : 0);
+        if (recent > 0) {
+          st.coastSpeed = recent * COAST_START;
+          st.coasting = true;
+        }
+      }
     }
     applyMeasuredCap(st, cap, bigRewind || modeChanged);
     st.lastTarget = target;

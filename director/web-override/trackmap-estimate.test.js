@@ -693,6 +693,31 @@ for (var gi = 0; gi < gapTicks.length; gi++) {
   gapPrev = gapShown;
 }
 
+// 迟到格更新：画面超前但目标并未真后撤一大截时，不回退、柔和减速前行。
+var lateBatch = E.stepMotion(null, 0.50, 0.52, 0, 90000, false, { exact: true });
+for (var lbT = 1000; lbT <= 6000; lbT += 1000) {
+  lateBatch = E.stepMotion(lateBatch, 0.50, 0.52, lbT, 90000, false, { exact: true });
+}
+var lateBefore = E.sampleMotion(lateBatch, 6000, 90000, false);
+lateBatch = E.stepMotion(lateBatch, 0.38, 0.40, 6000, 90000, false, { exact: true });
+var lateTick = E.sampleMotion(lateBatch, 6000, 90000, false);
+assert(lateBatch.easeTo == null, 'late batch behind paint does not start a backward ease');
+assert(lateTick + 1e-6 >= lateBefore, 'late batch does not yank ' + lateTick + ' from ' + lateBefore);
+var latePrev = lateTick;
+var lateSlowSum = 0;
+var lateSlowN = 0;
+for (var lb = 6016; lb <= 7500; lb += 16) {
+  var latePos = E.sampleMotion(lateBatch, lb, 90000, false);
+  var lateStep = E.wrapDelta(latePos - latePrev);
+  assert(lateStep >= -1e-9, 'late-batch coast rolled back at ' + lb);
+  lateSlowSum += lateStep;
+  lateSlowN++;
+  latePrev = latePos;
+}
+var lateVisX = lateSlowN ? lateSlowSum / ((lateSlowN * 16) / 90000) : 0;
+assert(lateVisX > 0.28 && lateVisX < 1.05,
+  'late batch soft-decelerates forward visX=' + lateVisX);
+
 // 超过约 0.12 圈的后撤仍然沿短弧收回（重置 / 大幅跳数）。
 var rewind = E.stepMotion(null, 0.55, 0.62, 0, 90000, false, { exact: true });
 rewind = E.stepMotion(rewind, 0.30, 0.36, 1000, 90000, false, { exact: true });
@@ -968,8 +993,11 @@ holdSnap.at = 0;
 holdSnap.seen = 0;
 holdSnap.vel = 1 / 90000;
 holdSnap.coasting = false;
-var holdSnapped = E.sampleMotion(holdSnap, 16, 90000, false, paceSq);
-near(holdSnapped, 0.30, 0.002, 'HOLD_BACK still snaps shown = belief with arc');
+var holdOvershoot0 = E.sampleMotion(holdSnap, 16, 90000, false, paceSq);
+assert(holdOvershoot0 + 1e-6 >= 0.50, 'cruise overshoot does not snap back with arc ' + holdOvershoot0);
+var holdOvershoot1 = E.sampleMotion(holdSnap, 2000, 90000, false, paceSq);
+assert(holdOvershoot1 > holdOvershoot0 + 0.0002, 'overshoot coasts forward ' + holdOvershoot1);
+assert(holdOvershoot1 < 0.50 + 2000 / 90000, 'overshoot slows below full cruise ' + holdOvershoot1);
 
 var appChaseSrc = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 assert(appChaseSrc.indexOf('plan.holdField') >= 0, 'app freezes when session holdField');
