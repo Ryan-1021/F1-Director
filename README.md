@@ -3,7 +3,12 @@
 把官方赛时数据摊成可拖拽的导播台：成绩榜、赛段、天气、赛道图、轮胎与车手圈等，本机一键开跑。
 
 **项目名称：** F1 导播台 / F1-Director  
-**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.17+20261122**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+**壳层版本：** [`VERSION`](VERSION) 当前为 **0.2.18+20261127**（只标识本导播台壳；内嵌时序 jar 仍为 **0.1.15_modify**，勿与壳版本混读）
+
+相对 **v0.2.17**（**v0.2.18** Release）：
+
+- 估计赛道图：显示点明显超前后改为向前减速滑行，不再猛地向后抽回（PR #86）
+- 内嵌 jar 恢复订阅 TimingStats / TopThree，练习/排位/正赛的「最快圈」与各赛段个人最佳会重新有数据（文件名仍为 `0.1.15_modify`）。先前 0.2.17 包里的 jar 漏订了这两路流。
 
 相对 **v0.2.16**（**v0.2.17** Release）：
 
@@ -209,7 +214,7 @@ Rank swap: both the main timing board and the sector board slide rows to their n
 - 窗口标题版本自测：`node director/window-title-version.test.js`。
 - 直播地址历史自测：`node director/stream-url-history.test.js`（载入记历史、去重、上限 20、单条删除；清除只停当前流）。
 - `share/web/` 为生成物，以 `director/` 为源。
-- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种、SSE ping / state 写锁等；壳层版本见 `VERSION`，勿与 jar 标号混读。
+- 内嵌 jar（`share/F1-RaceControl-Desktop-0.1.15_modify.jar`）含本地补丁：顶栏剩余时间外推 + SSE ≥1Hz 推送、Stints `Compound` sticky / `deepMerge` 保胎种、SSE ping / state 写锁、TimingStats / TopThree 订阅等；壳层版本见 `VERSION`，勿与 jar 标号混读。
 - 打官方 Release zip：在 Windows 本机（`D:\Develop\F1-Director`）跑 `director\Pack-Release.cmd`。会先 `Publish-Web`，再打出 `F1-Director-v{短版本}-with-jre-win64.zip` 与 `-with-minijre-win64.zip`（ZIP 使用 UTF-8 文件名与语言编码标志；不含 `docs/`、`.git`、`*.bak`）；仅输出到 `D:\Develop`，打完清理 staging 并打印每个 zip 的体积与 SHA-256。不创建 GitHub Release（需另行上传）。
 - 合并进 `main` 请用 **`git merge --no-ff`**，不要快进合并。
 - 分支命名：`{base}_{content}`（如 `main_timingWeatherCache`）。
