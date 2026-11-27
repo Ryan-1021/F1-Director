@@ -241,7 +241,8 @@ function Open-DirectorBrowser {
     if ($browser) {
         $appArg = "--app=$DirectorUrl"
         Write-Host ("Opening director in app mode: {0} {1}" -f $browser, $appArg)
-        Start-Process -FilePath $browser -ArgumentList @($appArg)
+        # Extensions off in this --app window only; normal Edge profile browsing unchanged.
+        Start-Process -FilePath $browser -ArgumentList @($appArg, '--disable-extensions')
     } else {
         Write-Host ("[!] Edge/Chrome not found; falling back to default browser: {0}" -f $DirectorUrl)
         Start-Process $DirectorUrl

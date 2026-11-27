@@ -32,6 +32,8 @@ assert(loopPos >= 0 && openPos > loopPos && waitPos > openPos,
   'inside start loop: Java start, then browser, then health wait');
 assert((ps1.match(/Start-Process -FilePath \$browser/g) || []).length === 1,
   'single browser launch via Open-DirectorBrowser');
+assert(ps1.indexOf("'--disable-extensions'") !== -1,
+  'app browser launch passes --disable-extensions');
 
 assert(ps1.indexOf('-XX:+TieredCompilation') !== -1, 'JVM TieredCompilation flag');
 assert(ps1.indexOf('-XX:TieredStopAtLevel=1') !== -1, 'JVM TieredStopAtLevel=1 flag');
