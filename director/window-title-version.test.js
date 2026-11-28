@@ -80,7 +80,7 @@ assert(publish.indexOf('Sync-WebPublish.ps1') !== -1, 'Publish-Web runs Sync-Web
 assert(publish.indexOf('NEEDS_STAMP') === -1, 'Publish-Web does not parse NEEDS_STAMP from cmd');
 assert(publish.indexOf('Stamp-WindowTitle.ps1') === -1,
   'Publish-Web does not call Stamp-WindowTitle separately');
-assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd incremental publish');
+assert(start.indexOf('Start-Director.ps1') !== -1, 'Start.cmd single-host publish+run');
 assert(start.indexOf('NEEDS_STAMP') === -1, 'Start.cmd does not parse NEEDS_STAMP from cmd');
 assert(start.indexOf('Stamp-WindowTitle.ps1') === -1,
   'Start.cmd does not call Stamp-WindowTitle separately');

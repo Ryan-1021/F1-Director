@@ -91,8 +91,12 @@ function Test-Health {
 
 function Test-DirectorPort8720Free {
     try {
-        $listen = Get-NetTCPConnection -LocalPort 8720 -State Listen -ErrorAction SilentlyContinue
-        return -not $listen
+        $props = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+        $listeners = $props.GetActiveTcpListeners()
+        foreach ($ep in $listeners) {
+            if ($ep.Port -eq 8720) { return $false }
+        }
+        return $true
     } catch {
         return $true
     }

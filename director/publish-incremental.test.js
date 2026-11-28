@@ -30,6 +30,7 @@ var root = path.join(__dirname);
 var syncPs1 = fs.readFileSync(path.join(root, 'Sync-WebPublish.ps1'), 'utf8');
 var stampPs1 = fs.readFileSync(path.join(root, 'Stamp-WindowTitle.ps1'), 'utf8');
 var start = fs.readFileSync(path.join(root, 'Start.cmd'), 'utf8');
+var startPs1 = fs.readFileSync(path.join(root, 'Start-Director.ps1'), 'utf8');
 var publish = fs.readFileSync(path.join(root, 'Publish-Web.cmd'), 'utf8');
 var versionRaw = fs.readFileSync(path.join(root, '..', 'VERSION'), 'utf8');
 
@@ -59,7 +60,12 @@ assert(syncPs1.indexOf('Stamp-WindowTitle.ps1') !== -1, 'Sync-WebPublish invokes
 assert(syncPs1.indexOf('NEEDS_STAMP') === -1, 'Sync-WebPublish no longer emits NEEDS_STAMP');
 assert(syncPs1.indexOf('director.css') !== -1, 'Sync publishes director.css');
 assert(syncPs1.indexOf('director-app.js') !== -1, 'Sync publishes director-app.js');
-assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd uses Sync-WebPublish');
+assert(start.indexOf('Start-Director.ps1') !== -1, 'Start.cmd uses single-host Start-Director.ps1');
+assert(startPs1.indexOf('Sync-WebPublish.ps1') !== -1, 'Start-Director invokes Sync-WebPublish');
+assert(startPs1.indexOf('Run-Director.ps1') !== -1, 'Start-Director invokes Run-Director in same host');
+assert(syncPs1.indexOf('.publish-stamp') !== -1, 'Sync maintains .publish-stamp manifest');
+assert(syncPs1.indexOf('ForcePublish') !== -1, 'Sync has ForcePublish switch');
+assert(syncPs1.indexOf('PUBLISH_SKIPPED=1') !== -1, 'Sync skips hash walk on stamp hit');
 assert(start.indexOf('NEEDS_STAMP') === -1, 'Start.cmd does not read NEEDS_STAMP');
 assert(publish.indexOf('NEEDS_STAMP') === -1, 'Publish-Web.cmd does not read NEEDS_STAMP');
 assert(start.indexOf('xcopy') === -1, 'Start.cmd no longer bulk xcopy');
@@ -158,6 +164,32 @@ try {
     { encoding: 'utf8' }
   );
   assert(/PUBLISH_CHANGED=0/.test(out2), 'second sync reports no changes');
+  assert(/PUBLISH_SKIPPED=1/.test(out2), 'second sync skips hash walk via stamp');
+
+  var stampPath = path.join(tmpWeb, '.publish-stamp');
+  assert(fs.existsSync(stampPath), 'full publish writes .publish-stamp');
+
+  var outForce = cp.execSync(
+    '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
+      path.join(root, 'Sync-WebPublish.ps1') +
+      '" -DirectorRoot "' + root + '" -WebDir "' + tmpWeb + '" -ForcePublish',
+    { encoding: 'utf8' }
+  );
+  assert(/PUBLISH_SKIPPED=1/.test(outForce) === false,
+    'ForcePublish runs full sync (no PUBLISH_SKIPPED)');
+
+  var layoutsDst = path.join(tmpWeb, 'layouts.json');
+  var customLayouts = '{"user":"custom"}';
+  fs.writeFileSync(layoutsDst, customLayouts);
+  var outLayouts = cp.execSync(
+    '"' + ps + '" -NoProfile -ExecutionPolicy Bypass -File "' +
+      path.join(root, 'Sync-WebPublish.ps1') +
+      '" -DirectorRoot "' + root + '" -WebDir "' + tmpWeb + '" -SeedLayouts',
+    { encoding: 'utf8' }
+  );
+  assert(/PUBLISH_SKIPPED=1/.test(outLayouts), 'stamp hit still skips after layouts exist');
+  assert(fs.readFileSync(layoutsDst, 'utf8') === customLayouts,
+    'SeedLayouts does not overwrite existing layouts.json');
 
   var tmpStamp = fs.mkdtempSync(path.join(os.tmpdir(), 'f1-stamp-'));
   var stampDst = path.join(tmpStamp, 'director.html');
