@@ -28,7 +28,11 @@ node director/calibrate-circuit-phase.js --cache /tmp/mv
 
 | SVG | MultiViewer | circuitKey |
 | --- | --- | --- |
-| bahrain-3.svg | Sakhir | 63 |
+| bahrain-1.svg | Sakhir | 63 |
+| portimao-1.svg | Algarve | 147 |
+| istanbul-1.svg | Istanbul | 59 |
+| madring-1.svg | — | 153（404，无可用 MV 几何） |
+| bahrain-3.svg | Sakhir（旧布局） | 63 |
 | jeddah-1.svg | Jeddah | 149 |
 | melbourne-2.svg | Melbourne | 10 |
 | suzuka-2.svg | Suzuka | 46 |
@@ -82,10 +86,14 @@ offset / reverse / sectors 是运行时用的值。奥斯汀的 offset 不是这
 | las-vegas-1.svg | 152 | 2023 | 0.475 | false | 0.262, 0.539 | 0.19 | 高 | 2025 拉斯维加斯，T5 后 90 m、T12 后 140 m |
 | lusail-1.svg | 150 | 2023 | 0.958 | false | 0.388, 0.68 | 0.12 | 高 | FIA 2025 计时线（T1 弯心 776 m）；MV 最近 marshal 灯不在计时线 |
 | yas-marina-2.svg | 70 | 2021 | 0.623 | true | 0.233, 0.684 | 0.22 | 高 | 2025 阿布扎比，T5 前 205 m、T9 前 100 m |
+| bahrain-1.svg | 63 | 2022 | 0.202 | true | 0.233, 0.640 | 0.71 | 中 | MV 2022 计时灯（key 63；较新年份回落 2022）+ FIA 2025 Sakhir Control Line |
+| portimao-1.svg | 147 | 2021 | 0.863 | true | 0.311, 0.665 | 0.14 | 高 | MV 2021 key 147（Algarve）+ FIA 2021 Portugal；S1 T5 前 270 m、S2 T11 后 80 m |
+| istanbul-1.svg | 59 | 2021 | 0.620 | false | 0.346, 0.706 | — | 高 | MV 2021 key 59 + FIA 2021 Turkey；S1 残差 2.9%（在 3% 门内） |
+| madring-1.svg | — | — | 0.612 | false | — | — | 中 | 无 MV 几何；FIA 2026 Madrid Control Line 比例法，见下文 |
 
 ## 跳过和没写赛段的
 
-- **bahrain-3.svg（key 63）**：采样出来的闭环不像萨基尔大奖赛（没有那条内场），相似变换残差 9.7%，正反方向也分不开。不写相位，进度 0 仍是文件起点。
+- **bahrain-3.svg（key 63）**：旧 f1db 轮廓不是大奖赛布局（缺内场段），残差 9.7%。`CIRCUIT_SVG` 已改指向 **bahrain-1.svg**；文件仍留在 `circuits/` 作对照。
 - **marina-bay.svg**：和 `marina-bay-4.svg` 字节相同，`CIRCUIT_SVG` 只用带版本号的那份。
 - **spielberg-3.svg**：起终点可用（反向，offset 0.182），但示意图比中心线拉得开，残差 2.2%。FIA 2026 的 S1/S2 距离比例是 0.281 / 0.673，投到 SVG 上变成大约 0.332 / 0.699，差了一截，所以不写 sectors。
 - **jeddah-1.svg、imola-3.svg、interlagos-2.svg**：起终点贴合（残差 0.51%、0.14%、0.10%）。没有找到能对上当前布局的 FIA 赛段公里数或弯心计时环，sectors 留空，赛段三等分。2026 年「巴林站在马来西亚」是雪邦，不能用来标萨基尔；2026 西班牙站是马德里，巴塞罗那用的是 2025 年笔记。
@@ -119,7 +127,17 @@ offset / reverse / sectors 是运行时用的值。奥斯汀的 offset 不是这
 | las-vegas-1.svg | 152 | 2023 | 2023 | 21 | n 起点 | |
 | lusail-1.svg | 150 | 2023 | 2023 | 20 | n 起点 | 与 offset 0.958 同帧重投 |
 | yas-marina-2.svg | 70 | 2021 | 2021 | 20 | n−1 | reverse |
-| bahrain-3.svg | 63 | — | — | — | 等分 | 无 CIRCUIT_PHASE |
+| bahrain-3.svg | 63 | — | — | — | 等分 | 旧布局，无 CIRCUIT_PHASE |
+| bahrain-1.svg | 63 | 2022 | 2022 | 18 | n−1 | reverse |
+| portimao-1.svg | 147 | 2021 | 2021 | 19 | n 起点 | reverse；`CIRCUIT_VIEW_ROT` 344° |
+| istanbul-1.svg | 59 | 2021 | — | — | 等分 | marshal 投影 maxDistPct 0.95%；`CIRCUIT_VIEW_ROT` 344° |
+| madring-1.svg | — | — | — | — | 等分 | 无 MV；不写 sectors / flagBounds |
+
+## Madring（马德里）与 Q/q 解析
+
+`madring-1.svg` 含相对二次贝塞尔 `q` 命令。在补全 `sampleSvgPath` 的 **Q/q**（及 **T/t**  shorthand）之前，解析会在第一个 `q` 处中断，折线只剩右侧发卡弯一段；任何基于截断路径的 offset（例如错误的 **0.919**）都无效。
+
+运行时 offset **0.612** 是在 **`curveSteps = 4`**、完整路径经 Q 感知采样后量的（与 `loadSvgOutline` 一致）。FIA 2026 Madrid 图：Control Line 在左侧维修区直道 T22→T1 上，距 T22 **190 m**、该直道官方长 **589 m** → 190/589 ≈ 32.3% 沿 T22→T1；折线弧长比例与此对齐得 **0.612**。起跑灯在同一直道上约 **66%** 处，**不是**相位 offset。MultiViewer key 153 返回 404，无法做 Umeyama 对照；置信度 **中**。
 
 ## 奥斯汀
 

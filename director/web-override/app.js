@@ -2407,7 +2407,7 @@
   //
   // 奥斯汀保持手调的 0.522 / [0.311, 0.715]。同一套投影得到约 0.537，
   // 和旧的 0.536 一样，都在 T20–T1 主直道上，不改。
-  // 巴林 bahrain-3.svg 的轮廓对不上萨基尔大奖赛中心线，没有写相位。
+  // 旧 bahrain-3.svg 不是大奖赛布局；萨基尔用 bahrain-1.svg。
   // 斯皮尔伯格只写了起终点：示意图拉得比较开，赛段终点没有稳稳落在折线上。
   // 吉达、伊莫拉、因特拉戈斯没有对上可靠的赛段里程，计时赛段仍三等分。
   var CIRCUIT_PHASE = {
@@ -2433,7 +2433,11 @@
     'circuits/interlagos-2.svg': { offset: 0.205, reverse: false, flagCount: 16, flagBounds: [0.0416, 0.1041, 0.1886, 0.267, 0.3511, 0.4332, 0.4874, 0.5248, 0.5673, 0.6213, 0.6818, 0.7402, 0.7974, 0.852, 0.9171] },
     'circuits/las-vegas-1.svg': { offset: 0.475, reverse: false, sectors: [0.262, 0.539], flagCount: 21, flagBounds: [0.9779, 0.0169, 0.0562, 0.0999, 0.1539, 0.2044, 0.2512, 0.2899, 0.311, 0.3356, 0.374, 0.4147, 0.4494, 0.4862, 0.5339, 0.5942, 0.6663, 0.7623, 0.8386, 0.8845, 0.9335] },
     'circuits/lusail-1.svg': { offset: 0.958, reverse: false, sectors: [0.388, 0.68], flagCount: 20, flagBounds: [0.0413, 0.1029, 0.1669, 0.2219, 0.28, 0.3308, 0.3753, 0.4387, 0.4977, 0.5362, 0.5711, 0.6154, 0.6704, 0.7217, 0.7679, 0.8154, 0.8601, 0.901, 0.9452] },
-    'circuits/yas-marina-2.svg': { offset: 0.623, reverse: true, sectors: [0.233, 0.684], flagCount: 20, flagBounds: [0.0266, 0.0858, 0.1343, 0.1833, 0.2251, 0.2757, 0.3698, 0.4612, 0.5178, 0.5738, 0.6443, 0.6971, 0.7377, 0.7793, 0.8071, 0.8317, 0.8541, 0.8925, 0.9444] }
+    'circuits/yas-marina-2.svg': { offset: 0.623, reverse: true, sectors: [0.233, 0.684], flagCount: 20, flagBounds: [0.0266, 0.0858, 0.1343, 0.1833, 0.2251, 0.2757, 0.3698, 0.4612, 0.5178, 0.5738, 0.6443, 0.6971, 0.7377, 0.7793, 0.8071, 0.8317, 0.8541, 0.8925, 0.9444] },
+    'circuits/bahrain-1.svg': { offset: 0.202, reverse: true, sectors: [0.233, 0.640], flagCount: 18, flagBounds: [0.8612, 0.9437, 0.0354, 0.1108, 0.181, 0.2303, 0.2622, 0.2924, 0.3295, 0.3699, 0.395, 0.4597, 0.5334, 0.5596, 0.5997, 0.6599, 0.7352, 0.8063] },
+    'circuits/portimao-1.svg': { offset: 0.863, reverse: true, sectors: [0.311, 0.665], flagCount: 19, flagBounds: [0.9591, 0.0415, 0.1273, 0.1817, 0.2176, 0.2684, 0.3247, 0.380, 0.4273, 0.4695, 0.5152, 0.5734, 0.632, 0.6718, 0.706, 0.7563, 0.8077, 0.8486, 0.8966] },
+    'circuits/istanbul-1.svg': { offset: 0.620, reverse: false, sectors: [0.346, 0.706] },
+    'circuits/madring-1.svg': { offset: 0.612, reverse: false }
   };
 
   function circuitPhase(rel) {
@@ -2455,7 +2459,9 @@
     'circuits/shanghai-1.svg': 336,
     'circuits/spielberg-3.svg': 20,
     'circuits/suzuka-2.svg': 233,
-    'circuits/yas-marina-2.svg': 261
+    'circuits/yas-marina-2.svg': 261,
+    'circuits/portimao-1.svg': 344,
+    'circuits/istanbul-1.svg': 344
   };
 
   function officialViewRotDeg(rel) {
@@ -2897,8 +2903,8 @@
   var CIRCUIT_SVG = {
     'singapore': 'circuits/marina-bay-4.svg',
     'marina bay': 'circuits/marina-bay-4.svg',
-    'sakhir': 'circuits/bahrain-3.svg',
-    'bahrain': 'circuits/bahrain-3.svg',
+    'sakhir': 'circuits/bahrain-1.svg',
+    'bahrain': 'circuits/bahrain-1.svg',
     'melbourne': 'circuits/melbourne-2.svg',
     'suzuka': 'circuits/suzuka-2.svg',
     'shanghai': 'circuits/shanghai-1.svg',
@@ -2929,7 +2935,14 @@
     'losail': 'circuits/lusail-1.svg',
     'yas marina': 'circuits/yas-marina-2.svg',
     'abu dhabi': 'circuits/yas-marina-2.svg',
-    'jeddah': 'circuits/jeddah-1.svg'
+    'jeddah': 'circuits/jeddah-1.svg',
+    'portimao': 'circuits/portimao-1.svg',
+    'portimão': 'circuits/portimao-1.svg',
+    'algarve': 'circuits/portimao-1.svg',
+    'istanbul': 'circuits/istanbul-1.svg',
+    'istanbul park': 'circuits/istanbul-1.svg',
+    'madring': 'circuits/madring-1.svg',
+    'madrid': 'circuits/madring-1.svg'
   };
 
   function normCircuit(s) {
