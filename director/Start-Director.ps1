@@ -38,15 +38,19 @@ try {
     Write-Error $_.Exception.Message
     exit 1
 }
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host ("Published web UI to: {0}" -f $WebDir)
 Write-Host ''
 
 $runScript = Join-Path $scriptDir 'Run-Director.ps1'
 if (-not (Test-Path -LiteralPath $runScript)) {
     Write-Error "Run script not found: $runScript"
-    exit 1
+    exit 2
 }
 
-& $runScript -JavaExe $JavaExe -Jar $Jar -WebDir $WebDir -ExtraArgs $extraForJava
-exit $LASTEXITCODE
+try {
+    & $runScript -JavaExe $JavaExe -Jar $Jar -WebDir $WebDir -ExtraArgs $extraForJava
+} catch {
+    Write-Error $_.Exception.Message
+    exit 2
+}
+exit 0

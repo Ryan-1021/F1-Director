@@ -98,7 +98,7 @@ assert(stampPs1.indexOf('Copy-Item') !== -1 && stampPs1.indexOf('VERSION') !== -
 assert(stampPs1.indexOf('copyVersion') !== -1, 'stamp script skips redundant VERSION copy');
 assert(stampPs1.indexOf('titleRewritten') !== -1, 'stamp script logs only when title changes');
 assert(/if errorlevel 1/i.test(publish), 'Publish-Web checks sync errorlevel');
-assert(/if errorlevel 1/i.test(start), 'Start.cmd checks sync errorlevel');
+assert(/if "%RC%"=="1"/i.test(start), 'Start.cmd checks publish failure exit code');
 
 function stampLikePs1(src, raw) {
   var shortVer = short(raw);

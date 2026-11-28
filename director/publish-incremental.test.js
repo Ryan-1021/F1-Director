@@ -71,7 +71,7 @@ assert(publish.indexOf('NEEDS_STAMP') === -1, 'Publish-Web.cmd does not read NEE
 assert(start.indexOf('xcopy') === -1, 'Start.cmd no longer bulk xcopy');
 assert(publish.indexOf('Sync-WebPublish.ps1') !== -1, 'Publish-Web uses Sync-WebPublish');
 assert(/if errorlevel 1/i.test(publish), 'Publish-Web checks sync errorlevel');
-assert(/if errorlevel 1/i.test(start), 'Start.cmd checks sync errorlevel');
+assert(/if "%RC%"=="1"/i.test(start), 'Start.cmd checks publish failure exit code');
 
 function shortVersion(raw) {
   var s = String(raw || '').replace(/^\uFEFF/, '').trim();

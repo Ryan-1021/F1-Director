@@ -57,12 +57,17 @@ rem the UI is served from http://127.0.0.1:8720/director.html (same origin).
 set "WEBDIR=%SHARE%\web"
 if not exist "%WEBDIR%" mkdir "%WEBDIR%" >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Start-Director.ps1" -DirectorRoot "%~dp0." -WebDir "%WEBDIR%" -JavaExe "%JAVA_EXE%" -Jar "%JAR%" -ExtraArgs "%*" -SeedLayouts
-if errorlevel 1 (
-  echo Start failed ^(publish or director^), error %ERRORLEVEL%.
-  pause
-  exit /b %ERRORLEVEL%
-)
 set "RC=%ERRORLEVEL%"
+if "%RC%"=="1" (
+  echo Publish failed ^(Sync-WebPublish.ps1^), error %RC%.
+  pause
+  exit /b %RC%
+)
+if "%RC%"=="2" (
+  echo Director run failed, error %RC%.
+  pause
+  exit /b %RC%
+)
 echo.
 if not "%RC%"=="0" (
   echo Start finished with error code %RC%.

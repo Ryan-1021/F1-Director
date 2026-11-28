@@ -34,11 +34,16 @@ assert(portFn.indexOf('GetActiveTcpListeners') !== -1,
 assert((startCmd.match(/powershell\s+-NoProfile/gi) || []).length === 1,
   'Start.cmd launches one PowerShell host');
 assert(startCmd.indexOf('Start-Director.ps1') !== -1, 'Start.cmd uses Start-Director.ps1');
-assert(startCmd.indexOf('Run-Director.ps1') === -1,
+assert(!/powershell[\s\S]*Run-Director\.ps1/i.test(startCmd),
   'Start.cmd does not start Run-Director in a second PowerShell');
 assert(startPs1.indexOf('Sync-WebPublish.ps1') !== -1, 'Start-Director runs Sync-WebPublish');
 assert(startPs1.indexOf('Run-Director.ps1') !== -1, 'Start-Director continues into Run-Director');
 assert(startPs1.indexOf('--force-publish') !== -1, 'Start-Director strips --force-publish flag');
+assert(startPs1.indexOf('exit $LASTEXITCODE') === -1,
+  'Start-Director does not exit with stale LASTEXITCODE after script invokes');
+assert(startPs1.indexOf('if ($LASTEXITCODE') === -1,
+  'Start-Director does not gate on LASTEXITCODE after Sync-WebPublish');
+assert(/exit\s+0\s*$/m.test(startPs1), 'Start-Director exits 0 after normal Run-Director return');
 
 assert(ps1.indexOf('function Invoke-F1DirectorStartupCleanup') !== -1, 'conditional startup cleanup');
 assert(/if \(-not \(Test-DirectorPort8720Free\)\) \{[\s\S]*Invoke-F1DirectorStartupCleanup/.test(ps1),
