@@ -1309,11 +1309,10 @@ var svgRe = /'(circuits\/[^']+\.svg)'/g;
 var sm;
 while ((sm = svgRe.exec(svgSrc))) svgTargets[sm[1]] = true;
 var svgKeys = Object.keys(svgTargets);
-assert(svgKeys.length >= 23, 'circuit svg map ' + svgKeys.length);
-assert(phases['circuits/bahrain-3.svg'] == null, 'Bahrain outline is not calibrated');
-assert(svgTargets['circuits/bahrain-3.svg'], 'Bahrain is still a known circuit');
+assert(svgKeys.length >= 26, 'circuit svg map ' + svgKeys.length);
+assert(phases['circuits/bahrain-1.svg'], 'Bahrain GP outline is calibrated');
+assert(svgTargets['circuits/bahrain-1.svg'], 'Bahrain GP is a known circuit');
 svgKeys.forEach(function (rel) {
-  if (rel === 'circuits/bahrain-3.svg') return;
   assert(phases[rel], 'missing phase ' + rel);
 });
 function nearestFrac(pts, q) {
@@ -1384,6 +1383,12 @@ near(E.progressFromTiming(miniCar, monacoPhase.sectors).frac, monacoPhase.sector
 near(E.progressFromTiming(miniCar, monzaPhase.sectors).frac, monzaPhase.sectors[0] * 0.5, 0.001, 'Monza S1 uses the sector end');
 assert(shanghaiPhase.reverse === true, 'Shanghai file direction is opposite the race');
 assert(phases['circuits/austin-1.svg'].offset === 0.522, 'Austin hand offset stays');
+assert(phases['circuits/madring-1.svg'].offset === 0.612, 'Madring FIA proportion offset');
+assert(phases['circuits/istanbul-1.svg'].flagBounds == null, 'Istanbul flags stay equal-arc');
+assert(phases['circuits/madring-1.svg'].sectors == null, 'Madring timing sectors stay empty');
+var madringRaw = E.outlineFromSvg(
+  fs.readFileSync(path.join(__dirname, 'circuits/madring-1.svg'), 'utf8'), 4);
+assert(madringRaw.length >= 400, 'Madring Q/q path samples the full outline, got ' + madringRaw.length);
 function assertFlagPhase(rel, count) {
   var phase = phases[rel];
   assert(phase && phase.flagCount === count, rel + ' flagCount ' + (phase && phase.flagCount));
@@ -1540,9 +1545,11 @@ var officialViewRot = {
   'circuits/shanghai-1.svg': 336,
   'circuits/spielberg-3.svg': 20,
   'circuits/suzuka-2.svg': 233,
-  'circuits/yas-marina-2.svg': 261
+  'circuits/yas-marina-2.svg': 261,
+  'circuits/portimao-1.svg': 344,
+  'circuits/istanbul-1.svg': 344
 };
-assert(Object.keys(viewRots).length === 12, 'exactly 12 official view-rot overrides, got ' + Object.keys(viewRots).length);
+assert(Object.keys(viewRots).length === 14, 'exactly 14 official view-rot overrides, got ' + Object.keys(viewRots).length);
 Object.keys(officialViewRot).forEach(function (rel) {
   assert(viewRots[rel] === officialViewRot[rel],
     rel + ' official default ' + viewRots[rel] + ' vs ' + officialViewRot[rel]);

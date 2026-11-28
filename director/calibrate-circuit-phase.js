@@ -23,7 +23,9 @@ var path = require('path');
 var E = require('./web-override/trackmap-estimate.js');
 
 var CIRCUITS = [
-  { svg: 'bahrain-3.svg', key: 63, name: 'Sakhir' },
+  { svg: 'bahrain-1.svg', key: 63, name: 'Sakhir' },
+  { svg: 'portimao-1.svg', key: 147, name: 'Algarve' },
+  { svg: 'istanbul-1.svg', key: 59, name: 'Istanbul' },
   { svg: 'jeddah-1.svg', key: 149, name: 'Jeddah' },
   { svg: 'melbourne-2.svg', key: 10, name: 'Melbourne' },
   { svg: 'suzuka-2.svg', key: 46, name: 'Suzuka' },

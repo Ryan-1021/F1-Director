@@ -2111,6 +2111,17 @@
     }
   }
 
+  function addQuadratic(pts, x0, y0, x1, y1, x2, y2, steps) {
+    for (var i = 1; i <= steps; i++) {
+      var t = i / steps;
+      var u = 1 - t;
+      pts.push({
+        x: u * u * x0 + 2 * u * t * x1 + t * t * x2,
+        y: u * u * y0 + 2 * u * t * y1 + t * t * y2
+      });
+    }
+  }
+
   function addArc(pts, x1, y1, rx, ry, angleDeg, large, sweep, x2, y2) {
     if (!isFinite(x2) || !isFinite(y2)) return;
     var dx0 = x2 - x1;
@@ -2191,6 +2202,8 @@
     var sy = 0;
     var prevCx = 0;
     var prevCy = 0;
+    var prevQx = 0;
+    var prevQy = 0;
     var prevCmd = '';
     function hasNum() { return i < tok.length && typeof tok[i] === 'number'; }
     function read() { return tok[i++]; }
@@ -2250,6 +2263,30 @@
           prevCx = x2; prevCy = y2;
           x = x3; y = y3;
           prevCmd = 'C';
+        }
+      } else if (C === 'Q') {
+        while (hasNum()) {
+          var qx1 = read(), qy1 = read(), qx2 = read(), qy2 = read();
+          if (rel) { qx1 += x; qy1 += y; qx2 += x; qy2 += y; }
+          addQuadratic(pts, x, y, qx1, qy1, qx2, qy2, steps);
+          prevQx = qx1; prevQy = qy1;
+          x = qx2; y = qy2;
+          prevCmd = 'Q';
+        }
+      } else if (C === 'T') {
+        while (hasNum()) {
+          var tx2 = read(), ty2 = read();
+          if (rel) { tx2 += x; ty2 += y; }
+          var tx1 = x;
+          var ty1 = y;
+          if (prevCmd === 'Q' || prevCmd === 'T') {
+            tx1 = 2 * x - prevQx;
+            ty1 = 2 * y - prevQy;
+          }
+          addQuadratic(pts, x, y, tx1, ty1, tx2, ty2, steps);
+          prevQx = tx1; prevQy = ty1;
+          x = tx2; y = ty2;
+          prevCmd = 'T';
         }
       } else if (C === 'S') {
         while (hasNum()) {
