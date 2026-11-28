@@ -16,7 +16,7 @@ node director/calibrate-circuit-phase.js --cache /tmp/mv
 
 1. 用 `outlineFromSvg` 采样 SVG，再把 y 取负，和 `loadSvgOutline` 一样。存进 `CIRCUIT_PHASE` 的比例按运行时的 `curveSteps = 4` 折线量。
 2. MultiViewer 折线按弧长重采样成 400 点。在 flipY、反向、圆周移位上做 Umeyama 相似变换（平移、旋转、均匀缩放）。
-3. `marshalLights` 里 `length ≈ 0` 的点投到 SVG 折线上，最近点的弧长比例就是原始 offset。`reverse` 表示比赛方向和文件方向相反；为 true 时 offset 在掉头之后再量。
+3. `marshalLights` 里 `length ≈ 0` 的点投到 SVG 折线上，最近点的弧长比例就是原始 offset。若某站没有 `length≈0` 的灯、或 FIA 有独立计时线里程而 MV 锚点与 SVG 路径起点不一致，则改用 `TIMING_FIA`（`calibrate-circuit-phase.js`）从 FIA 弯心距离推出计时线 XY，再参与 Umeyama 对齐。`reverse` 表示比赛方向和文件方向相反；为 true 时 offset 在掉头之后再量。
 4. 赛段：优先用 FIA 比赛笔记里的赛段中心线公里数，沿 MultiViewer 中心线走到对应比例，再投回 SVG。没有公里数、但图例写了「弯前/弯后多少米」时，用弯心在中心线上的位置加减这段距离。投影和距离比例差过 0.03，或者落点离开折线，就不写 `sectors`，运行时仍三等分。
 5. 旗语区段：把 `marshalSectors[].trackPosition` 投到同一条运行时折线，得到相对计时线的中点，再取相邻中点的前向中点当区段起点。写入 `flagCount` + `flagBounds`，**不要**写进计时 `sectors`。对齐还能用时取最新 `yearField`（再比 `requestYear`）。区段 1 起点靠近计时线（±0.02）时收成 n−1 个内部分界（隐式 0/1）；否则保留 n 个起点，允许跨过进度 0。投影离开折线（distPct > 0.8）或中点不沿圈递增，就不写，运行时等分。不拿 MV `length/周长` 否决（那是示意图拉伸，计时 sectors 才用 0.03 门闩）。
 
@@ -84,7 +84,7 @@ offset / reverse / sectors 是运行时用的值。奥斯汀的 offset 不是这
 | mexico-city-3.svg | 65 | 2021 | 0.014 | false | 0.432, 0.792 | 0.61 | 高 | 2025 墨西哥城，T4 前 136 m、T12 前 242 m |
 | interlagos-2.svg | 14 | 2019 | 0.205 | false | — | 0.10 | 高 | 未写，见下方 |
 | las-vegas-1.svg | 152 | 2023 | 0.475 | false | 0.262, 0.539 | 0.19 | 高 | 2025 拉斯维加斯，T5 后 90 m、T12 后 140 m |
-| lusail-1.svg | 150 | 2023 | 0.004 | false | 0.341, 0.633 | 0.11 | 高 | 2025 卡塔尔，T6 前 80 m、T12 前 75 m |
+| lusail-1.svg | 150 | 2023 | 0.958 | false | 0.388, 0.68 | 0.12 | 高 | FIA 2025 计时线（T1 弯心 776 m）；MV 最近 marshal 灯不在计时线 |
 | yas-marina-2.svg | 70 | 2021 | 0.623 | true | 0.233, 0.684 | 0.22 | 高 | 2025 阿布扎比，T5 前 205 m、T9 前 100 m |
 | bahrain-1.svg | 63 | 2022 | 0.202 | true | 0.233, 0.640 | 0.71 | 中 | MV 2022 计时灯（key 63；较新年份回落 2022）+ FIA 2025 Sakhir Control Line |
 | portimao-1.svg | 147 | 2021 | 0.863 | true | 0.311, 0.665 | 0.14 | 高 | MV 2021 key 147（Algarve）+ FIA 2021 Portugal；S1 T5 前 270 m、S2 T11 后 80 m |
@@ -125,7 +125,7 @@ offset / reverse / sectors 是运行时用的值。奥斯汀的 offset 不是这
 | mexico-city-3.svg | 65 | 2021 | 2021 | 16 | n−1 | |
 | interlagos-2.svg | 14 | 2019 | 2023 | 16 | n−1 | offset 仍 2019 的 0.205；区段 9/10 约 `[0.5248, 0.5673)` / `[0.5673, 0.6213)` |
 | las-vegas-1.svg | 152 | 2023 | 2023 | 21 | n 起点 | |
-| lusail-1.svg | 150 | 2023 | 2023 | 20 | n 起点 | |
+| lusail-1.svg | 150 | 2023 | 2023 | 20 | n 起点 | 与 offset 0.958 同帧重投 |
 | yas-marina-2.svg | 70 | 2021 | 2021 | 20 | n−1 | reverse |
 | bahrain-3.svg | 63 | — | — | — | 等分 | 旧布局，无 CIRCUIT_PHASE |
 | bahrain-1.svg | 63 | 2022 | 2022 | 18 | n−1 | reverse |
@@ -144,3 +144,34 @@ offset / reverse / sectors 是运行时用的值。奥斯汀的 offset 不是这
 投影（curveSteps 4，y 取负）给出 offset **0.537**、reverse false、残差 0.64%、flipY 不需要再翻（SVG 已经按运行时取过负）。先前用 curveSteps 24 的对照是 **0.536**，移位 188；这次移位 187。两点和手调的 **0.522** 都在 T20–T1 主直道上，相差大约 1.5% 圈程，所以 `CIRCUIT_PHASE` 仍是 0.522，sectors 仍是 `[0.311, 0.715]`。
 
 2025 美国站图例：S1 在 T7 前 55 m，S2 在 T13 前 65 m。这和手调的两个终点是同一段直道，没有改数字。
+
+## 2026 全表审计（FIA / MV，`--cache /tmp/mv`）
+
+| 赛道 | app offset | 校准 offset | 动作 | 依据 |
+| --- | ---: | ---: | --- | --- |
+| bahrain-3.svg | — | — | 无相位 | SVG 非萨基尔；残差 9.7% |
+| jeddah-1.svg | 0.071 | 0.071 | 未改 | MV 高置信；无独立 FIA 计时线表 |
+| melbourne-2.svg | 0.083 | 0.083 | 未改 | FIA 2026 赛段与 MV 一致 |
+| suzuka-2.svg | 0.591 | 0.587 | 未改 | Δ0.004；FIA 2026 赛段已写入 |
+| shanghai-1.svg | 0.436 | 0.436 | 未改 | FIA 2026 |
+| miami-1.svg | 0.040 | 0.040 | 未改 | FIA 2026 |
+| imola-3.svg | 0.887 | 0.887 | 未改 | MV；无可靠 FIA 赛段 km |
+| monaco-6.svg | 0.335 | 0.336 | 未改 | FIA 2026；Δ0.001 |
+| montreal-6.svg | 0.415 | 0.416 | 未改 | FIA 2026 |
+| catalunya-6.svg | 0.185 | 0.185 | 未改 | FIA 2025 巴塞罗那弯心 |
+| spielberg-3.svg | 0.182 | 0.182 | 未改 | 仅起终点；sectors 未写 |
+| silverstone-8.svg | 0.939 | 0.939 | 未改 | FIA 2026 |
+| hungaroring-3.svg | 0.868 | 0.868 | 未改 | FIA 2026 |
+| spa-francorchamps-4.svg | 0.980 | 0.980 | 未改 | FIA 2026 |
+| zandvoort-5.svg | 0.135 | 0.135 | 未改 | FIA 2026 |
+| monza-7.svg | 0.692 | 0.693 | 未改 | FIA 2026 |
+| baku-1.svg | 0.938 | 0.938 | 未改 | FIA 2026；旗语仍等分 |
+| marina-bay-4.svg | 0.056 | 0.056 | 未改 | FIA 2026 |
+| austin-1.svg | 0.522 | 0.537 | 未改 | 手调；见上文奥斯汀 |
+| mexico-city-3.svg | 0.014 | 0.014 | 未改 | FIA 2025 弯心 |
+| interlagos-2.svg | 0.205 | 0.207 | 未改 | MV 高置信 |
+| las-vegas-1.svg | 0.475 | 0.475 | 未改 | FIA 2025 弯心 |
+| **lusail-1.svg** | **0.004** | **0.958** | **已改** | FIA 2025：T1 弯心 776 m、S1/S2 2109/3677 m；MV marshal 最近灯距计时线 ~5% 周长 |
+| yas-marina-2.svg | 0.623 | 0.623 | 未改 | FIA 2025 弯心 |
+
+**Lusail 改动明细**：offset `0.004→0.958`，sectors `[0.341,0.633]→[0.388,0.68]`，flagBounds 整表重投（20 段 n 起点）。旧 offset 把方格旗放在主直道近 T1；FIA 中心线 5.419 km 上 T1 弯心 776 m、T16 弯心 5001 m，计时线在 T16 出口主直道末端。

@@ -744,12 +744,110 @@ assert(E.wrapDelta(crawlLater2 - crawlLater) <= E.wrapDelta(crawlLater - crawlHe
   'coast speed decays ' + crawlLater2 + ' vs ' + crawlLater + ' vs ' + crawlHeld);
 
 // 停车 / 进站仍冻住，不走 coast。
-var stopped = E.stepMotion(null, 0.40, 0.55, 0, 90000, false, { exact: true });
-stopped = E.stepMotion(stopped, 0.42, 0.55, 2000, 90000, false, { exact: true, hold: true });
+var stopped = E.stepMotion(null, 0.40, 0.42, 0, 90000, false, { exact: true });
+stopped = E.stepMotion(stopped, 0.40, 0.42, 2000, 90000, false, { exact: true, hold: true });
 var stoppedAt = E.sampleMotion(stopped, 2000, 90000, false);
 var stoppedLater = E.sampleMotion(stopped, 8000, 90000, false);
 near(stoppedLater, stoppedAt, 0.0005, 'hold still freezes');
 assert(stopped.coasting === false, 'hold does not coast');
+
+// 等下一格时已经巡航超前：停车应 ease 回最后一格，而不是冻在超前点。
+var holdCruise = E.stepMotion(null, 0.40, 0.44, 0, 90000, false, { exact: true });
+E.rebaseMotion(holdCruise, 0.48, 0);
+holdCruise.cap = 0.44;
+holdCruise = E.stepMotion(holdCruise, 0.40, 0.44, 100, 90000, false, { exact: true, hold: true });
+assert(holdCruise.easeTo != null, 'hold starts ease when already ahead of last mini');
+near(holdCruise.easeTo, 0.44, 0.015, 'hold ease target is last mini cap');
+var holdEased = E.sampleMotion(holdCruise, 4000, 90000, false);
+near(holdEased, 0.44, 0.015, 'hold ease lands on last mini');
+near(E.sampleMotion(holdCruise, 12000, 90000, false), 0.44, 0.015, 'hold stays at last mini');
+
+// 迷你赛段 2052：stopped 标志还没来时也应 hold，cap 不留给巡航。
+function crashS1Segs2052(done) {
+  var segs = [];
+  var i;
+  for (i = 0; i < 9; i++) {
+    if (i < done - 1) segs.push(2048);
+    else if (i === done - 1) segs.push(2052);
+    else segs.push(0);
+  }
+  return [
+    { value: '28.000', segments: segs },
+    { value: '', segments: [0, 0, 0, 0] },
+    { value: '', segments: [0, 0, 0, 0] }
+  ];
+}
+var mini2052Car = {
+  number: 44, tla: 'HAM', position: 5, gap: '', stopped: false,
+  sectors: crashS1Segs2052(5)
+};
+var mini2052Prog = E.progressFromTiming(mini2052Car, null);
+assert(Math.abs(mini2052Prog.cap - mini2052Prog.frac) < 0.0001,
+  '2052 pins cap to last mini ' + mini2052Prog.frac + ' vs ' + mini2052Prog.cap);
+var mini2052Plan = E.planField([mini2052Car], 'Practice 2', 'Green');
+assert(mini2052Plan.cars[0].hold === true, '2052 hold before stopped=true');
+
+function miniSegs2052(len, done) {
+  var segs = [];
+  var i;
+  for (i = 0; i < len; i++) {
+    if (i < done - 1) segs.push(2048);
+    else if (i === done - 1) segs.push(2052);
+    else segs.push(0);
+  }
+  return segs;
+}
+
+function allLitMinis(len) {
+  var segs = [];
+  var i;
+  for (i = 0; i < len; i++) segs.push(2049);
+  return segs;
+}
+
+// S2 末尾 2052：S1 全亮时不应只看 S1。
+var mini2052S2Car = {
+  number: 44, tla: 'HAM', position: 5, gap: '', stopped: false,
+  sectors: [
+    { value: '28.000', segments: allLitMinis(9) },
+    { value: '30.000', segments: miniSegs2052(8, 4) },
+    { value: '', segments: [0, 0, 0, 0] }
+  ]
+};
+var mini2052S2Prog = E.progressFromTiming(mini2052S2Car, null);
+assert(mini2052S2Prog.sector === 1, 'S2 2052 progress in sector 1');
+assert(Math.abs(mini2052S2Prog.cap - mini2052S2Prog.frac) < 0.0001,
+  'S2 2052 pins cap ' + mini2052S2Prog.frac + ' vs ' + mini2052S2Prog.cap);
+assert(E.planField([mini2052S2Car], 'Practice 2', 'Green').cars[0].hold === true,
+  'S2 2052 hold before stopped=true');
+
+// S3 末尾 2052：前两段全亮。
+var mini2052S3Car = {
+  number: 44, tla: 'HAM', position: 5, gap: '', stopped: false,
+  sectors: [
+    { value: '28.000', segments: allLitMinis(9) },
+    { value: '30.000', segments: allLitMinis(8) },
+    { value: '31.000', segments: miniSegs2052(6, 3) }
+  ]
+};
+var mini2052S3Prog = E.progressFromTiming(mini2052S3Car, null);
+assert(mini2052S3Prog.sector === 2, 'S3 2052 progress in sector 2');
+assert(Math.abs(mini2052S3Prog.cap - mini2052S3Prog.frac) < 0.0001,
+  'S3 2052 pins cap ' + mini2052S3Prog.frac + ' vs ' + mini2052S3Prog.cap);
+assert(E.planField([mini2052S3Car], 'Practice 2', 'Green').cars[0].hold === true,
+  'S3 2052 hold before stopped=true');
+
+// 回归：S1 有亮格、S2 才是 2052 时不能误用 S1 最后一格（非 2052）。
+var mini2052S1MaskCar = {
+  number: 44, tla: 'HAM', position: 5, gap: '', stopped: false,
+  sectors: [
+    { value: '28.000', segments: allLitMinis(9) },
+    { value: '30.000', segments: miniSegs2052(8, 5) },
+    { value: '', segments: [0, 0, 0, 0] }
+  ]
+};
+assert(E.planField([mini2052S1MaskCar], 'Practice 2', 'Green').cars[0].hold === true,
+  'S2 2052 not masked by lit S1');
 
 // Scheme 3：belief 前跳时画面不瞬移，沿圈加速度限制追上。
 var leap = E.stepMotion(null, 0.20, 0.28, 0, 90000, false, { exact: true });
