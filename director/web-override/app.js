@@ -32,6 +32,7 @@
   function applyTheme(theme) {
     theme = (theme === 'day') ? 'day' : 'night';
     document.documentElement.setAttribute('data-theme', theme);
+    try { resetCarnoColourCache(); } catch (eCarno) { /* carno helpers load later */ }
     try {
       var metas = document.getElementsByName('color-scheme');
       if (metas && metas[0]) {
@@ -1171,7 +1172,9 @@
     bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
     who.appendChild(bar);
     who.appendChild(el('span', 'tla', c.tla || ''));
-    who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
+    var carnoEl = el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : '');
+    applyCarnoTeamColour(carnoEl, c.teamColour);
+    who.appendChild(carnoEl);
     tr.appendChild(who);
     tr.appendChild(trackStatusTd(c));
     tr.appendChild(el('td', 'mono col-gap', c.gap || ''));
@@ -1229,7 +1232,10 @@
       var tla = tds[1].querySelector('.tla');
       if (tla) tla.textContent = c.tla || '';
       var carno = tds[1].querySelector('.carno');
-      if (carno) carno.textContent = c.number != null && c.number !== '' ? String(c.number) : '';
+      if (carno) {
+        carno.textContent = c.number != null && c.number !== '' ? String(c.number) : '';
+        applyCarnoTeamColour(carno, c.teamColour);
+      }
     }
     if (tds[2]) patchTrackStatusTd(tds[2], c);
     if (tds[3] && !opts.deferPlace) tds[3].textContent = c.gap || '';
@@ -1751,7 +1757,9 @@
     bar.style.background = c.teamColour ? ('#' + c.teamColour.replace('#', '')) : '#555';
     who.appendChild(bar);
     who.appendChild(el('span', 'tla', c.tla || ''));
-    who.appendChild(el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : ''));
+    var carnoS = el('span', 'carno', c.number != null && c.number !== '' ? String(c.number) : '');
+    applyCarnoTeamColour(carnoS, c.teamColour);
+    who.appendChild(carnoS);
     return who;
   }
 
@@ -1762,7 +1770,10 @@
     var tla = td.querySelector('.tla');
     if (tla) tla.textContent = c.tla || '';
     var carno = td.querySelector('.carno');
-    if (carno) carno.textContent = c.number != null && c.number !== '' ? String(c.number) : '';
+    if (carno) {
+      carno.textContent = c.number != null && c.number !== '' ? String(c.number) : '';
+      applyCarnoTeamColour(carno, c.teamColour);
+    }
   }
 
   function sectorsTyreTd(c) {
@@ -2966,6 +2977,158 @@
     if (/^[0-9a-fA-F]{6}$/.test(s)) return '#' + s;
     if (/^[0-9a-fA-F]{3}$/.test(s)) return '#' + s;
     return '#90caf9';
+  }
+
+  var CARNO_CONTRAST_MIN = 3.2;
+  var carnoColourCache = {};
+
+  function hexToRgb(hex) {
+    var s = String(hex || '').replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(s)) {
+      s = s.charAt(0) + s.charAt(0) + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2);
+    }
+    if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
+    return {
+      r: parseInt(s.slice(0, 2), 16),
+      g: parseInt(s.slice(2, 4), 16),
+      b: parseInt(s.slice(4, 6), 16)
+    };
+  }
+
+  function rgbToHex(rgb) {
+    function h(n) {
+      var s = Math.round(Math.max(0, Math.min(255, n))).toString(16);
+      return s.length < 2 ? '0' + s : s;
+    }
+    return '#' + h(rgb.r) + h(rgb.g) + h(rgb.b);
+  }
+
+  function srgbToLinear(c) {
+    var v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  }
+
+  function relLuminance(rgb) {
+    var r = srgbToLinear(rgb.r);
+    var g = srgbToLinear(rgb.g);
+    var b = srgbToLinear(rgb.b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function contrastRatio(fg, bg) {
+    var l1 = relLuminance(fg);
+    var l2 = relLuminance(bg);
+    var hi = Math.max(l1, l2);
+    var lo = Math.min(l1, l2);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  function parseCssRgbColor(raw) {
+    if (!raw) return null;
+    raw = String(raw).trim();
+    var hex = hexToRgb(raw);
+    if (hex) return hex;
+    var m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/.exec(raw);
+    if (m) {
+      return {
+        r: parseFloat(m[1]),
+        g: parseFloat(m[2]),
+        b: parseFloat(m[3]),
+        a: m[4] != null ? parseFloat(m[4]) : 1
+      };
+    }
+    return null;
+  }
+
+  function compositeOver(fg, bg) {
+    var a = fg.a != null ? fg.a : 1;
+    if (a >= 1) return { r: fg.r, g: fg.g, b: fg.b };
+    var ia = 1 - a;
+    return {
+      r: fg.r * a + bg.r * ia,
+      g: fg.g * a + bg.g * ia,
+      b: fg.b * a + bg.b * ia
+    };
+  }
+
+  function mixRgb(a, b, t) {
+    return {
+      r: a.r + (b.r - a.r) * t,
+      g: a.g + (b.g - a.g) * t,
+      b: a.b + (b.b - a.b) * t
+    };
+  }
+
+  function timingBoardRowBgs() {
+    var cs = getComputedStyle(document.documentElement);
+    var panel = parseCssRgbColor(cs.getPropertyValue('--panel').trim());
+    var stripe = parseCssRgbColor(cs.getPropertyValue('--stripe-row').trim());
+    if (!panel) {
+      var day = document.documentElement.getAttribute('data-theme') === 'day';
+      panel = day ? { r: 255, g: 255, b: 255 } : { r: 13, g: 18, b: 24 };
+    }
+    var even = stripe ? compositeOver(stripe, panel) : panel;
+    return { odd: panel, even: even };
+  }
+
+  function carnoMinRowContrast(fgRgb, bgs) {
+    return Math.min(contrastRatio(fgRgb, bgs.odd), contrastRatio(fgRgb, bgs.even));
+  }
+
+  function resetCarnoColourCache() {
+    carnoColourCache = {};
+  }
+
+  function whoTeamColourHex(teamColour) {
+    return teamColour ? teamColourCss(teamColour) : '#555';
+  }
+
+  function carnoColourCss(teamColour) {
+    var theme = document.documentElement.getAttribute('data-theme') === 'day' ? 'day' : 'night';
+    var cacheKey = theme + '|' + String(teamColour || '');
+    if (carnoColourCache[cacheKey]) return carnoColourCache[cacheKey];
+
+    var baseHex = whoTeamColourHex(teamColour);
+    var base = hexToRgb(baseHex);
+    if (!base) {
+      carnoColourCache[cacheKey] = baseHex;
+      return baseHex;
+    }
+
+    var bgs = timingBoardRowBgs();
+    if (carnoMinRowContrast(base, bgs) >= CARNO_CONTRAST_MIN) {
+      carnoColourCache[cacheKey] = baseHex;
+      return baseHex;
+    }
+
+    var target = theme === 'day'
+      ? { r: 0, g: 0, b: 0 }
+      : { r: 255, g: 255, b: 255 };
+    var lo = 0;
+    var hi = 1;
+    var best = base;
+    for (var ci = 0; ci < 24; ci++) {
+      var t = (lo + hi) / 2;
+      var mixed = mixRgb(base, target, t);
+      if (carnoMinRowContrast(mixed, bgs) >= CARNO_CONTRAST_MIN - 1e-4) {
+        best = mixed;
+        hi = t;
+      } else {
+        lo = t;
+      }
+    }
+    while (carnoMinRowContrast(best, bgs) < CARNO_CONTRAST_MIN && hi < 1) {
+      hi = Math.min(1, hi + 0.02);
+      best = mixRgb(base, target, hi);
+    }
+    var out = rgbToHex(best);
+    carnoColourCache[cacheKey] = out;
+    return out;
+  }
+
+  function applyCarnoTeamColour(span, teamColour) {
+    if (!span) return;
+    span.style.color = carnoColourCss(teamColour);
   }
 
   function raceKey() {
@@ -4628,6 +4791,7 @@
       themeMo = new MutationObserver(function (muts) {
         for (var i = 0; i < muts.length; i++) {
           if (muts[i].attributeName === 'data-theme') {
+            try { resetCarnoColourCache(); } catch (eMo) { /* ignore */ }
             scheduleThemeCanvasRedraw();
             break;
           }
