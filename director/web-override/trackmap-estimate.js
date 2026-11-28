@@ -1155,6 +1155,21 @@
     return !fieldRacing;
   }
 
+  function sessionHasEnded(statusText) {
+    var phase = sessionLifecyclePhase(statusText);
+    return phase === 'finished' || phase === 'finalised' || phase === 'ends';
+  }
+
+  /**
+   * 练习 / 排位等非正赛：场次结束后隐藏赛道上停车点；进行中仍 hold。
+   * 正赛绿旗停车规则不变；不因 gap 是否清空；进站走 pit 路径。
+   */
+  function shouldHideStoppedAfterNonRaceSession(raceGaps, statusText, pit, hide, car) {
+    if (raceGaps || hide || pit) return false;
+    if (!sessionHasEnded(statusText)) return false;
+    return carStoppedOnTrack(car);
+  }
+
   function refLapSeconds(cars) {
     var best = Infinity;
     var list = cars || [];
@@ -1347,6 +1362,9 @@
         c, prog, prevByNum[num], leader, leaderProg, prevByNum, leaderNum,
         raceGaps, pace, pit, hide, gap, statusText, holdField
       )) {
+        hide = true;
+        hold = false;
+      } else if (shouldHideStoppedAfterNonRaceSession(raceGaps, statusText, pit, hide, c)) {
         hide = true;
         hold = false;
       }

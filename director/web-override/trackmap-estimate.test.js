@@ -437,6 +437,33 @@ var endsPlan = E.planField([postRaceCar], 'Sprint', 'Ends Sprint');
 assert(endsPlan.holdField === true, 'ends sprint holds field');
 assert(E.planField([postRaceCar], 'Qualifying', 'Finalised Qualifying').holdField === false,
   'quali finalised does not hold field');
+
+// 练习 / 排位：进行中停车 hold；结束后隐藏（gap 可非空）；新场次恢复显示。
+var fpLeader = {
+  number: 1, tla: 'VER', position: 1, gap: 'LEADER', bestLap: '1:28.000',
+  sectors: crashS2Segs(5)
+};
+var fpHamStopped = {
+  number: 44, tla: 'HAM', position: 8, gap: '+2.100', stopped: true, bestLap: '1:29.000',
+  sectors: crashS2Segs(2)
+};
+var fpLive = E.planField([fpLeader, fpHamStopped], 'Practice 2', 'Started Practice 2');
+assert(fpLive.cars[1].hold === true && !fpLive.cars[1].hide, 'practice live stopped holds on outline');
+var fpEnded = E.planField([fpLeader, fpHamStopped], 'Practice 2', 'Finished Practice 2');
+assert(fpEnded.cars[1].hide === true && !fpEnded.cars[1].hold,
+  'practice finished hides stopped even with gap');
+assert(fpEnded.cars[1].pit === false, 'practice finished stopped not inPit');
+var qualEnded = E.planField([fpLeader, fpHamStopped], 'Qualifying', 'Finalised Qualifying');
+assert(qualEnded.cars[1].hide === true, 'quali finalised hides stopped on track');
+var fpHamPit = Object.assign({}, fpHamStopped, { inPit: true, gap: 'IN PIT' });
+var fpEndedPit = E.planField([fpLeader, fpHamPit], 'Practice 2', 'Ends Practice 2');
+assert(fpEndedPit.cars[1].pit === true && !fpEndedPit.cars[1].hide,
+  'ended session stopped in pit stays pit not outline-hide');
+var fpNewSession = E.planField([fpLeader, fpHamStopped], 'Practice 3', 'Started Practice 3',
+  null, fpEnded);
+assert(fpNewSession.cars[1].hold === true && !fpNewSession.cars[1].hide,
+  'new practice session shows stopped again');
+
 var endSt = E.stepMotion(null, finalisedPlan.cars[0].frac, finalisedPlan.cars[0].cap, 0, 90000, true,
   { exact: finalisedPlan.cars[0].exact });
 endSt = E.stepMotion(endSt, finalisedPlan.cars[0].frac, finalisedPlan.cars[0].cap, 2000, 90000, true,
