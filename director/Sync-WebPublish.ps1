@@ -1,4 +1,6 @@
 # Incremental publish: copy repo web sources into share/web only when content differs.
+# Cheap source stamp (path + length + UTC mtime) under share/web/.publish-stamp skips the
+# per-file SHA256 walk on unchanged trees; --force-publish (via Start.cmd) forces a full sync.
 # director.html: compare SHA256 against the SOURCE file (sidecar), not the stamped dest copy.
 # Other files: skip copy when SHA256(source) == SHA256(dest).
 # Unchanged trees (especially circuits/) add no copy work on restart. layouts.json in the
@@ -10,7 +12,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$DirectorRoot,
     [Parameter(Mandatory = $true)][string]$WebDir,
-    [switch]$SeedLayouts
+    [switch]$SeedLayouts,
+    [switch]$ForcePublish
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +23,108 @@ if (-not (Test-Path -LiteralPath $WebDir)) {
 }
 $WebDir = [System.IO.Path]::GetFullPath($WebDir)
 $DirectorRoot = [System.IO.Path]::GetFullPath($DirectorRoot)
+
+function Get-PublishStampPath([string]$Root) {
+    return Join-Path $Root '.publish-stamp'
+}
+
+function Get-SourceStampLine([string]$Key, [string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $fi = Get-Item -LiteralPath $Path
+    return ('{0}|{1}|{2}' -f $Key, $fi.Length, $fi.LastWriteTimeUtc.Ticks)
+}
+
+function Add-TreeStampLines {
+    param(
+        [System.Collections.Generic.List[string]]$Lines,
+        [string]$SrcDir,
+        [string]$KeyPrefix
+    )
+    if (-not (Test-Path -LiteralPath $SrcDir)) { return }
+    $srcRoot = [System.IO.Path]::GetFullPath($SrcDir)
+    Get-ChildItem -LiteralPath $srcRoot -File -Recurse | ForEach-Object {
+        $rel = $_.FullName.Substring($srcRoot.Length).TrimStart('\', '/')
+        $key = if ($KeyPrefix) { ($KeyPrefix + '/' + $rel) -replace '\\', '/' } else { $rel -replace '\\', '/' }
+        $line = Get-SourceStampLine $key $_.FullName
+        if ($line) { $Lines.Add($line) | Out-Null }
+    }
+}
+
+function Get-PublishSourceStampText([string]$dir) {
+    $wo = Join-Path $dir 'web-override'
+    $lines = New-Object System.Collections.Generic.List[string]
+
+    $rootPairs = @(
+        @{ Key = 'app.js'; Src = (Join-Path $wo 'app.js') },
+        @{ Key = 'trackmap-estimate.js'; Src = (Join-Path $wo 'trackmap-estimate.js') },
+        @{ Key = 'rank-swap.js'; Src = (Join-Path $wo 'rank-swap.js') },
+        @{ Key = 'board.html'; Src = (Join-Path $wo 'board.html') },
+        @{ Key = 'index.html'; Src = (Join-Path $wo 'index.html') },
+        @{ Key = 'style.css'; Src = (Join-Path $wo 'style.css') },
+        @{ Key = 'director.css'; Src = (Join-Path $dir 'director.css') },
+        @{ Key = 'director-app.js'; Src = (Join-Path $dir 'director-app.js') },
+        @{ Key = 'director.html'; Src = (Join-Path $dir 'director.html') },
+        @{ Key = 'layouts.json'; Src = (Join-Path $dir 'layouts.json') }
+    )
+    foreach ($pair in $rootPairs) {
+        $line = Get-SourceStampLine $pair.Key $pair.Src
+        if ($line) { $lines.Add($line) | Out-Null }
+    }
+
+    if (Test-Path -LiteralPath (Join-Path $wo 'favicon.ico')) {
+        $line = Get-SourceStampLine 'favicon.ico' (Join-Path $wo 'favicon.ico')
+        if ($line) { $lines.Add($line) | Out-Null }
+    }
+    if (Test-Path -LiteralPath (Join-Path $wo 'favicon-32.png')) {
+        $line = Get-SourceStampLine 'favicon-32.png' (Join-Path $wo 'favicon-32.png')
+        if ($line) { $lines.Add($line) | Out-Null }
+    }
+
+    Add-TreeStampLines $lines (Join-Path $wo 'circuits') 'circuits'
+    Add-TreeStampLines $lines (Join-Path $wo 'icons') 'icons'
+    Add-TreeStampLines $lines (Join-Path $dir 'assets') 'assets'
+
+    $versionFile = [System.IO.Path]::GetFullPath((Join-Path $dir '..\VERSION'))
+    if (Test-Path -LiteralPath $versionFile) {
+        $line = Get-SourceStampLine 'VERSION' $versionFile
+        if ($line) { $lines.Add($line) | Out-Null }
+    }
+
+    $sorted = $lines | Sort-Object
+    return ($sorted -join "`n")
+}
+
+function Read-PublishSourceStamp([string]$WebRoot) {
+    $path = Get-PublishStampPath $WebRoot
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    return ([System.IO.File]::ReadAllText($path, [System.Text.UTF8Encoding]::new($false))).Trim()
+}
+
+function Write-PublishSourceStamp([string]$WebRoot, [string]$Text) {
+    $path = Get-PublishStampPath $WebRoot
+    [System.IO.File]::WriteAllText($path, $Text, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Invoke-SeedLayoutsOnce {
+    param([string]$dir)
+    $layoutsSrc = Join-Path $dir 'layouts.json'
+    $layoutsDst = Join-Path $WebDir 'layouts.json'
+    if ((Test-Path -LiteralPath $layoutsSrc) -and -not (Test-Path -LiteralPath $layoutsDst)) {
+        Copy-Item -LiteralPath $layoutsSrc -Destination $layoutsDst -Force
+        return $true
+    }
+    return $false
+}
+
+function Invoke-PublishWindowTitleStamp {
+    param([string]$dir)
+    $versionFile = Join-Path $dir '..\VERSION'
+    $versionFile = [System.IO.Path]::GetFullPath($versionFile)
+    $stampScript = Join-Path $dir 'Stamp-WindowTitle.ps1'
+    if ((Test-Path -LiteralPath $versionFile) -and (Test-Path -LiteralPath $stampScript)) {
+        & $stampScript -WebDir $WebDir -VersionFile $versionFile
+    }
+}
 
 function Get-FileSha256([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
@@ -156,6 +261,22 @@ function Prune-MappedTree([string]$SrcDir, [string]$DstRelDir) {
 $dir = $DirectorRoot.TrimEnd('\', '/')
 $wo = Join-Path $dir 'web-override'
 
+if (-not $ForcePublish) {
+    $stampNow = Get-PublishSourceStampText $dir
+    $stampWas = Read-PublishSourceStamp $WebDir
+    if ($stampWas -and ($stampWas -eq $stampNow)) {
+        $seeded = $false
+        if ($SeedLayouts) {
+            $seeded = Invoke-SeedLayoutsOnce $dir
+        }
+        Invoke-PublishWindowTitleStamp $dir
+        $changed = [int]$seeded
+        Write-Output ("PUBLISH_CHANGED={0}" -f $changed)
+        Write-Output 'PUBLISH_SKIPPED=1'
+        return
+    }
+}
+
 $rootFiles = @(
   @{ Src = (Join-Path $wo 'app.js'); Dst = 'app.js' },
   @{ Src = (Join-Path $wo 'trackmap-estimate.js'); Dst = 'trackmap-estimate.js' },
@@ -198,12 +319,7 @@ if (Test-Path -LiteralPath $versionFile) {
 }
 
 if ($SeedLayouts) {
-  $layoutsSrc = Join-Path $dir 'layouts.json'
-  $layoutsDst = Join-Path $WebDir 'layouts.json'
-  if ((Test-Path -LiteralPath $layoutsSrc) -and -not (Test-Path -LiteralPath $layoutsDst)) {
-    Copy-Item -LiteralPath $layoutsSrc -Destination $layoutsDst -Force
-    $script:AnyChanged = $true
-  }
+  if (Invoke-SeedLayoutsOnce $dir) { $script:AnyChanged = $true }
 }
 
 foreach ($pair in ($rootFiles + $pruneRootFiles)) {
@@ -222,9 +338,8 @@ Prune-MappedTree (Join-Path $wo 'circuits') 'circuits'
 Prune-MappedTree (Join-Path $wo 'icons') 'icons'
 Prune-MappedTree $assets 'assets'
 
-$stampScript = Join-Path $dir 'Stamp-WindowTitle.ps1'
-if ((Test-Path -LiteralPath $versionFile) -and (Test-Path -LiteralPath $stampScript)) {
-    & $stampScript -WebDir $WebDir -VersionFile $versionFile
-}
+Invoke-PublishWindowTitleStamp $dir
+
+Write-PublishSourceStamp $WebDir (Get-PublishSourceStampText $dir)
 
 Write-Output ("PUBLISH_CHANGED={0}" -f ([int]$script:AnyChanged))

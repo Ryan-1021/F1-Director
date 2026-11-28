@@ -80,7 +80,7 @@ assert(publish.indexOf('Sync-WebPublish.ps1') !== -1, 'Publish-Web runs Sync-Web
 assert(publish.indexOf('NEEDS_STAMP') === -1, 'Publish-Web does not parse NEEDS_STAMP from cmd');
 assert(publish.indexOf('Stamp-WindowTitle.ps1') === -1,
   'Publish-Web does not call Stamp-WindowTitle separately');
-assert(start.indexOf('Sync-WebPublish.ps1') !== -1, 'Start.cmd incremental publish');
+assert(start.indexOf('Start-Director.ps1') !== -1, 'Start.cmd single-host publish+run');
 assert(start.indexOf('NEEDS_STAMP') === -1, 'Start.cmd does not parse NEEDS_STAMP from cmd');
 assert(start.indexOf('Stamp-WindowTitle.ps1') === -1,
   'Start.cmd does not call Stamp-WindowTitle separately');
@@ -98,7 +98,7 @@ assert(stampPs1.indexOf('Copy-Item') !== -1 && stampPs1.indexOf('VERSION') !== -
 assert(stampPs1.indexOf('copyVersion') !== -1, 'stamp script skips redundant VERSION copy');
 assert(stampPs1.indexOf('titleRewritten') !== -1, 'stamp script logs only when title changes');
 assert(/if errorlevel 1/i.test(publish), 'Publish-Web checks sync errorlevel');
-assert(/if errorlevel 1/i.test(start), 'Start.cmd checks sync errorlevel');
+assert(/if "%RC%"=="1"/i.test(start), 'Start.cmd checks publish failure exit code');
 
 function stampLikePs1(src, raw) {
   var shortVer = short(raw);
