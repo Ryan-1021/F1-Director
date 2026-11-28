@@ -726,6 +726,8 @@ table.timing tbody tr.retired:nth-child(even) > td {
 table.timing {
   --rank-swap-ms: 1000ms;
   --rank-swap-ease: ease;
+  --rank-swap-up: var(--sec-mini-green);
+  --rank-swap-down: #ff5a5a;
 }
 table.timing tr[data-car] {
   position: relative;
@@ -750,6 +752,29 @@ table.timing.rank-swapping tr.rank-swap-up {
 }
 table.timing.rank-swapping tr.rank-swap-down {
   z-index: 2;
+}
+/* During FLIP slide: hide deferred POS and show filled up/down triangle. */
+table.timing.rank-swapping tr.rank-swap-up > td.num,
+table.timing.rank-swapping tr.rank-swap-down > td.num {
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+}
+table.timing.rank-swapping tr.rank-swap-up > td.num::before,
+table.timing.rank-swapping tr.rank-swap-down > td.num::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 8px;
+  vertical-align: middle;
+}
+table.timing.rank-swapping tr.rank-swap-up > td.num::before {
+  background: var(--rank-swap-up);
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+table.timing.rank-swapping tr.rank-swap-down > td.num::before {
+  background: var(--rank-swap-down);
+  clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
 }
 @media (prefers-reduced-motion: reduce) {
   table.timing.rank-swapping tr[data-car] {

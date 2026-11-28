@@ -63,6 +63,13 @@ assert(RS.DURATION_MS === 1000, 'duration is 1s');
   var path = require('path');
   var css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
   assert(/--rank-swap-ms:\s*1000ms/.test(css), 'CSS --rank-swap-ms is 1000ms');
+  assert(/--rank-swap-up:\s*var\(--sec-mini-green\)/.test(css),
+    'CSS --rank-swap-up uses sec-mini-green');
+  assert(/--rank-swap-down:\s*#ff5a5a/.test(css), 'CSS --rank-swap-down is #ff5a5a');
+  assert(/table\.timing\.rank-swapping tr\.rank-swap-up > td\.num::before/.test(css),
+    'CSS rank-swap-up arrow on td.num');
+  assert(/table\.timing\.rank-swapping tr\.rank-swap-down > td\.num::before/.test(css),
+    'CSS rank-swap-down arrow on td.num');
 })();
 
 (function testPlayFlipWritesDuration() {
